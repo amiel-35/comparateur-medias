@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS notes_media (
 CREATE TABLE IF NOT EXISTS articles (
   id INTEGER PRIMARY KEY, cle TEXT NOT NULL UNIQUE, media_id INTEGER NOT NULL REFERENCES medias(id),
   titre TEXT NOT NULL, lien TEXT NOT NULL DEFAULT '', date TEXT, recolte TEXT NOT NULL,
-  trie INTEGER NOT NULL DEFAULT 0);
+  trie INTEGER NOT NULL DEFAULT 0, rubrique TEXT);
 CREATE INDEX IF NOT EXISTS articles_recolte ON articles(recolte);
 CREATE TABLE IF NOT EXISTS sujets (id INTEGER PRIMARY KEY, libelle TEXT NOT NULL, cree TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS sujet_articles (
@@ -76,7 +76,24 @@ def connexion():
     db.execute("PRAGMA journal_mode=WAL")
     db.execute("PRAGMA foreign_keys=ON")
     db.executescript(SCHEMA)
+    migrer(db)
     return db
+
+
+def migrer(db):
+    """Met une base d'avant au schéma courant, sans rien perdre. Aujourd'hui : la colonne articles.rubrique.
+    NULL = rubrique pas encore déduite (article d'avant la colonne), '' = aucune rubrique reconnue."""
+    if "rubrique" in {c[1] for c in db.execute("PRAGMA table_info(articles)")}:
+        return False
+    try:
+        db.execute("ALTER TABLE articles ADD COLUMN rubrique TEXT")
+    except sqlite3.OperationalError:   # une autre connexion vient de l'ajouter
+        return False
+    from .fabrique import rubrique     # import tardif : fabrique importe base
+    db.executemany("UPDATE articles SET rubrique = ? WHERE id = ?",
+                   [(rubrique(r[1]), r[0]) for r in db.execute("SELECT id, lien FROM articles").fetchall()])
+    db.commit()
+    return True
 
 
 def bord(score):

@@ -6,7 +6,7 @@ Les lecteurs ne lisent que ces fichiers : ni la base ni les modèles ne sont sol
 import json, os, shutil
 
 from . import aveugle, base, config, syntheses
-from .fabrique import sujets_du_jour
+from .fabrique import hors_ecartees, sujets_du_jour
 
 
 SEUILS = ("bords dérivés du score par nos soins : gauche ≤ -1,0 ; centre-gauche ≤ -0,5 ; centre ; "
@@ -45,13 +45,18 @@ def donnees_du_jour(db):
             "articles": [{"media": x["media"], "titre": x["titre"], "lien": x["lien"]} for x in s["articles"]]})
         ranges.update(x["id"] for x in s["articles"])
     # Titres de la fenêtre rangés sous aucun sujet publié : montrés à part, jamais comptés dans un bord.
+    # Ceux des rubriques écartées (sport, culture) ne sont montrés nulle part : seul leur nombre est publié.
+    garde, rubs = hors_ecartees("a")
     seuls = [{"media": r["nom"], "titre": r["titre"], "lien": r["lien"]} for r in db.execute(
-        """SELECT a.id, a.titre, a.lien, m.nom FROM articles a JOIN medias m ON m.id = a.media_id
-           WHERE COALESCE(a.date, a.recolte) >= ? AND m.actif = 1 ORDER BY m.nom, a.id""", (base.depuis(),))
-             if r["id"] not in ranges]
+        f"""SELECT a.id, a.titre, a.lien, m.nom FROM articles a JOIN medias m ON m.id = a.media_id
+            WHERE COALESCE(a.date, a.recolte) >= ? AND m.actif = 1 AND {garde} ORDER BY m.nom, a.id""",
+        (base.depuis(),) + rubs) if r["id"] not in ranges]
     total = db.execute("SELECT COUNT(*) AS n FROM articles WHERE COALESCE(date, recolte) >= ?", (base.depuis(),)).fetchone()["n"]
+    ecartes = db.execute(f"SELECT COUNT(*) AS n FROM articles a WHERE COALESCE(a.date, a.recolte) >= ? AND NOT ({garde})",
+                         (base.depuis(),) + rubs).fetchone()["n"]
     source = db.execute("SELECT source FROM notes_media WHERE methode = 'etude tierce' ORDER BY cree DESC, id DESC LIMIT 1").fetchone()
     return {"recolte": base.iso(), "heures": config.heures(), "total": total, "mode": "auto",
+            "ecartes": {"rubriques": config.rubriques_ecartees(), "titres": ecartes},
             "medias": sorted(({k: m[k] for k in ("nom", "score", "bord", "proprietaire")} for m in medias if m["id"] in presents),
                              key=lambda m: m["score"]),
             "absents": [m["nom"] for m in medias if m["id"] not in presents],
@@ -97,7 +102,11 @@ def ecrire_pages(db):
     # pour passer d'une période à l'autre : la dernière édition de chacune porte sa synthèse
     liste_s = [{"cle": k, "jour": v["jours"][-1]} for k, v in sorted(semaines.items())]
     liste_m = [{"cle": k, "jour": v["jours"][-1]} for k, v in sorted(mois.items())]
+    suivi = syntheses.suivi(charges)
     for i, (r, (_, charge)) in enumerate(zip(lignes, charges)):
+        # Le suivi d'un sujet : sa présence dans toutes les éditions gardées, s'il y figure plus d'un jour.
+        charge["suivi"] = {s["id"]: suivi[s["id"]] for s in charge["sujets"] if len(suivi.get(s["id"], [])) > 1}
+        charge["min_medias"] = syntheses.MIN_MEDIAS
         charge["periodes"] = {"semaine": semaines[syntheses.cle_semaine(r["jour"])], "mois": mois[r["jour"][:7]],
                               "semaines": liste_s, "mois_liste": liste_m}
         charge["edition"] = {"jour": r["jour"], "precedent": jours[i - 1] if i else None,
