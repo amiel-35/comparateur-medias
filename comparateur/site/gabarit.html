@@ -119,6 +119,11 @@ main:focus,h1:focus{outline:none}
 .pt{border-collapse:collapse;width:100%;max-width:60rem;font-size:.92rem}
 .pt th,.pt td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
 .pt thead th{font-family:var(--mono,monospace);font-size:.68rem;letter-spacing:.05em;text-transform:uppercase;border-bottom:2px solid var(--ink)}
+.fnl{border:3px solid var(--ink);border-top-width:10px;background:var(--paper);padding:18px 20px 14px;margin:22px 0 26px;max-width:78ch}
+.fnl h2{margin:.5rem 0 .5rem;font-size:clamp(1.5rem,4vw,2.1rem)}
+.fnl p{max-width:none}
+.fnl .lim{margin:10px 0 12px}
+.fnl .liens{font-size:.92rem;line-height:1.9}
 .eds{list-style:none;padding:0;margin:18px 0;max-width:60ch}
 .eds li{border-bottom:1px solid var(--line);padding:10px 0;font-family:var(--serif);font-size:1.15rem}
 .eds a[aria-current]{font-weight:700}
@@ -244,7 +249,7 @@ details>summary{cursor:pointer;font-weight:700;font-size:.9rem;padding:8px 0;min
 .origin{display:grid;gap:16px;grid-template-columns:minmax(0,1fr)}
 @media (min-width:800px){.origin{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .origin article{background:var(--paper);border:2px solid var(--ink);padding:16px}
-.origin .for{display:inline-block;background:var(--ink);color:var(--bg);font-family:var(--mono);font-size:.72rem;padding:2px 8px;text-transform:uppercase;letter-spacing:.06em}
+.origin .for,.fnl .for{display:inline-block;background:var(--ink);color:var(--bg);font-family:var(--mono);font-size:.72rem;padding:2px 8px;text-transform:uppercase;letter-spacing:.06em}
 footer{border-top:2px solid var(--ink);padding:18px 0 40px;font-size:.85rem;color:var(--mute)}
 </style>
 </head>
@@ -447,9 +452,9 @@ function vHome(){
   '<p class="note" style="margin-top:14px">Les « titres du jour » d’un média sont ceux rangés dans les sujets ci-dessous ou parmi les titres sans jumeau.</p></section>';
   h+='<details class="why"><summary><span class="why-t">Pourquoi ce site</span><span class="why-i" aria-hidden="true"></span></summary>'+
   '<p>Un même fait n’est pas titré de la même façon partout. Ce site met les titres côte à côte pour le montrer : qui en parle, avec quels mots, et qui n’en parle pas.</p>'+
-  '<p>Il ne dit pas qui a raison. Il ne classe pas les journaux : le classement vient d’une étude publiée, FrIdéo. <a href="#/classement">Voir le classement</a>.</p>'+
+  '<p>Il ne dit pas qui a raison. Il ne classe pas les journaux : le classement vient de FrIdéo, une étude publiée par le French News Lab. <a href="#/classement">Voir le classement</a>.</p>'+
   '<p>Un journal classé « à gauche » est plus à gauche que les autres journaux du panel. Ça ne veut pas dire qu’il est de gauche.</p>'+
-  '<p class="note">L’idée vient de Ground News : <a href="#/origine">d’où vient l’idée</a>. Comment ça marche : <a href="#/demarche">la démarche</a>. Le code est public : <a href="https://github.com/amiel-35/comparateur-medias" target="_blank" rel="noopener noreferrer">github.com/amiel-35/comparateur-medias ↗</a>.</p></details>';
+  '<p class="note">Ce site doit son classement au French News Lab et son idée à Ground News : <a href="#/origine">d’où vient ce site</a>. Comment ça marche : <a href="#/demarche">la démarche</a>. Le code est public : <a href="https://github.com/amiel-35/comparateur-medias" target="_blank" rel="noopener noreferrer">github.com/amiel-35/comparateur-medias ↗</a>.</p></details>';
   h+='<h2 style="margin-top:28px">Les '+rounds.length+' sujets du jour</h2>';
   var nsil=LARGES.filter(function(r){return r.sil.length;}).length;
   if(LARGES.length)h+='<p class="note">'+(nsil?'<b>'+nsil+' sur '+LARGES.length+'</b> '+(LARGES.length>1?'sujets repris':'sujet repris')+' par '+MIN+' médias ou plus '+(nsil>1?'ont':'a')+' au moins un bord silencieux. <a href="#/silences">Voir les silences</a>.':'Aucun bord silencieux sur les '+LARGES.length+' sujets repris par '+MIN+' médias ou plus.')+'</p>';
@@ -624,11 +629,19 @@ function vDemarche(){
 
 /* origine */
 function vOrigine(){
-  return '<p class="crumb"><a href="#/">Sujets</a> / Origine</p><h1 tabindex="-1" id="h1">D’où vient l’idée</h1>'+
-  '<p class="lede" style="font-family:var(--serif);font-size:1.2rem;max-width:56ch">Comparer la couverture d’un même sujet selon le bord des médias n’est pas une idée neuve. Deux projets nous ont montré la voie. Nous les citons avec estime, et nous n’avons repris ni leur habillage ni leurs textes.</p>'+
-  '<div class="origin"><article><span class="for">Pour le principe</span><h2 style="margin:.6rem 0 .4rem">Ground News</h2><p>Mettre côte à côte la manière dont des médias de bords différents traitent un même sujet, et rendre visible ce qu’un bord laisse de côté : ce geste de lecture, ils l’ont rendu simple et courant. C’est de là que vient la comparaison par bord et l’attention portée aux silences.</p><p><a href="https://ground.news/rating-system" target="_blank" rel="noopener noreferrer">ground.news/rating-system ↗</a></p></article>'+
-  '<article><span class="for">Pour la méthode</span><h2 style="margin:.6rem 0 .4rem">AllSides</h2><p>Exposer, page à l’appui, comment on évalue le positionnement d’un média, en croisant plusieurs approches plutôt qu’en assénant une note. Leur exigence de transparence est la nôtre : ici chaque classement dit d’où il vient, et chaque texte écrit par un modèle le dit aussi.</p><p><a href="https://www.allsides.com/about/media-bias-rating-methods" target="_blank" rel="noopener noreferrer">allsides.com/about/media-bias-rating-methods ↗</a></p></article></div>'+
-  '<h2>Ce que cette page fait autrement</h2><ul class="lim" style="max-width:68ch"><li>Elle met chaque fait en regard, bord par bord, avec les angles morts et les mots qui diffèrent.</li><li>Elle ne note aucun média elle-même : le classement vient de FrIdéo (<a href="#/classement">détails</a>).</li><li>Elle sépare ce qui est compté par formule de ce qui est écrit par un modèle (<a href="#/demarche">la démarche</a>).</li></ul>';
+  var L=' target="_blank" rel="noopener noreferrer"';
+  return '<p class="crumb"><a href="#/">Sujets</a> / Origine</p><h1 tabindex="-1" id="h1">D’où vient ce site</h1>'+
+  '<p class="lede" style="font-family:var(--serif);font-size:1.2rem;max-width:56ch">L’idée vient de Ground News. Le classement, et une bonne part de la méthode, viennent du French News Lab. Ce site n’invente ni l’une ni l’autre.</p>'+
+  '<section class="fnl"><span class="for">Ce site repose sur leur travail</span><h2>Le French News Lab</h2>'+
+  '<p>Une association de recherche française, fondée par Amr Sobhy, qui étudie la presse avec des données ouvertes. Sans elle, ce site n’existerait pas sous cette forme.</p>'+
+  '<ul class="lim"><li><b>Le classement.</b> Ce n’est pas ce site qui classe les journaux. C’est FrIdéo, leur échelle de trente médias, avec ses intervalles de confiance. <a href="#/classement">Voir le classement</a>.</li>'+
+  '<li><b>La leçon principale.</b> Leur étude des titres montre que, sur un même événement, les journaux écrivent souvent à peu près la même chose. Ce qui les sépare, c’est surtout ce qu’ils choisissent de couvrir. D’où l’attention portée ici aux silences.</li>'+
+  '<li><b>Une prudence.</b> Ils montrent qu’on reconnaît un journal à sa typographie plus qu’à ses mots, et que deux lecteurs sérieux ne jugent pas un titre de la même façon. Les descriptions de ce site sont à lire avec la même réserve.</li></ul>'+
+  '<p class="liens"><a href="https://frenchnewslab.org/fr"'+L+'>frenchnewslab.org ↗</a> · <a href="https://frenchnewslab.org/fr/publications/frideo-french-news-ideology-scale"'+L+'>FrIdéo ↗</a> · <a href="https://frenchnewslab.org/fr/publications/framing-by-wording-framing-by-selection"'+L+'>Cadrage par les mots, cadrage par la sélection ↗</a> · <a href="https://frenchnewslab.org/fr/publications/who-published-this-headline"'+L+'>Qui a publié ce titre ? ↗</a></p>'+
+  '<p class="note">Données FrIdéo v1.0 sous licence CC BY 4.0. Les bords affichés ici (gauche, centre, droite) sont tirés de leur score par ce site et n’engagent pas ses auteurs. Ce site n’est affilié à aucun des organismes cités.</p></section>'+
+  '<div class="origin"><article><span class="for">L’idée de départ</span><h2 style="margin:.6rem 0 .4rem">Ground News</h2><p>Ground News met côte à côte ce que des médias de bords différents font d’un même sujet, et montre ce qu’un bord laisse de côté. Ce geste de lecture, ils l’ont rendu simple et courant. La comparaison par bord vient de là.</p><p><a href="https://ground.news/rating-system"'+L+'>ground.news/rating-system ↗</a></p></article>'+
+  '<article><span class="for">Pour la transparence</span><h2 style="margin:.6rem 0 .4rem">AllSides</h2><p>AllSides publie sa méthode : comment se juge le positionnement d’un média, en croisant plusieurs approches plutôt qu’en assénant une note. Même exigence ici : chaque classement dit d’où il vient, et chaque texte écrit par un modèle le dit aussi.</p><p><a href="https://www.allsides.com/about/media-bias-rating-methods"'+L+'>allsides.com/about/media-bias-rating-methods ↗</a></p></article></div>'+
+  '<h2>Ce que ce site fait de son côté</h2><ul class="lim" style="max-width:68ch"><li>Il publie une édition par jour : chaque fait en regard, bord par bord, avec les silences et les mots qui diffèrent.</li><li>Il ne note aucun média lui-même (<a href="#/classement">le classement</a>).</li><li>Il sépare ce qui est compté par formule de ce qui est écrit par un modèle (<a href="#/demarche">la démarche</a>).</li></ul>';
 }
 
 /* routage */
