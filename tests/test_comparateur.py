@@ -200,6 +200,51 @@ class Chaine(unittest.TestCase):
         self.assertEqual(dernier, 429)
 
 
+class Editions(unittest.TestCase):
+    """Une édition par jour, gardée ; une page par édition ; le démarrage n'en refait pas."""
+
+    def setUp(self):
+        self.db = base.connexion()
+        self.db.execute("DELETE FROM editions")
+        self.db.commit()
+
+    def tearDown(self):
+        self.db.execute("DELETE FROM editions")
+        self.db.commit()
+        publier.publier(self.db)   # rend au site une édition, pour les autres tests
+        self.db.close()
+
+    def test_deux_jours_deux_pages_et_la_navigation(self):
+        publier.publier(self.db, jour="2026-01-01")
+        rendu = publier.publier(self.db, jour="2026-01-02")
+        self.assertEqual(rendu["editions"], 2)
+        pub = publier.config.public()
+        for j in ("2026-01-01", "2026-01-02"):
+            self.assertTrue(os.path.isfile(os.path.join(pub, "editions", j + ".html")))
+        hier = json.load(open(os.path.join(pub, "data", "editions", "2026-01-01.json"), encoding="utf-8"))
+        self.assertEqual(hier["edition"], {"jour": "2026-01-01", "precedent": None, "suivant": "2026-01-02",
+                                            "toutes": ["2026-01-01", "2026-01-02"]})
+        accueil = json.load(open(os.path.join(pub, "data", "jour.json"), encoding="utf-8"))
+        self.assertEqual(accueil["edition"]["jour"], "2026-01-02")   # la dernière édition est l'accueil
+        self.assertEqual(json.load(open(os.path.join(pub, "data", "editions.json"))), ["2026-01-01", "2026-01-02"])
+
+    def test_refaire_un_jour_le_remplace(self):
+        publier.publier(self.db, jour="2026-01-01")
+        publier.publier(self.db, jour="2026-01-01")
+        self.assertEqual(self.db.execute("SELECT COUNT(*) AS n FROM editions").fetchone()["n"], 1)
+
+    def test_le_demarrage_ne_refait_pas_une_edition(self):
+        publier.publier(self.db, jour="2026-01-01")
+        avant = self.db.execute("SELECT cree FROM editions").fetchone()["cree"]
+        self.assertEqual(publier.pages(self.db), {"editions": 1})
+        self.assertEqual([r["jour"] for r in self.db.execute("SELECT jour FROM editions")], ["2026-01-01"])
+        self.assertEqual(self.db.execute("SELECT cree FROM editions").fetchone()["cree"], avant)
+
+    def test_le_demarrage_fait_la_premiere_edition(self):
+        publier.pages(self.db)
+        self.assertEqual(self.db.execute("SELECT COUNT(*) AS n FROM editions").fetchone()["n"], 1)
+
+
 class Budget(unittest.TestCase):
     def test_plafond_arrete_la_fabrique(self):
         os.environ["COMPARATEUR_BUDGET_JOUR_USD"] = "0"

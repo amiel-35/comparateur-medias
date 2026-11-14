@@ -16,9 +16,9 @@ sauf le SDK Anthropic (mode `api` seulement).
 ## En local
 
 ```bash
-python3 -m unittest discover -s tests          # 14 tests, sans réseau ni modèle
+python3 -m unittest discover -s tests          # 18 tests, sans réseau ni modèle
 python3 -m comparateur init                    # base SQLite + 30 médias (scores FrIdéo)
-python3 -m comparateur tout                    # récolte, regroupement, analyse, lots, publication
+python3 -m comparateur tout                    # l'édition du jour : récolte, regroupement, analyse, lots, publication
 python3 -m comparateur inviter 3               # trois codes d'invitation
 python3 -m comparateur servir                  # http://localhost:8080
 python3 -m comparateur jetons                  # appels aux modèles, jetons, coût
@@ -36,8 +36,9 @@ En local la fabrique appelle les modèles par `claude -p` (abonnement Claude Cod
    le suffixe ensuite mais le garde pour son proxy). Coolify fournit le HTTPS. Aucun `ports:` dans le compose.
 4. **Stockage** : le volume `comparateur-donnees` (monté sur `/data`) porte la base, le cache des appels et le
    site généré. C'est lui qu'il faut sauvegarder.
-5. Déployer. Le conteneur crée la base, publie une page vide, sert, puis lance la fabrique toutes les
-   `COMPARATEUR_FABRIQUE_MINUTES` minutes (30 par défaut).
+5. Déployer. Le conteneur crée la base, réécrit le site depuis les éditions gardées, sert, puis lance la
+   fabrique : récolte des flux toutes les `COMPARATEUR_FABRIQUE_MINUTES` minutes (180 par défaut) et une édition
+   par jour à `COMPARATEUR_EDITION_HEURE` heures, heure de Paris (6 par défaut).
 
 Variante, si ta version de Coolify propose des tâches planifiées sur une ressource Compose (non vérifié dans sa
 documentation) : `COMPARATEUR_FABRIQUE_MINUTES=0` et une tâche `python -m comparateur tout`, par exemple `*/30 * * * *`.
@@ -49,6 +50,19 @@ dans Persistent Storage avant toute migration de données.
 
 Créer des invitations : terminal du conteneur dans Coolify, `python -m comparateur inviter 5`. Le lien à
 envoyer est `https://<domaine>/aveugle.html?code=<code>`.
+
+## Les éditions
+
+La récolte et l'édition sont séparées. Les flux sont lus plusieurs fois par jour, sans modèle, pour ne rien
+rater. Une fois par jour, à heure fixe, la fabrique regroupe et analyse les titres des 24 dernières heures et
+publie **l'édition du jour**, qui ne bouge plus ensuite.
+
+- Chaque édition est gardée entière dans la table `editions` (une ligne par jour, datée en heure de Paris).
+- Le site a une page par édition (`/editions/2026-11-14.html`), la dernière servant de page d'accueil, avec une
+  navigation jour par jour et la liste de toutes les éditions.
+- Les pages sont réécrites depuis les éditions gardées à chaque publication et à chaque démarrage : un
+  changement du gabarit vaut aussi pour les archives.
+- `python -m comparateur tout` refait l'édition du jour ; `python -m comparateur pages` réécrit seulement le site.
 
 ## L'API des votes
 

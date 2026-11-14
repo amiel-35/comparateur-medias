@@ -1,8 +1,8 @@
 # Comparateur de cadrages : une image, deux usages (le serveur, et la fabrique lancée par tâche planifiée).
 FROM python:3.13-slim
 
-# curl : lecture des flux RSS et contrôle de santé.
-RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
+# curl : lecture des flux RSS et contrôle de santé. tzdata : les éditions sont datées en heure de Paris.
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates tzdata \
     && rm -rf /var/lib/apt/lists/*
 
 # Seule dépendance : le SDK Anthropic, pour le mode « api » de la fabrique.
@@ -28,5 +28,5 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -fsS http://127.0.0.1:8080/sante || exit 1
 
-# Au démarrage : crée la base et charge les médias si besoin, publie une première page, puis sert.
-CMD ["sh", "-c", "python -m comparateur init && python -m comparateur publier && exec python -m comparateur servir"]
+# Au démarrage : crée la base et charge les médias si besoin, réécrit le site depuis les éditions gardées, puis sert.
+CMD ["sh", "-c", "python -m comparateur init && python -m comparateur pages && exec python -m comparateur servir"]

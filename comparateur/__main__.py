@@ -5,8 +5,9 @@
   regrouper            range les nouveaux titres en sujets (Haiku)
   analyser             analyse le cadrage des sujets (Sonnet)
   lots                 fabrique les lots à juger à l'aveugle
-  publier              écrit le site statique
-  tout                 recolter + regrouper + analyser + lots + publier (la tâche planifiée)
+  publier              fait l'édition du jour avec ce que la base contient, et réécrit le site
+  pages                réécrit le site depuis les éditions gardées, sans en refaire une (au démarrage)
+  tout                 l'édition du jour : recolter + regrouper + analyser + lots + publier
   importer <fichier>   charge une récolte du test de concept (articles.json)
   inviter [n]          crée n codes d'invitation et les affiche (défaut : 1)
   jetons               bilan des appels aux modèles (jetons, coût)
@@ -41,6 +42,8 @@ def main(argv):
             print(aveugle.fabriquer_lots(db), "lots créés")
         elif cmd == "publier":
             print(publier.publier(db), "->", config.public())
+        elif cmd == "pages":
+            print(publier.pages(db), "->", config.public())
         elif cmd == "tout":
             chaine.tout(db)
         elif cmd == "importer":

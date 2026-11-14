@@ -6,16 +6,25 @@ from . import aveugle, base, fabrique, llm, publier
 VERROU = threading.Lock()
 
 
+def recolte(db=None, afficher=print):
+    """La récolte seule, sans modèle : plusieurs fois par jour, pour ne rien rater entre deux éditions."""
+    return _lancer([("recolte", fabrique.recolter)], db, afficher)
+
+
 def tout(db=None, afficher=print):
-    """recolte -> regroupement -> analyse -> lots -> publication. Une seule exécution à la fois."""
+    """L'édition du jour : recolte -> regroupement -> analyse -> lots -> publication. Une fois par jour."""
+    return _lancer([("recolte", fabrique.recolter), ("regroupement", fabrique.regrouper), ("analyse", fabrique.analyser),
+                    ("lots", aveugle.fabriquer_lots), ("publication", publier.publier)], db, afficher)
+
+
+def _lancer(etapes, db, afficher):
+    """Une seule exécution à la fois."""
     if not VERROU.acquire(blocking=False):
         afficher("fabrique déjà en cours : passage ignoré")
         return False
     propre = db is None
     db = db or base.connexion()
     try:
-        etapes = [("recolte", fabrique.recolter), ("regroupement", fabrique.regrouper), ("analyse", fabrique.analyser),
-                  ("lots", aveugle.fabriquer_lots), ("publication", publier.publier)]
         for nom, etape in etapes:
             try:
                 rendu = etape(db)

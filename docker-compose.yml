@@ -9,10 +9,12 @@ services:
     environment:
       # Secret : à saisir dans Coolify (Environment Variables), jamais dans ce fichier.
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?clé API Anthropic requise pour la fabrique}
-      # La fabrique tourne dans le même conteneur, toutes les N minutes (0 = tâche planifiée Coolify à la place).
-      COMPARATEUR_FABRIQUE_MINUTES: ${COMPARATEUR_FABRIQUE_MINUTES:-30}
+      # La fabrique tourne dans le même conteneur : récolte des flux toutes les N minutes (0 = fabrique coupée),
+      # et une édition par jour à l'heure indiquée (heure de Paris).
+      COMPARATEUR_FABRIQUE_MINUTES: ${COMPARATEUR_FABRIQUE_MINUTES:-180}
+      COMPARATEUR_EDITION_HEURE: ${COMPARATEUR_EDITION_HEURE:-6}
       COMPARATEUR_BUDGET_JOUR_USD: ${COMPARATEUR_BUDGET_JOUR_USD:-2}
-      COMPARATEUR_HEURES: ${COMPARATEUR_HEURES:-30}
+      COMPARATEUR_HEURES: ${COMPARATEUR_HEURES:-24}
       COMPARATEUR_MIN_PAR_BORD: ${COMPARATEUR_MIN_PAR_BORD:-5}
     volumes:
       - comparateur-donnees:/data

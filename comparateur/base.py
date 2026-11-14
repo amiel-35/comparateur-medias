@@ -40,6 +40,8 @@ CREATE TABLE IF NOT EXISTS avis_aveugle (
 CREATE TABLE IF NOT EXISTS avis_note (
   votant_id TEXT NOT NULL REFERENCES votants(id), media_id INTEGER NOT NULL REFERENCES medias(id),
   accord INTEGER NOT NULL, cree TEXT NOT NULL, PRIMARY KEY (votant_id, media_id));
+-- Une édition par jour : la photographie complète de ce que le site affichait ce jour-là.
+CREATE TABLE IF NOT EXISTS editions (jour TEXT PRIMARY KEY, cree TEXT NOT NULL, donnees TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS journal_fabrique (
   id INTEGER PRIMARY KEY, etape TEXT NOT NULL, debut TEXT NOT NULL, fin TEXT, ok INTEGER, detail TEXT);
 """
@@ -47,6 +49,16 @@ CREATE TABLE IF NOT EXISTS journal_fabrique (
 
 def maintenant():
     return datetime.now(timezone.utc)
+
+
+def paris(d=None):
+    """L'instant donné (défaut : maintenant) à l'heure de Paris : les éditions sont datées en heure française."""
+    d = d or maintenant()
+    try:
+        from zoneinfo import ZoneInfo
+        return d.astimezone(ZoneInfo("Europe/Paris"))
+    except Exception:  # pas de base de fuseaux sur la machine : heure d'hiver, à une heure près l'été
+        return d.astimezone(timezone(timedelta(hours=1)))
 
 
 def iso(d=None):

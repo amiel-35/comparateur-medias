@@ -42,7 +42,7 @@ def budget_jour_usd():
 
 def heures():
     """Fenêtre d'actualité : âge maximal d'un titre pris en compte."""
-    return int(env("COMPARATEUR_HEURES", "30"))
+    return int(env("COMPARATEUR_HEURES", "24"))
 
 
 def min_par_bord():
@@ -56,5 +56,10 @@ def confiance_proxy():
 
 
 def fabrique_minutes():
-    """Si > 0, le serveur lance lui-même la fabrique à cet intervalle (sinon : tâche planifiée externe)."""
+    """Si > 0, le serveur lance lui-même la fabrique : c'est l'intervalle entre deux récoltes des flux, en minutes."""
     return int(env("COMPARATEUR_FABRIQUE_MINUTES", "0"))
+
+
+def edition_heure():
+    """Heure (0-23, heure de Paris) à laquelle l'édition du jour est fabriquée, une fois par jour."""
+    return max(0, min(23, int(env("COMPARATEUR_EDITION_HEURE", "6"))))

@@ -104,6 +104,9 @@ def recolter(db):
                 except Exception as e:  # un flux en panne ne doit pas arrêter la récolte
                     etat = f"{type(e).__name__}: {e}"[:80]
                     continue
+                for a in lus:   # un flux qui annonce une date dans le futur se trompe : on date à la récolte
+                    if a["date"] is not None and base.iso(a["date"]) > quand:
+                        a["date"] = None
                 gardes = [a for a in lus if a["titre"] and (a["date"] is None or base.iso(a["date"]) >= borne)]
                 neufs = 0
                 for a in gardes[:MAX_PAR_MEDIA]:

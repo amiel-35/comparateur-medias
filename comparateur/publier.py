@@ -59,16 +59,59 @@ def donnees_du_jour(db):
             "aveugle": aveugle.resultats(db)}
 
 
-def publier(db):
-    with base.Etape(db, "publication") as etape:
-        charge = donnees_du_jour(db)
-        pub = config.public()
+def enregistrer_edition(db, jour=None):
+    """Photographie l'état du jour et la garde : une édition par jour, datée en heure de Paris.
+    Refaire l'édition d'un jour déjà fait la remplace."""
+    charge = donnees_du_jour(db)
+    charge["rythme"] = {"recolte_minutes": config.fabrique_minutes(), "edition_heure": config.edition_heure()}
+    jour = jour or base.paris().strftime("%Y-%m-%d")
+    db.execute("""INSERT INTO editions (jour, cree, donnees) VALUES (?, ?, ?)
+                  ON CONFLICT(jour) DO UPDATE SET cree = excluded.cree, donnees = excluded.donnees""",
+               (jour, base.iso(), json.dumps(charge, ensure_ascii=False)))
+    db.commit()
+    return jour, charge
+
+
+def ecrire_pages(db):
+    """Écrit le site à partir des éditions gardées : une page par jour (editions/<jour>.html), la dernière en
+    page d'accueil. Tout est réécrit à chaque fois : un changement du gabarit vaut aussi pour les archives."""
+    pub = config.public()
+    os.makedirs(os.path.join(pub, "editions"), exist_ok=True)
+    os.makedirs(os.path.join(pub, "data", "editions"), exist_ok=True)
+    gabarit = open(os.path.join(config.ICI, "site", "gabarit.html"), encoding="utf-8").read()
+    lignes = db.execute("SELECT jour, donnees FROM editions ORDER BY jour").fetchall()
+    jours = [r["jour"] for r in lignes]
+    for i, r in enumerate(lignes):
+        charge = json.loads(r["donnees"])
+        charge["edition"] = {"jour": r["jour"], "precedent": jours[i - 1] if i else None,
+                             "suivant": jours[i + 1] if i + 1 < len(jours) else None, "toutes": jours}
         texte = json.dumps(charge, ensure_ascii=False)
-        _ecrire(os.path.join(pub, "data", "jour.json"), texte)
-        gabarit = open(os.path.join(config.ICI, "site", "gabarit.html"), encoding="utf-8").read()
-        _ecrire(os.path.join(pub, "index.html"), gabarit.replace("/*DONNEES*/null", texte.replace("</", "<\\/")))
-        for nom in os.listdir(os.path.join(config.ICI, "site")):
-            if nom != "gabarit.html":
-                shutil.copyfile(os.path.join(config.ICI, "site", nom), os.path.join(pub, nom))
-        etape.detail = {"sujets": len(charge["sujets"]), "medias": len(charge["medias"]), "titres": charge["total"]}
+        page = gabarit.replace("/*DONNEES*/null", texte.replace("</", "<\\/"))
+        _ecrire(os.path.join(pub, "editions", r["jour"] + ".html"), page)
+        _ecrire(os.path.join(pub, "data", "editions", r["jour"] + ".json"), texte)
+        if i + 1 == len(jours):   # la dernière édition est la page d'accueil
+            _ecrire(os.path.join(pub, "index.html"), page)
+            _ecrire(os.path.join(pub, "data", "jour.json"), texte)
+    _ecrire(os.path.join(pub, "data", "editions.json"), json.dumps(jours))
+    for nom in os.listdir(os.path.join(config.ICI, "site")):
+        if nom != "gabarit.html":
+            shutil.copyfile(os.path.join(config.ICI, "site", nom), os.path.join(pub, nom))
+    return jours
+
+
+def publier(db, jour=None):
+    """Fait l'édition du jour et réécrit le site."""
+    with base.Etape(db, "publication") as etape:
+        jour, charge = enregistrer_edition(db, jour)
+        jours = ecrire_pages(db)
+        etape.detail = {"edition": jour, "editions": len(jours), "sujets": len(charge["sujets"]),
+                        "medias": len(charge["medias"]), "titres": charge["total"]}
         return etape.detail
+
+
+def pages(db):
+    """Au démarrage : réécrit le site depuis les éditions gardées, sans en refaire une. S'il n'y en a aucune
+    (première mise en route), en fait une avec ce que la base contient."""
+    if not db.execute("SELECT 1 FROM editions LIMIT 1").fetchone():
+        return publier(db)
+    return {"editions": len(ecrire_pages(db))}

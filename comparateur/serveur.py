@@ -236,16 +236,36 @@ def creer(port=None, hote="0.0.0.0"):
 
 
 def _planifier(minutes):
-    """Lance la fabrique à intervalle fixe, dans un fil à part : une visite n'attend jamais la fabrique."""
+    """Dans un fil à part (une visite n'attend jamais la fabrique) : la récolte des flux toutes les `minutes`,
+    et l'édition une fois par jour, à l'heure réglée (heure de Paris). Un redémarrage après l'heure la rattrape."""
     from . import chaine
 
+    def dire(m):
+        print("fabrique |", m, flush=True)
+
+    def edition_faite(jour):
+        db = base.connexion()
+        try:
+            return db.execute("SELECT 1 FROM editions WHERE jour = ?", (jour,)).fetchone() is not None
+        finally:
+            db.close()
+
     def boucle():
+        derniere = 0.0
         while True:
             try:
-                chaine.tout(afficher=lambda m: print("fabrique |", m, flush=True))
+                ici = base.paris()
+                if ici.hour >= config.edition_heure() and not edition_faite(ici.strftime("%Y-%m-%d")):
+                    dire("édition du " + ici.strftime("%Y-%m-%d"))
+                    chaine.tout(afficher=dire)       # l'édition commence par une récolte
+                    derniere = time.time()
+                elif time.time() - derniere >= minutes * 60:
+                    chaine.recolte(afficher=dire)
+                    derniere = time.time()
             except Exception as e:
-                print("fabrique | arrêt inattendu :", type(e).__name__, e, flush=True)
-            time.sleep(minutes * 60)
+                dire(f"arrêt inattendu : {type(e).__name__} {e}")
+                derniere = time.time()               # pas de boucle serrée sur une panne
+            time.sleep(60)
 
     threading.Thread(target=boucle, daemon=True, name="fabrique").start()
 
@@ -254,7 +274,8 @@ def servir():
     srv = creer()
     print(f"comparateur : écoute sur le port {srv.server_address[1]}", flush=True)
     if config.fabrique_minutes() > 0:
-        print(f"comparateur : fabrique toutes les {config.fabrique_minutes()} min", flush=True)
+        print(f"comparateur : récolte toutes les {config.fabrique_minutes()} min, édition chaque jour à "
+              f"{config.edition_heure()} h (Paris)", flush=True)
         _planifier(config.fabrique_minutes())
     try:
         srv.serve_forever()
