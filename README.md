@@ -31,8 +31,9 @@ En local la fabrique appelle les modèles par `claude -p` (abonnement Claude Cod
 
 1. Nouvelle ressource → **Docker Compose**, ce dépôt Git, dossier de base à la racine.
 2. **Environment Variables** : `ANTHROPIC_API_KEY` (secret), et au besoin les réglages de `.env.example`.
-3. **Domaine** : Domains → Add domain, service `comparateur`, par exemple `https://mon-domaine`. Le compose fait
-   écouter le conteneur sur le port 80, celui que le proxy vise par défaut. Coolify fournit le HTTPS. Aucun `ports:` dans le compose.
+3. **Domaine** : Domains → Add domain, service `comparateur`, port interne `8080` (forme `https://mon-domaine:8080` : le
+   suffixe dit au proxy quel port du conteneur viser, le public reste en 443 ; Coolify n'affiche plus
+   le suffixe ensuite mais le garde pour son proxy). Coolify fournit le HTTPS. Aucun `ports:` dans le compose.
 4. **Stockage** : le volume `comparateur-donnees` (monté sur `/data`) porte la base, le cache des appels et le
    site généré. C'est lui qu'il faut sauvegarder.
 5. Déployer. Le conteneur crée la base, publie une page vide, sert, puis lance la fabrique toutes les
