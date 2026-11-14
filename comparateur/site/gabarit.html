@@ -106,6 +106,7 @@ main:focus,h1:focus{outline:none}
 .brows.frise .bn{grid-area:auto;grid-column:1 / -1;grid-row:2;text-align:left}
 .brows.frise .bt{grid-area:auto;grid-column:1 / -1;grid-row:3}
 .brows.frise .bl{grid-area:auto;grid-column:1 / -1;grid-row:1}
+.brows.frise .bn .ko{display:block}
 .brows.frise a,.brows.frise b{font-family:var(--serif);font-size:1.05rem}
 @media (min-width:720px){
   .brows li{grid-template-columns:9.5rem minmax(0,1fr) 12rem;grid-template-areas:"l t n"}
@@ -153,7 +154,7 @@ main:focus,h1:focus{outline:none}
 .card h3{font-size:1.15rem}
 .card .pbar{margin-top:auto;max-width:none}
 .card.sil{border-left-width:10px;border-left-color:var(--ko)}
-.chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.chips{display:flex;flex-wrap:wrap;align-items:flex-start;gap:6px;margin:8px 0}
 .am{display:inline-block;font-family:var(--mono);font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;background:var(--ko);color:var(--paper);padding:2px 7px}
 :root[data-theme="dark"] .am{color:#14130f}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .am{color:#14130f}}
@@ -439,7 +440,7 @@ function frise(r){
     var lab=ici?'<b aria-current="true">'+esc(jourFrise(j))+'</b> <span class="mono mute">cette édition</span>':x?'<a href="'+edUrl(j)+'#/sujet/'+esc(r.id)+'">'+esc(jourFrise(j))+'</a>':'<span class="mute">'+esc(jourFrise(j))+'</span>';
     if(!x){h+='<li><span class="bl">'+lab+'</span><span class="bt nul"></span><span class="bn mute">absent de cette édition</span></li>';return;}
     var sl=(x.silences||[]).filter(function(b){return BL[b];});
-    h+='<li><span class="bl">'+lab+'</span><span class="bt">'+barFine(x.par||{},Math.max(4,Math.round(100*x.titres/mx)))+'</span><span class="bn">'+pl(x.titres,'titre','titres')+' · '+pl(x.medias,'média','médias')+(sl.length?' · <span class="ko">silence : '+sl.map(bl).join(', ')+'</span>':'')+'</span></li>';
+    h+='<li><span class="bl">'+lab+'</span><span class="bt">'+barFine(x.par||{},Math.max(4,Math.round(100*x.titres/mx)))+'</span><span class="bn">'+pl(x.titres,'titre','titres')+' · '+pl(x.medias,'média','médias')+(sl.length?' <span class="ko">silence : '+sl.map(bl).join(', ')+'</span>':'')+'</span></li>';
   });
   return h+'</ol>'+legende();
 }
@@ -547,7 +548,7 @@ function vClass(){
   '<p class="lede" style="font-family:var(--serif);font-size:1.2rem;max-width:56ch">Les '+MEDIAS.length+' médias du panel, situés les uns par rapport aux autres. C’est ce classement, et lui seul, qui range les médias par bord : aucun modèle de langage n’a noté un média.</p>';
   h+='<div class="src"><p><b>Source.</b> FrIdéo v1.0, French News Lab, Amr Sobhy, ICNLSP 2026, licence CC BY 4.0. <a href="https://frenchnewslab.org/fr/publications/frideo-french-news-ideology-scale" target="_blank" rel="noopener noreferrer">frenchnewslab.org ↗</a>. Scores et intervalles du jeu de données officiel publié sur data.gouv.fr.</p>'+
   '<p><b>Réserve.</b> Un journal classé « à gauche » est plus à gauche que les autres journaux du panel. Ça ne veut pas dire qu’il est de gauche. Ce classement peut ne pas correspondre à l’idée que vous vous faites d’un journal. Classer les journaux n’est pas le but de ce site.</p>'+
-  '<p><b>Comment lire les scores.</b> Zéro est la moyenne des '+MEDIAS.length+' médias. Les bords sont tirés du score par ce site, avec ces seuils : '+esc(C.seuils.replace(/^bords dérivés du score par nos soins : /,''))+'.</p>'+
+  '<p><b>Comment lire les scores.</b> Zéro est la moyenne des '+MEDIAS.length+' médias. Les bords sont tirés du score par ce site, avec ces seuils : '+esc(C.seuils.replace(/^bords dérivés du score par (nos soins|ce site) : /,''))+'.</p>'+
   '<p><b>Intervalles de confiance.</b> Le trait fin autour de chaque barre est l’intervalle à 95 % publié par FrIdéo : plus il est long, moins le classement est sûr de la place du journal. Pour '+MEDIAS.filter(function(m){return m.ic&&m.ic[0]<0&&m.ic[1]>0;}).length+' médias sur '+MEDIAS.length+', ce trait traverse la moyenne : le classement ne dit pas de quel côté ils se trouvent. Aucun modèle de langage n’a noté un média.</p></div>';
   h+='<div class="legend">'+BORDS.map(function(b){return '<span><i class="b-'+b+'"></i>'+BL[b]+'</span>';}).join('')+'</div>';
   h+='<div class="axis"><div class="scale"><div></div><div><span style="left:0">← gauche</span><span style="right:0;text-align:right">droite →</span><span style="left:'+pos(0)+'%;transform:translateX(-50%);top:1.5em">moy. panel</span></div><div></div></div>';
@@ -580,7 +581,7 @@ function vMedia(nom){
   var pos=(m.score+2.6)/4.8*100;
   h+='<div class="mini" role="img" aria-label="Position sur l’axe du panel"><i style="left:calc('+pos+'% - 2px)"></i></div><p class="note" style="display:flex;justify-content:space-between"><span>← plus à gauche que la moyenne</span><span>plus à droite →</span></p>';
   h+='<dl class="kv"><div><dt>D’où vient la note</dt><dd>Classement FrIdéo v1.0 (French News Lab, Amr Sobhy, ICNLSP 2026, CC BY 4.0). Le zéro est la moyenne du panel, pas un centre politique. <a href="#/classement">Voir le classement</a>.</dd></div>'+
-  '<div><dt>D’où vient le bord</dt><dd>Dérivé du score par nos soins, avec les seuils du classement. Un modèle de langage n’intervient pas.</dd></div>'+
+  '<div><dt>D’où vient le bord</dt><dd>Dérivé du score par ce site, avec les seuils du classement. Un modèle de langage n’intervient pas.</dd></div>'+
   '<div><dt>Intervalle de confiance</dt><dd>'+(m.ic?'De '+fs(m.ic[0])+' à '+fs(m.ic[1])+' (à 95 %).'+(m.ic[0]<0&&m.ic[1]>0?' Il traverse la moyenne du panel : le classement ne dit pas de quel côté se trouve ce journal.':'')+(m.sources?' Score établi sur '+m.sources+' familles d’indices sur 9'+(m.peu?', ce qui est peu : à lire avec prudence.':'.'):''):'<span class="soon">à venir</span>')+'</dd></div>'+
   '<div><dt>Propriétaire</dt><dd><span class="soon">à venir</span> <span class="mute">(absent des données)</span></dd></div>'+
   (m.note?'<div><dt>Note sur le flux</dt><dd>'+esc(m.note)+'</dd></div>':'')+
@@ -635,7 +636,7 @@ function vOrigine(){
   '<section class="fnl"><span class="for">Ce site repose sur leur travail</span><h2>Le French News Lab</h2>'+
   '<p>Une association de recherche française, fondée par Amr Sobhy, qui étudie la presse avec des données ouvertes. Sans elle, ce site n’existerait pas sous cette forme.</p>'+
   '<ul class="lim"><li><b>Le classement.</b> Ce n’est pas ce site qui classe les journaux. C’est FrIdéo, leur échelle de trente médias, avec ses intervalles de confiance. <a href="#/classement">Voir le classement</a>.</li>'+
-  '<li><b>La leçon principale.</b> Leur étude des titres montre que, sur un même événement, les journaux écrivent souvent à peu près la même chose. Ce qui les sépare, c’est surtout ce qu’ils choisissent de couvrir. D’où l’attention portée ici aux silences.</li>'+
+  '<li><b>La leçon principale.</b> Leur étude des titres montre que, sur un même événement, les journaux écrivent souvent à peu près la même chose. Ce qui les sépare, c’est surtout ce qu’ils choisissent de couvrir. D’où l’attention portée ici aux silences : <a href="#/silences">les silences de l’édition</a>.</li>'+
   '<li><b>Une prudence.</b> Ils montrent qu’on reconnaît un journal à sa typographie plus qu’à ses mots, et que deux lecteurs sérieux ne jugent pas un titre de la même façon. Les descriptions de ce site sont à lire avec la même réserve.</li></ul>'+
   '<p class="liens"><a href="https://frenchnewslab.org/fr"'+L+'>frenchnewslab.org ↗</a> · <a href="https://frenchnewslab.org/fr/publications/frideo-french-news-ideology-scale"'+L+'>FrIdéo ↗</a> · <a href="https://frenchnewslab.org/fr/publications/framing-by-wording-framing-by-selection"'+L+'>Cadrage par les mots, cadrage par la sélection ↗</a> · <a href="https://frenchnewslab.org/fr/publications/who-published-this-headline"'+L+'>Qui a publié ce titre ? ↗</a></p>'+
   '<p class="note">Données FrIdéo v1.0 sous licence CC BY 4.0. Les bords affichés ici (gauche, centre, droite) sont tirés de leur score par ce site et n’engagent pas ses auteurs. Ce site n’est affilié à aucun des organismes cités.</p></section>'+

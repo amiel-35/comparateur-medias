@@ -16,7 +16,7 @@ sauf le SDK Anthropic (mode `api` seulement).
 ## En local
 
 ```bash
-python3 -m unittest discover -s tests          # 21 tests, sans réseau ni modèle
+python3 -m unittest discover -s tests          # 28 tests, sans réseau ni modèle
 python3 -m comparateur init                    # base SQLite + 30 médias (scores FrIdéo)
 python3 -m comparateur tout                    # l'édition du jour : récolte, regroupement, analyse, lots, publication
 python3 -m comparateur inviter 3               # trois codes d'invitation
@@ -64,10 +64,48 @@ publie **l'édition du jour**, qui ne bouge plus ensuite.
   changement du gabarit vaut aussi pour les archives.
 - `python -m comparateur tout` refait l'édition du jour ; `python -m comparateur pages` réécrit seulement le site.
 
+## Cinq bords, trois côtés
+
+Le score FrIdéo d'un média donne son bord, sur cinq niveaux : gauche, centre gauche, centre, centre droit, droite
+(`base.bord`). Tous les comptages du site se font sur ces cinq bords : cartes de l'accueil, page d'un sujet,
+silences, semaine, mois. Les textes d'angle écrits par le modèle (`analyse.g/c/d`) n'existent que pour trois
+côtés (gauche et centre gauche, centre, centre droit et droite, `base.COTE`) : la page d'un sujet le dit.
+
+## Les silences
+
+Un bord est silencieux sur un sujet quand il n'y a aucun titre, que le sujet est repris par
+`syntheses.MIN_MEDIAS` médias ou plus (4) et que le bord a au moins un média lu ce jour-là. C'est un comptage,
+sans modèle. La vue `#/silences` liste les silences de l'édition affichée, bord par bord, les sujets les plus
+couverts d'abord ; l'accueil marque les cartes concernées. Deux réserves, écrites sur la page : les bords n'ont
+pas le même nombre de journaux (12 au centre, 4 ou 5 ailleurs), et sur un sujet repris par 4 médias seulement
+un bord au moins est forcément absent.
+
+## Suivre un sujet
+
+Un sujet garde son identifiant (`s45`) d'une édition à l'autre. À chaque écriture des pages,
+`publier.ecrire_pages` calcule sa présence dans toutes les éditions gardées (`syntheses.suivi` : jour, titres,
+médias, répartition sur cinq bords, bords silencieux) et l'injecte dans la page (`suivi`). Quand un sujet figure
+dans plus d'une édition, sa page montre une frise jour par jour ; chaque jour mène à
+`/editions/<jour>.html#/sujet/<id>`. Rien n'est ajouté aux éditions gardées en base.
+
+## Le sport et la culture sont écartés
+
+`fabrique.rubrique` lit la rubrique d'un article dans son adresse, sans modèle : un segment entier du chemin
+(`/sport/`, `/sports/`, `/culture/`, `/loisirs/`, `/people/`, `/cinema/`, `/musique/`, `/tele/`...) ou un
+sous-domaine (`sport24.lefigaro.fr`). Le dernier segment, qui porte le titre, n'est pas lu. La rubrique est
+gardée dans la colonne `articles.rubrique` ; une base existante reçoit la colonne au démarrage (`ALTER TABLE`,
+puis lecture des adresses déjà en base), sans rien perdre.
+
+Les articles des rubriques écartées ne sont ni proposés au regroupement ni comptés dans les sujets, ni montrés
+parmi les titres sans jumeau. Ils restent en base. La liste se règle par `COMPARATEUR_RUBRIQUES_ECARTEES`
+(défaut `sport,culture` ; `aucune` pour ne rien écarter). Rubriques reconnues : sport, culture, politique,
+international, economie, societe, faits-divers, sciences, environnement, opinions. Un article dont l'adresse
+ne dit rien de sa rubrique n'est pas écarté.
+
 ## La semaine et le mois
 
-`syntheses.py` met bout à bout les éditions gardées : les sujets les plus couverts, ce que chaque bord a traité
-et laissé de côté, la présence de chaque journal. Ce sont des comptages, sans modèle. Un sujet qui dure garde
+`syntheses.py` met bout à bout les éditions gardées : les sujets les plus couverts, ce que chacun des cinq bords
+a traité et laissé de côté, la présence de chaque journal. Ce sont des comptages, sans modèle. Un sujet qui dure garde
 le même identifiant d'un jour à l'autre, ce qui permet de le suivre ; deux sujets ouverts séparément sur le
 même fait sont comptés deux fois. Les synthèses sont recalculées à chaque publication et s'ouvrent depuis
 l'accueil (« la semaine », « le mois »).
@@ -114,6 +152,9 @@ minute et par adresse ; corps limité à 4 Ko.
 - **Mode `api` non essayé** tant qu'il n'y a pas de clé : seul le mode `cli` a tourné.
 - **Le Point et Les Echos** refusent même un lecteur RSS déclaré (403) : absents de la récolte.
 - Un titre resté seul n'est pas reproposé aux sujets ouverts après lui.
+- **Rubriques lues dans l'adresse seulement.** Un article de sport dont l'adresse ne porte pas de rubrique passe.
+  Les lots à l'aveugle ne tiennent pas compte des rubriques.
+- **Un silence sur cinq bords est fréquent** sur les sujets peu repris : voir « Les silences ».
 
 ## Essais
 
@@ -121,11 +162,16 @@ minute et par adresse ; corps limité à 4 Ko.
 autre modèle, noms des médias masqués, bords échangés. Sur 20 sujets (14/11/2026), aucune de ces variantes ne
 change plus la description qu'un simple second tirage.
 
+`essais/editions_essai.py` fabrique quatre éditions factices (dont une au format d'avant les rubriques et le
+suivi) et écrit le site, sans réseau ni modèle, pour voir le rendu en local. Il efface les éditions de la base
+visée : `COMPARATEUR_DONNEES=/tmp/essai python3 essais/editions_essai.py`, puis `python3 -m comparateur servir`
+avec la même variable.
+
 ## Sources et remerciements
 
 - **Classement des médias : FrIdéo v1.0**, French News Lab (<https://frenchnewslab.org/en/medias>), sous licence
-  CC BY 4.0. Les scores de `comparateur/medias.json` en sont relevés ; les bords (gauche, centre, droite) sont
-  dérivés ici par des seuils fixes et n'engagent pas ses auteurs.
+  CC BY 4.0. Les scores de `comparateur/medias.json` en sont relevés ; les bords (gauche, centre gauche,
+  centre, centre droit, droite) sont dérivés ici par des seuils fixes et n'engagent pas ses auteurs.
 - **L'idée** de comparer la couverture par bord et de signaler les angles morts vient de
   [Ground News](https://ground.news/rating-system).
 - **Le jugement à l'aveugle** par un panel équilibré s'inspire de la méthode publiée par
