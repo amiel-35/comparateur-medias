@@ -1,0 +1,5 @@
+donnees/
+tests/
+.env
+**/__pycache__/
+*.pyc

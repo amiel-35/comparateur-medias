@@ -1,0 +1,4 @@
+donnees/
+.env
+__pycache__/
+*.pyc

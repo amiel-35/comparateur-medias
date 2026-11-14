@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Comparateur de cadrages</title>
+<style>
+:root {
+  --fond: #f6f4ef; --carte: #fffdf9; --trait: #e2ddd2; --encre: #1f1d1a; --doux: #6b665d;
+  --g: #c8456a; --c: #b9a25a; --d: #3d6fb4; --g-fond: #f7e3e9; --c-fond: #f3edd8; --d-fond: #e0eaf6;
+  --alerte: #8a5a00; --alerte-fond: #fbeecb; --accent: #1f1d1a;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --fond: #17161a; --carte: #201f24; --trait: #35333b; --encre: #eeebe4; --doux: #a29d93;
+    --g: #e0718f; --c: #cdb873; --d: #6f9ad6; --g-fond: #3a2430; --c-fond: #35301f; --d-fond: #222e40;
+    --alerte: #f0c869; --alerte-fond: #3a3018; --accent: #eeebe4;
+  }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--fond); color: var(--encre); font: 16px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif; }
+main { max-width: 1040px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font: 700 30px/1.15 Georgia, "Times New Roman", serif; margin: 0 0 6px; }
+.chapo { color: var(--doux); margin: 0 0 18px; max-width: 70ch; }
+.barre-outils { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 18px; }
+button, select { font: inherit; color: inherit; }
+.puce { border: 1px solid var(--trait); background: var(--carte); border-radius: 999px; padding: 6px 14px; cursor: pointer; font-size: 14px; }
+.puce[aria-pressed="true"] { background: var(--accent); color: var(--fond); border-color: var(--accent); }
+.puce small { opacity: .7; margin-left: 4px; }
+.tri { margin-left: auto; font-size: 14px; color: var(--doux); display: flex; gap: 6px; align-items: center; }
+.tri select { background: var(--carte); border: 1px solid var(--trait); border-radius: 8px; padding: 5px 8px; }
+.sujet { background: var(--carte); border: 1px solid var(--trait); border-radius: 14px; margin: 0 0 12px; overflow: hidden; }
+.tete { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 16px 18px; cursor: pointer; }
+.tete h2 { font: 700 20px/1.25 Georgia, serif; margin: 0 0 4px; text-wrap: balance; }
+.fait { color: var(--doux); margin: 0 0 12px; font-size: 15px; }
+.jauge { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: var(--trait); }
+.jauge i { display: block; height: 100%; }
+.jauge .g { background: var(--g); } .jauge .c { background: var(--c); } .jauge .d { background: var(--d); }
+.legende { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 8px; font-size: 13px; color: var(--doux); align-items: center; }
+.legende b { font-weight: 600; color: var(--encre); }
+.pastille { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; vertical-align: 1px; }
+.etiq { font-size: 12px; font-weight: 600; border-radius: 6px; padding: 2px 8px; margin-left: auto; }
+.etiq.mort { background: var(--alerte-fond); color: var(--alerte); }
+.etiq.div { border: 1px solid var(--trait); color: var(--doux); }
+.corps { border-top: 1px solid var(--trait); padding: 16px 18px 18px; }
+.colonnes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 760px) { .colonnes { grid-template-columns: 1fr; } .tri { margin-left: 0; } h1 { font-size: 25px; } }
+.col { border-radius: 10px; padding: 12px; min-width: 0; }
+.col.g { background: var(--g-fond); } .col.c { background: var(--c-fond); } .col.d { background: var(--d-fond); }
+.col h3 { margin: 0 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; }
+.col.g h3 { color: var(--g); } .col.c h3 { color: var(--alerte); } .col.d h3 { color: var(--d); }
+.angle { margin: 0 0 10px; font-size: 15px; }
+.col ul { list-style: none; margin: 0; padding: 0; }
+.col li { font-size: 14px; padding: 7px 0; border-top: 1px solid color-mix(in srgb, var(--encre) 12%, transparent); overflow-wrap: anywhere; }
+.col li span { display: block; font-size: 12px; font-weight: 600; color: var(--doux); }
+.col a { color: inherit; text-decoration: none; } .col a:hover { text-decoration: underline; }
+.vide { font-size: 14px; color: var(--doux); font-style: italic; }
+.mots { margin: 14px 0 0; padding: 0; list-style: none; font-size: 14px; display: flex; flex-wrap: wrap; gap: 6px 10px; }
+.mots li { border: 1px solid var(--trait); border-radius: 8px; padding: 4px 10px; }
+.mots em { font-style: normal; color: var(--doux); }
+h2.rubrique { font: 700 20px Georgia, serif; margin: 34px 0 4px; }
+.note { color: var(--doux); font-size: 14px; margin: 0 0 12px; max-width: 75ch; }
+.seuls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 760px) { .seuls { grid-template-columns: 1fr; } }
+.seuls .col li:first-child { border-top: 0; padding-top: 0; }
+details.reglage { background: var(--carte); border: 1px solid var(--trait); border-radius: 14px; padding: 12px 18px; margin-top: 34px; }
+details.reglage summary { cursor: pointer; font-weight: 600; }
+.medias { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px 16px; margin: 12px 0; }
+.medias label { display: flex; justify-content: space-between; gap: 8px; align-items: center; font-size: 14px; }
+.medias select { background: var(--fond); border: 1px solid var(--trait); border-radius: 8px; padding: 4px 6px; font-size: 13px; }
+.lien { background: none; border: 0; padding: 0; text-decoration: underline; cursor: pointer; color: var(--doux); font-size: 14px; }
+footer { color: var(--doux); font-size: 13px; margin-top: 28px; max-width: 80ch; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Qui parle de quoi, et comment</h1>
+  <p class="chapo" id="chapo"></p>
+  <div class="barre-outils" id="filtres"></div>
+  <div id="liste"></div>
+
+  <h2 class="rubrique">Vu d'un seul côté</h2>
+  <p class="note">Des titres portés par un seul média dans la récolte : des candidats « angle mort », à lire avec prudence (une exclusivité ou une tribune n'est pas un silence des autres).</p>
+  <div class="seuls" id="seuls"></div>
+
+  <details class="reglage">
+    <summary>Mon classement des médias</summary>
+    <p class="note">Le classement de départ vient des scores FrIdéo (entre parenthèses ; négatif = gauche). Tu peux le changer, les barres et les angles morts se recalculent. Les textes d'analyse, eux, ont été écrits pour le classement de départ.</p>
+    <div class="medias" id="medias"></div>
+    <button class="lien" id="raz">Revenir au classement de départ</button>
+  </details>
+
+  <p class="note" style="margin-top:28px"><a href="aveugle.html" style="color:inherit">Juger des titres à l'aveugle</a> (sur invitation)</p>
+  <footer id="pied"></footer>
+</main>
+<script>
+const DONNEES = /*DONNEES*/null;
+const BORDS = ['gauche', 'centre-gauche', 'centre', 'centre-droit', 'droite'];
+const COTE = { 'gauche': 'g', 'centre-gauche': 'g', 'centre': 'c', 'centre-droit': 'd', 'droite': 'd' };
+const NOM = { g: 'Gauche', c: 'Centre', d: 'Droite' };
+const CLE = 'comparateur.classement';
+const depart = Object.fromEntries(DONNEES.medias.map(m => [m.nom, m.bord]));
+let classement = { ...depart };
+try { Object.assign(classement, JSON.parse(localStorage.getItem(CLE) || '{}')); } catch (e) {}
+let filtre = 'tous', tri = 'couverture';
+const ouverts = new Set();
+
+const el = (tag, attrs = {}, ...enfants) => {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'class') n.className = v; else if (k.startsWith('on')) n.addEventListener(k.slice(2), v); else n.setAttribute(k, v);
+  }
+  for (const e of enfants.flat()) if (e != null) n.append(e);
+  return n;
+};
+const lien = (a) => /^https?:\/\//.test(a.lien) ? el('a', { href: a.lien, target: '_blank', rel: 'noopener noreferrer' }, a.titre) : a.titre;
+
+function mesure(sujet) {
+  const total = { g: 0, c: 0, d: 0 }, vus = { g: new Set(), c: new Set(), d: new Set() };
+  for (const [m, b] of Object.entries(classement)) total[COTE[b]]++;
+  for (const a of sujet.articles) vus[COTE[classement[a.media]]].add(a.media);
+  const taux = {}; let nb = 0;
+  for (const k of 'gcd') { taux[k] = total[k] ? vus[k].size / total[k] : 0; nb += vus[k].size; }
+  let mort = null;
+  if (vus.d.size === 0 && vus.g.size > 0 && nb >= 3) mort = 'd';
+  if (vus.g.size === 0 && vus.d.size > 0 && nb >= 3) mort = 'g';
+  return { total, vus, taux, nb, mort };
+}
+
+function carte(sujet) {
+  const m = mesure(sujet);
+  const somme = m.taux.g + m.taux.c + m.taux.d || 1;
+  const jauge = el('div', { class: 'jauge', role: 'img', 'aria-label': 'Part de chaque bord' },
+    [...'gcd'].map(k => el('i', { class: k, style: `width:${100 * m.taux[k] / somme}%` })));
+  const legende = el('div', { class: 'legende' },
+    [...'gcd'].map(k => el('span', {}, el('i', { class: 'pastille', style: `background:var(--${k})` }),
+      `${NOM[k]} `, el('b', {}, `${m.vus[k].size}/${m.total[k]}`))),
+    el('span', {}, `${sujet.articles.length} titres, ${m.nb} médias`),
+    m.mort ? el('span', { class: 'etiq mort' }, `Angle mort à ${NOM[m.mort].toLowerCase()}`)
+      : sujet.divergence != null ? el('span', { class: 'etiq div' }, `Écart de cadrage ${sujet.divergence}/5`) : null);
+  const ouvert = ouverts.has(sujet.id);
+  const tete = el('button', { class: 'tete', 'aria-expanded': String(ouvert), onclick: () => { ouvert ? ouverts.delete(sujet.id) : ouverts.add(sujet.id); rendre(); } },
+    el('h2', {}, sujet.titre), el('p', { class: 'fait' }, sujet.fait), jauge, legende);
+  const boite = el('article', { class: 'sujet' }, tete);
+  if (ouvert) {
+    const cols = [...'gcd'].map(k => {
+      const arts = sujet.articles.filter(a => COTE[classement[a.media]] === k)
+        .sort((x, y) => BORDS.indexOf(classement[x.media]) - BORDS.indexOf(classement[y.media]));
+      return el('section', { class: 'col ' + k }, el('h3', {}, NOM[k]), el('p', { class: 'angle' }, sujet.analyse[k]),
+        arts.length ? el('ul', {}, arts.map(a => el('li', {}, el('span', {}, a.media), lien(a)))) : el('p', { class: 'vide' }, 'Aucun titre récolté de ce côté.'));
+    });
+    boite.append(el('div', { class: 'corps' }, el('div', { class: 'colonnes' }, cols),
+      sujet.mots.length ? el('ul', { class: 'mots' }, sujet.mots.map(x => el('li', {}, x.terme + ' ', el('em', {}, x.qui)))) : null));
+  }
+  return { boite, m };
+}
+
+function rendre() {
+  const rendus = DONNEES.sujets.map(s => ({ s, ...carte(s) }));
+  const compte = {
+    tous: rendus.length, mortg: rendus.filter(r => r.m.mort === 'g').length,
+    mortd: rendus.filter(r => r.m.mort === 'd').length, ecart: rendus.filter(r => (r.s.divergence || 0) >= 3).length
+  };
+  const garde = { tous: () => true, mortg: r => r.m.mort === 'g', mortd: r => r.m.mort === 'd', ecart: r => (r.s.divergence || 0) >= 3 }[filtre];
+  const visibles = rendus.filter(garde);
+  if (tri === 'couverture') visibles.sort((a, b) => b.m.nb - a.m.nb);
+  if (tri === 'ecart') visibles.sort((a, b) => (b.s.divergence ?? -1) - (a.s.divergence ?? -1));
+  const liste = document.getElementById('liste');
+  liste.replaceChildren(...(visibles.length ? visibles.map(r => r.boite) : [el('p', { class: 'note' }, 'Aucun sujet dans ce filtre avec ce classement.')]));
+
+  const libelles = { tous: 'Tous les sujets', ecart: 'Cadrages qui divergent', mortd: 'Angles morts à droite', mortg: 'Angles morts à gauche' };
+  const select = el('select', { 'aria-label': 'Trier', onchange: (e) => { tri = e.target.value; rendre(); } },
+    el('option', { value: 'couverture' }, 'les plus couverts'), el('option', { value: 'ecart' }, 'les plus divergents'));
+  select.value = tri;
+  document.getElementById('filtres').replaceChildren(
+    ...Object.keys(libelles).map(k => el('button', { class: 'puce', 'aria-pressed': String(filtre === k), onclick: () => { filtre = k; rendre(); } },
+      libelles[k], el('small', {}, String(compte[k])))),
+    el('label', { class: 'tri' }, 'Trier par', select));
+}
+
+function rendreSeuls() {
+  const par = { g: [], d: [] };
+  for (const a of DONNEES.seuls) { const k = COTE[classement[a.media]]; if (par[k]) par[k].push(a); }
+  document.getElementById('seuls').replaceChildren(...['g', 'd'].map(k => el('section', { class: 'col ' + k },
+    el('h3', {}, `Seulement à ${NOM[k].toLowerCase()}`),
+    par[k].length ? el('ul', {}, par[k].map(a => el('li', {}, el('span', {}, a.media), lien(a)))) : el('p', { class: 'vide' }, 'Rien relevé.'))));
+}
+
+function rendreMedias() {
+  document.getElementById('medias').replaceChildren(...DONNEES.medias.map(m => {
+    const s = el('select', { onchange: (e) => { classement[m.nom] = e.target.value; garder(); tout(); } }, BORDS.map(b => el('option', { value: b }, b)));
+    s.value = classement[m.nom];
+    return el('label', {}, `${m.nom} (${m.score > 0 ? '+' : ''}${m.score.toFixed(2).replace('.', ',')})`, s);
+  }));
+}
+function garder() {
+  const ecart = Object.fromEntries(Object.entries(classement).filter(([m, b]) => depart[m] !== b));
+  try { localStorage.setItem(CLE, JSON.stringify(ecart)); } catch (e) {}
+}
+function tout() { rendre(); rendreSeuls(); rendreMedias(); }
+
+document.getElementById('raz').addEventListener('click', () => { classement = { ...depart }; garder(); tout(); });
+const quand = new Date(DONNEES.recolte).toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short' });
+document.getElementById('chapo').textContent =
+  `${DONNEES.total} titres de ${DONNEES.medias.length} médias français, récoltés le ${quand} sur les ${DONNEES.heures} dernières heures. ` +
+  `Pour chaque sujet : quels bords en parlent, et sous quel angle. Touche un sujet pour lire les titres côte à côte.`;
+document.getElementById('pied').textContent =
+  `Test de concept. Les chiffres « 3/6 » comptent les médias de ce bord qui ont au moins un titre sur le sujet. ` +
+  (DONNEES.mode === 'auto'
+    ? `Version automatique, sans relecture humaine : regroupement en sujets par Claude Haiku, textes d'analyse par Claude Sonnet, à partir des seuls titres ; `
+    : `Le regroupement en sujets et les textes d'analyse ont été écrits par Claude à partir des seuls titres, sans lire les articles : `) +
+  `ils décrivent le traitement, pas le fond. ` +
+  `Classement des médias : scores FrIdéo v1.0 du French News Lab (Amr Sobhy, ICNLSP 2026), licence CC BY 4.0 ; le découpage en bords à partir du score est le nôtre. ` +
+  (DONNEES.absents.length ? `Absents de cette récolte : ${DONNEES.absents.join(', ')} (leur flux refuse les lecteurs automatiques).` : '');
+if (DONNEES.sujets.length) ouverts.add(DONNEES.sujets[0].id);
+if (!DONNEES.seuls.length) { const r = document.getElementById('seuls'); r.previousElementSibling.hidden = true; r.previousElementSibling.previousElementSibling.hidden = true; r.hidden = true; }
+tout();
+</script>
+</body>
+</html>

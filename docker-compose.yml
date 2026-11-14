@@ -1,0 +1,27 @@
+# Déploiement Coolify (type « Docker Compose »). Coolify fournit le domaine et le HTTPS (Traefik) :
+# on n'expose aucun port sur l'hôte, on déclare seulement le port interne du service.
+services:
+  comparateur:
+    build: .
+    restart: unless-stopped
+    expose:
+      - "8080"
+    environment:
+      # Secret : à saisir dans Coolify (Environment Variables), jamais dans ce fichier.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?clé API Anthropic requise pour la fabrique}
+      # La fabrique tourne dans le même conteneur, toutes les N minutes (0 = tâche planifiée Coolify à la place).
+      COMPARATEUR_FABRIQUE_MINUTES: ${COMPARATEUR_FABRIQUE_MINUTES:-30}
+      COMPARATEUR_BUDGET_JOUR_USD: ${COMPARATEUR_BUDGET_JOUR_USD:-2}
+      COMPARATEUR_HEURES: ${COMPARATEUR_HEURES:-30}
+      COMPARATEUR_MIN_PAR_BORD: ${COMPARATEUR_MIN_PAR_BORD:-5}
+    volumes:
+      - comparateur-donnees:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/sante"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  comparateur-donnees:
