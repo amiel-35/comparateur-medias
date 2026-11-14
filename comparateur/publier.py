@@ -9,6 +9,10 @@ from . import aveugle, base, config
 from .fabrique import sujets_du_jour
 
 
+SEUILS = ("bords dérivés du score par nos soins : gauche ≤ -1,0 ; centre-gauche ≤ -0,5 ; centre ; "
+          "centre-droit ≥ +0,5 ; droite ≥ +1,0")
+
+
 def _ecrire(chemin, texte):
     tmp = chemin + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
@@ -24,7 +28,7 @@ def donnees_du_jour(db):
     presents = {r["media_id"] for r in db.execute(
         "SELECT DISTINCT media_id FROM articles WHERE COALESCE(date, recolte) >= ?", (base.depuis(),))}
     analyses = {r["sujet_id"]: r for r in db.execute("SELECT * FROM analyses")}
-    sujets = []
+    sujets, ranges = [], set()
     for s in sujets_du_jour(db):
         a = analyses.get(s["id"])
         if a is None and s["medias"] < 3:
@@ -36,13 +40,22 @@ def donnees_du_jour(db):
             "analyse": {k: a[k] for k in "gcd"} if a else {"g": vide, "c": vide, "d": vide},
             "mots": json.loads(a["mots"]) if a else [],
             "articles": [{"media": x["media"], "titre": x["titre"], "lien": x["lien"]} for x in s["articles"]]})
+        ranges.update(x["id"] for x in s["articles"])
+    # Titres de la fenêtre rangés sous aucun sujet publié : montrés à part, jamais comptés dans un bord.
+    seuls = [{"media": r["nom"], "titre": r["titre"], "lien": r["lien"]} for r in db.execute(
+        """SELECT a.id, a.titre, a.lien, m.nom FROM articles a JOIN medias m ON m.id = a.media_id
+           WHERE COALESCE(a.date, a.recolte) >= ? AND m.actif = 1 ORDER BY m.nom, a.id""", (base.depuis(),))
+             if r["id"] not in ranges]
     total = db.execute("SELECT COUNT(*) AS n FROM articles WHERE COALESCE(date, recolte) >= ?", (base.depuis(),)).fetchone()["n"]
     source = db.execute("SELECT source FROM notes_media WHERE methode = 'etude tierce' LIMIT 1").fetchone()
     return {"recolte": base.iso(), "heures": config.heures(), "total": total, "mode": "auto",
             "medias": sorted(({k: m[k] for k in ("nom", "score", "bord", "proprietaire")} for m in medias if m["id"] in presents),
                              key=lambda m: m["score"]),
             "absents": [m["nom"] for m in medias if m["id"] not in presents],
-            "source_classement": source["source"] if source else "", "sujets": sujets, "seuls": [],
+            "source_classement": source["source"] if source else "",
+            "classement": {"source": source["source"] if source else "", "seuils": SEUILS,
+                           "medias": sorted(({"nom": m["nom"], "score": m["score"]} for m in medias), key=lambda m: m["score"])},
+            "sujets": sujets, "seuls": seuls,
             "aveugle": aveugle.resultats(db)}
 
 

@@ -3,219 +3,448 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Comparateur de cadrages</title>
+<meta name="color-scheme" content="light dark">
+<title>Cadrages : l’actualité du 14 novembre</title>
 <style>
-:root {
-  --fond: #f6f4ef; --carte: #fffdf9; --trait: #e2ddd2; --encre: #1f1d1a; --doux: #6b665d;
-  --g: #c8456a; --c: #b9a25a; --d: #3d6fb4; --g-fond: #f7e3e9; --c-fond: #f3edd8; --d-fond: #e0eaf6;
-  --alerte: #8a5a00; --alerte-fond: #fbeecb; --accent: #1f1d1a;
+:root{
+  --bg:#f1ede4;--paper:#fbf9f4;--ink:#16140f;--mute:#5b564b;--line:#cfc8b6;--hl:#f2c230;--hl-on:#16140f;
+  --g:#b8203b;--on-g:#fff;--cg:#e8879c;--on-cg:#16140f;--c:#666a76;--on-c:#fff;--cd:#8fb0ea;--on-cd:#16140f;--d:#1d4fb3;--on-d:#fff;
+  --ko:#9a2a1a;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
 }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --fond: #17161a; --carte: #201f24; --trait: #35333b; --encre: #eeebe4; --doux: #a29d93;
-    --g: #e0718f; --c: #cdb873; --d: #6f9ad6; --g-fond: #3a2430; --c-fond: #35301f; --d-fond: #222e40;
-    --alerte: #f0c869; --alerte-fond: #3a3018; --accent: #eeebe4;
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#14130f;--paper:#1d1b16;--ink:#efe9da;--mute:#aaa392;--line:#403b2f;--hl:#f2c230;--hl-on:#16140f;
+    --g:#ff4d70;--on-g:#14130f;--cg:#f2a3b5;--on-cg:#14130f;--c:#a7abb8;--on-c:#14130f;--cd:#8db3ff;--on-cd:#14130f;--d:#6f9bff;--on-d:#14130f;
+    --ko:#ff9c8a;
   }
 }
-* { box-sizing: border-box; }
-[hidden] { display: none !important; }
-body { margin: 0; background: var(--fond); color: var(--encre); font: 16px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif; }
-main { max-width: 1040px; margin: 0 auto; padding: 24px 16px 64px; }
-h1 { font: 700 30px/1.15 Georgia, "Times New Roman", serif; margin: 0 0 6px; }
-.chapo { color: var(--doux); margin: 0 0 18px; max-width: 70ch; }
-.barre-outils { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 18px; }
-button, select { font: inherit; color: inherit; }
-.puce { border: 1px solid var(--trait); background: var(--carte); border-radius: 999px; padding: 6px 14px; cursor: pointer; font-size: 14px; }
-.puce[aria-pressed="true"] { background: var(--accent); color: var(--fond); border-color: var(--accent); }
-.puce small { opacity: .7; margin-left: 4px; }
-.tri { margin-left: auto; font-size: 14px; color: var(--doux); display: flex; gap: 6px; align-items: center; }
-.tri select { background: var(--carte); border: 1px solid var(--trait); border-radius: 8px; padding: 5px 8px; }
-.sujet { background: var(--carte); border: 1px solid var(--trait); border-radius: 14px; margin: 0 0 12px; overflow: hidden; }
-.tete { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 16px 18px; cursor: pointer; }
-.tete h2 { font: 700 20px/1.25 Georgia, serif; margin: 0 0 4px; text-wrap: balance; }
-.fait { color: var(--doux); margin: 0 0 12px; font-size: 15px; }
-.jauge { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: var(--trait); }
-.jauge i { display: block; height: 100%; }
-.jauge .g { background: var(--g); } .jauge .c { background: var(--c); } .jauge .d { background: var(--d); }
-.legende { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 8px; font-size: 13px; color: var(--doux); align-items: center; }
-.legende b { font-weight: 600; color: var(--encre); }
-.pastille { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; vertical-align: 1px; }
-.etiq { font-size: 12px; font-weight: 600; border-radius: 6px; padding: 2px 8px; margin-left: auto; }
-.etiq.mort { background: var(--alerte-fond); color: var(--alerte); }
-.etiq.div { border: 1px solid var(--trait); color: var(--doux); }
-.corps { border-top: 1px solid var(--trait); padding: 16px 18px 18px; }
-.colonnes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-@media (max-width: 760px) { .colonnes { grid-template-columns: 1fr; } .tri { margin-left: 0; } h1 { font-size: 25px; } }
-.col { border-radius: 10px; padding: 12px; min-width: 0; }
-.col.g { background: var(--g-fond); } .col.c { background: var(--c-fond); } .col.d { background: var(--d-fond); }
-.col h3 { margin: 0 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; }
-.col.g h3 { color: var(--g); } .col.c h3 { color: var(--alerte); } .col.d h3 { color: var(--d); }
-.angle { margin: 0 0 10px; font-size: 15px; }
-.col ul { list-style: none; margin: 0; padding: 0; }
-.col li { font-size: 14px; padding: 7px 0; border-top: 1px solid color-mix(in srgb, var(--encre) 12%, transparent); overflow-wrap: anywhere; }
-.col li span { display: block; font-size: 12px; font-weight: 600; color: var(--doux); }
-.col a { color: inherit; text-decoration: none; } .col a:hover { text-decoration: underline; }
-.vide { font-size: 14px; color: var(--doux); font-style: italic; }
-.mots { margin: 14px 0 0; padding: 0; list-style: none; font-size: 14px; display: flex; flex-wrap: wrap; gap: 6px 10px; }
-.mots li { border: 1px solid var(--trait); border-radius: 8px; padding: 4px 10px; }
-.mots em { font-style: normal; color: var(--doux); }
-h2.rubrique { font: 700 20px Georgia, serif; margin: 34px 0 4px; }
-.note { color: var(--doux); font-size: 14px; margin: 0 0 12px; max-width: 75ch; }
-.seuls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-@media (max-width: 760px) { .seuls { grid-template-columns: 1fr; } }
-.seuls .col li:first-child { border-top: 0; padding-top: 0; }
-details.reglage { background: var(--carte); border: 1px solid var(--trait); border-radius: 14px; padding: 12px 18px; margin-top: 34px; }
-details.reglage summary { cursor: pointer; font-weight: 600; }
-.medias { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px 16px; margin: 12px 0; }
-.medias label { display: flex; justify-content: space-between; gap: 8px; align-items: center; font-size: 14px; }
-.medias select { background: var(--fond); border: 1px solid var(--trait); border-radius: 8px; padding: 4px 6px; font-size: 13px; }
-.lien { background: none; border: 0; padding: 0; text-decoration: underline; cursor: pointer; color: var(--doux); font-size: 14px; }
-footer { color: var(--doux); font-size: 13px; margin-top: 28px; max-width: 80ch; }
+:root[data-theme="dark"]{
+  --bg:#14130f;--paper:#1d1b16;--ink:#efe9da;--mute:#aaa392;--line:#403b2f;--hl:#f2c230;--hl-on:#16140f;
+  --g:#ff4d70;--on-g:#14130f;--cg:#f2a3b5;--on-cg:#14130f;--c:#a7abb8;--on-c:#14130f;--cd:#8db3ff;--on-cd:#14130f;--d:#6f9bff;--on-d:#14130f;
+  --ko:#ff9c8a;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 var(--sans);overflow-x:hidden}
+a{color:inherit;text-underline-offset:.18em;text-decoration-thickness:1px}
+a:hover{text-decoration-thickness:2px}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:3px solid var(--hl);outline-offset:2px}
+h1,h2,h3{font-family:var(--serif);font-weight:700;line-height:1.15;margin:0;overflow-wrap:anywhere}
+h1{font-size:clamp(1.9rem,6vw,3.4rem);letter-spacing:-.01em}
+h2{font-size:clamp(1.3rem,3.4vw,1.8rem);margin:2.2rem 0 .8rem}
+h3{font-size:1.1rem}
+p{margin:.5em 0;overflow-wrap:anywhere}
+.wrap{max-width:1120px;margin:0 auto;padding:0 16px}
+.mono{font-family:var(--mono);font-size:.74rem;letter-spacing:.06em;text-transform:uppercase}
+.mute{color:var(--mute)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* en-tête */
+.top{border-bottom:2px solid var(--ink);background:var(--bg);z-index:5}
+.top .wrap{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;padding-top:10px;padding-bottom:10px}
+.brand{font-family:var(--serif);font-weight:800;font-size:1.25rem;text-decoration:none;display:flex;align-items:center;gap:8px;margin-right:auto}
+.brand i{display:inline-block;width:34px;height:14px;background:var(--ink)}
+nav.main{display:flex;flex-wrap:wrap;gap:2px 4px;order:3;width:100%}
+nav.main a{font-size:.88rem;padding:6px 8px;text-decoration:none;border-bottom:3px solid transparent;font-weight:600}
+nav.main a[aria-current="page"]{border-bottom-color:var(--hl)}
+.tools{display:flex;gap:8px}
+.btn{border:2px solid var(--ink);background:var(--paper);padding:8px 12px;font-weight:700;font-size:.9rem;border-radius:0;min-height:40px}
+.btn:hover{background:var(--ink);color:var(--bg)}
+.btn.hl{background:var(--hl);color:var(--hl-on);border-color:var(--ink)}
+.btn.hl:hover{background:var(--ink);color:var(--hl)}
+.btn.sm{padding:5px 9px;font-size:.82rem;min-height:32px}
+@media (min-width:760px){ .top{position:sticky;top:0} nav.main{order:0;width:auto} .top .wrap{flex-wrap:nowrap} .brand{margin-right:12px} nav.main{margin-right:auto} }
+
+main{padding-bottom:64px;min-height:70vh}
+main:focus,h1:focus{outline:none}
+
+/* tags */
+.mdl{display:inline-block;font-family:var(--mono);font-size:.66rem;letter-spacing:.05em;text-transform:uppercase;padding:1px 6px;border:1px solid var(--mute);color:var(--mute);vertical-align:middle;white-space:nowrap;margin-left:6px;font-weight:400;font-style:normal}
+.nomdl{display:inline-block;font-family:var(--mono);font-size:.66rem;letter-spacing:.05em;text-transform:uppercase;padding:1px 6px;border:1px solid var(--ink);vertical-align:middle;white-space:nowrap}
+.soon{display:inline-block;font-family:var(--mono);font-size:.74rem;padding:1px 8px;border:1px dashed var(--mute);color:var(--mute)}
+.bchip{display:inline-block;padding:1px 8px;font-size:.78rem;font-weight:700;line-height:1.5;white-space:nowrap;box-shadow:inset 0 0 0 1px rgba(0,0,0,.25)}
+.b-gauche{background:var(--g);color:var(--on-g)}.b-centre-gauche{background:var(--cg);color:var(--on-cg)}.b-centre{background:var(--c);color:var(--on-c)}.b-centre-droit{background:var(--cd);color:var(--on-cd)}.b-droite{background:var(--d);color:var(--on-d)}
+.f-g{background:var(--g);color:var(--on-g)}.f-c{background:var(--c);color:var(--on-c)}.f-d{background:var(--d);color:var(--on-d)}
+
+/* hero */
+.hero{padding:34px 0 10px;border-bottom:1px solid var(--line)}
+.hero .lede{font-family:var(--serif);font-size:clamp(1.1rem,2.6vw,1.45rem);max-width:46ch;margin:14px 0 18px}
+.hero .row{display:flex;flex-wrap:wrap;gap:10px}
+.note{font-size:.88rem;color:var(--mute);max-width:70ch}
+
+.legend{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:.82rem;color:var(--mute);margin:8px 0}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.legend i{width:12px;height:12px;display:inline-block;box-shadow:inset 0 0 0 1px rgba(0,0,0,.25)}
+
+/* grille de sujets */
+.grid{list-style:none;margin:18px 0 0;padding:0;display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
+@media (min-width:720px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (min-width:1080px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.card{background:var(--paper);border:2px solid var(--ink);display:flex;flex-direction:column;height:100%;position:relative}
+.card a.cover{display:flex;flex-direction:column;gap:8px;padding:14px;text-decoration:none;height:100%}
+.card a.cover:hover h3{text-decoration:underline;text-decoration-thickness:2px}
+.card .no{font-family:var(--mono);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
+.card h3{font-size:1.15rem}
+.slots{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:auto;padding-top:6px}
+.slot{position:relative;border:1px solid var(--line);padding:4px 6px 8px;min-height:58px;overflow:hidden}
+.slot .lab{display:block;font-family:var(--mono);font-size:.64rem;letter-spacing:.06em;text-transform:uppercase;color:var(--mute)}
+.slot b{display:block;font-size:1.3rem;line-height:1.2;font-variant-numeric:tabular-nums}
+.slot i{position:absolute;left:0;bottom:0;height:5px}
+.slot.s-g i{background:var(--g)}.slot.s-c i{background:var(--c)}.slot.s-d i{background:var(--d)}
+.slot.zero{background:repeating-linear-gradient(135deg,transparent 0 6px,var(--line) 6px 7px)}
+.slot.zero b{font-size:.8rem;font-family:var(--mono);text-transform:uppercase;color:var(--ko);padding-top:6px;letter-spacing:.04em}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.am{display:inline-block;font-family:var(--mono);font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;background:var(--ko);color:var(--paper);padding:2px 7px}
+:root[data-theme="dark"] .am{color:#14130f}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .am{color:#14130f}}
+.dots{letter-spacing:2px;font-size:.9rem}
+
+/* sujet */
+.crumb{font-size:.85rem;margin:22px 0 10px}
+.fait{background:var(--paper);border-left:8px solid var(--hl);padding:12px 16px;margin:16px 0}
+.fait p{font-family:var(--serif);font-size:1.15rem;margin:.3em 0 0}
+
+.cols{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
+@media (min-width:900px){.cols{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.col{background:var(--paper);border:2px solid var(--ink);display:flex;flex-direction:column;min-width:0}
+.col>header{padding:8px 12px;font-weight:800;display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap}
+.col.s-g>header{background:var(--g);color:var(--on-g)}.col.s-c>header{background:var(--c);color:var(--on-c)}.col.s-d>header{background:var(--d);color:var(--on-d)}
+.col .body{padding:12px}
+.angle{font-family:var(--serif);font-size:1.02rem;border-bottom:1px solid var(--line);padding-bottom:10px;margin-bottom:10px}
+.angle .lab{display:block;margin-bottom:4px}
+.silence{border:2px dashed var(--ko);padding:12px;color:var(--ko);font-weight:700}
+.silence span{display:block;font-weight:400;color:var(--mute);font-size:.88rem;margin-top:4px}
+.tlist{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.tlist li{min-width:0}
+.tlist .who{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:2px}
+.mname{font-weight:700;font-size:.9rem}
+.tlist a.t{font-family:var(--serif);font-size:1.02rem;line-height:1.3;display:block;overflow-wrap:anywhere}
+details>summary{cursor:pointer;font-weight:700;font-size:.9rem;padding:8px 0;min-height:36px}
+.mots{list-style:none;margin:0;padding:0;display:grid;gap:10px;grid-template-columns:minmax(0,1fr)}
+@media (min-width:720px){.mots{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.mots li{background:var(--paper);border:1px solid var(--line);padding:10px 12px}
+.mots q{font-family:var(--serif);font-size:1.2rem;quotes:none}
+.pn{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:34px}
+
+/* classement */
+.axis{margin:14px 0}
+.cl{list-style:none;margin:0;padding:0}
+.cl li{display:grid;grid-template-columns:minmax(0,7.4rem) minmax(0,1fr) 3.6rem;gap:8px;align-items:center;padding:5px 0;border-bottom:1px solid var(--line)}
+.cl a{font-weight:700;font-size:.92rem;text-decoration:none;overflow-wrap:anywhere;line-height:1.2}
+.cl a:hover{text-decoration:underline}
+.track{position:relative;height:20px;background:repeating-linear-gradient(90deg,transparent 0 calc(100% - 1px),transparent 0)}
+.track .zero{position:absolute;top:-6px;bottom:-6px;width:2px;background:var(--ink)}
+.track .tick{position:absolute;top:0;bottom:0;width:0;border-left:1px dashed var(--mute);opacity:.7}
+.track .bar{position:absolute;top:3px;height:14px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.3)}
+.cl .sc{font-family:var(--mono);font-size:.82rem;text-align:right;font-variant-numeric:tabular-nums}
+.cl li.off a::after{content:" (flux illisible)";font-weight:400;color:var(--mute);font-size:.72rem}
+.scale{display:grid;grid-template-columns:minmax(0,7.4rem) minmax(0,1fr) 3.6rem;gap:8px;font-family:var(--mono);font-size:.66rem;color:var(--mute);text-transform:uppercase;letter-spacing:.04em}
+.scale div:nth-child(2){position:relative;height:3.2em}
+.scale span{position:absolute;white-space:nowrap}
+.src{background:var(--paper);border:1px solid var(--line);padding:12px 14px;margin:14px 0}
+
+/* médias */
+.mlist{list-style:none;margin:0;padding:0;display:grid;gap:8px;grid-template-columns:minmax(0,1fr)}
+@media (min-width:720px){.mlist{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (min-width:1080px){.mlist{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.mlist a{display:flex;gap:10px;align-items:center;justify-content:space-between;background:var(--paper);border:1px solid var(--line);border-left:8px solid var(--c);padding:8px 10px;text-decoration:none;min-height:48px}
+.mlist a:hover{border-color:var(--ink)}
+.mlist .l-gauche{border-left-color:var(--g)}.mlist .l-centre-gauche{border-left-color:var(--cg)}.mlist .l-centre{border-left-color:var(--c)}.mlist .l-centre-droit{border-left-color:var(--cd)}.mlist .l-droite{border-left-color:var(--d)}
+.mlist b{overflow-wrap:anywhere}
+.mlist small{color:var(--mute);font-family:var(--mono);font-size:.72rem;text-align:right;flex:none}
+.score{font-family:var(--serif);font-size:clamp(2.6rem,9vw,4.4rem);font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.kv{display:grid;grid-template-columns:minmax(0,1fr);gap:0;margin:0}
+.kv>div{padding:10px 0;border-bottom:1px solid var(--line)}
+@media (min-width:720px){.kv>div{display:grid;grid-template-columns:13rem minmax(0,1fr);gap:16px}}
+.kv dt{font-family:var(--mono);font-size:.74rem;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);margin-bottom:2px}
+.kv dd{margin:0;overflow-wrap:anywhere}
+.mini{position:relative;height:22px;margin:16px 0 4px;background:linear-gradient(90deg,var(--g),var(--cg) 28%,var(--c) 45%,var(--cd) 66%,var(--d));box-shadow:inset 0 0 0 1px rgba(0,0,0,.3)}
+.mini i{position:absolute;top:-6px;bottom:-6px;width:4px;background:var(--ink);outline:2px solid var(--paper)}
+.tags{display:flex;flex-wrap:wrap;gap:6px;list-style:none;margin:0;padding:0}
+.tags a,.tags span.x{display:inline-block;border:1px solid var(--ink);padding:3px 8px;font-size:.85rem;text-decoration:none;background:var(--paper)}
+.tags span.x{border-style:dashed;border-color:var(--mute);color:var(--mute)}
+.masked{color:var(--mute);font-size:.9rem}
+
+/* démarche */
+.steps{list-style:none;counter-reset:s;margin:14px 0;padding:0;display:grid;gap:12px}
+.steps li{counter-increment:s;background:var(--paper);border:2px solid var(--ink);padding:12px 14px 12px 58px;position:relative}
+.steps li::before{content:counter(s);position:absolute;left:12px;top:10px;font-family:var(--serif);font-size:2rem;font-weight:800;line-height:1}
+.steps h3{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin-bottom:4px}
+.two{display:grid;gap:14px;grid-template-columns:minmax(0,1fr)}
+@media (min-width:800px){.two{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.two>div{background:var(--paper);border:1px solid var(--line);padding:12px 14px}
+.two ul,.lim{margin:.4em 0;padding-left:1.2em}
+.two li,.lim li{margin:.35em 0;overflow-wrap:anywhere}
+.nums{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:14px 0}
+@media (min-width:720px){.nums{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.nums div{border:1px solid var(--line);background:var(--paper);padding:10px}
+.nums b{display:block;font-family:var(--serif);font-size:1.9rem;line-height:1.1}
+.nums span{font-size:.82rem;color:var(--mute)}
+.origin{display:grid;gap:16px;grid-template-columns:minmax(0,1fr)}
+@media (min-width:800px){.origin{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.origin article{background:var(--paper);border:2px solid var(--ink);padding:16px}
+.origin .for{display:inline-block;background:var(--ink);color:var(--bg);font-family:var(--mono);font-size:.72rem;padding:2px 8px;text-transform:uppercase;letter-spacing:.06em}
+footer{border-top:2px solid var(--ink);padding:18px 0 40px;font-size:.85rem;color:var(--mute)}
 </style>
 </head>
 <body>
-<main>
-  <h1>Qui parle de quoi, et comment</h1>
-  <p class="chapo" id="chapo"></p>
-  <div class="barre-outils" id="filtres"></div>
-  <div id="liste"></div>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#/"><i aria-hidden="true"></i>Cadrages</a>
+    <div class="tools">
+      <button class="btn sm" id="btnTheme" type="button" aria-label="Changer de thème">Thème</button>
+    </div>
+    <nav class="main" aria-label="Sections">
+      <a href="#/" data-nav="home">Sujets</a>
+      <a href="#/medias" data-nav="medias">Médias</a>
+      <a href="#/classement" data-nav="classement">Classement</a>
+      <a href="#/demarche" data-nav="demarche">Démarche</a>
+      <a href="#/origine" data-nav="origine">Origine</a>
+    </nav>
+  </div>
+</header>
+<main id="main" tabindex="-1"><div class="wrap" id="app"></div></main>
+<footer><div class="wrap" id="foot"></div></footer>
 
-  <h2 class="rubrique">Vu d'un seul côté</h2>
-  <p class="note">Des titres portés par un seul média dans la récolte : des candidats « angle mort », à lire avec prudence (une exclusivité ou une tribune n'est pas un silence des autres).</p>
-  <div class="seuls" id="seuls"></div>
-
-  <details class="reglage">
-    <summary>Mon classement des médias</summary>
-    <p class="note">Le classement de départ vient des scores FrIdéo (entre parenthèses ; négatif = gauche). Tu peux le changer, les barres et les angles morts se recalculent. Les textes d'analyse, eux, ont été écrits pour le classement de départ.</p>
-    <div class="medias" id="medias"></div>
-    <button class="lien" id="raz">Revenir au classement de départ</button>
-  </details>
-
-  <p class="note" style="margin-top:28px"><a href="aveugle.html" style="color:inherit">Juger des titres à l'aveugle</a> (sur invitation)</p>
-  <footer id="pied"></footer>
-</main>
-<script>
+<script id="donnees">
 const DONNEES = /*DONNEES*/null;
-const BORDS = ['gauche', 'centre-gauche', 'centre', 'centre-droit', 'droite'];
-const COTE = { 'gauche': 'g', 'centre-gauche': 'g', 'centre': 'c', 'centre-droit': 'd', 'droite': 'd' };
-const NOM = { g: 'Gauche', c: 'Centre', d: 'Droite' };
-const CLE = 'comparateur.classement';
-const depart = Object.fromEntries(DONNEES.medias.map(m => [m.nom, m.bord]));
-let classement = { ...depart };
-try { Object.assign(classement, JSON.parse(localStorage.getItem(CLE) || '{}')); } catch (e) {}
-let filtre = 'tous', tri = 'couverture';
-const ouverts = new Set();
+const CLASSEMENT = DONNEES.classement;
 
-const el = (tag, attrs = {}, ...enfants) => {
-  const n = document.createElement(tag);
-  for (const [k, v] of Object.entries(attrs)) {
-    if (k === 'class') n.className = v; else if (k.startsWith('on')) n.addEventListener(k.slice(2), v); else n.setAttribute(k, v);
+</script>
+<script id="app-js">
+(function(){
+'use strict';
+var D=DONNEES,C=CLASSEMENT;
+var GRP={'gauche':'g','centre-gauche':'g','centre':'c','centre-droit':'d','droite':'d'};
+var GL={g:'Gauche',c:'Centre',d:'Droite'};
+var BL={'gauche':'Gauche','centre-gauche':'Centre gauche','centre':'Centre','centre-droit':'Centre droit','droite':'Droite'};
+var BORDS=['gauche','centre-gauche','centre','centre-droit','droite'];
+var KEY='cadrages.v1';
+var S={theme:null};
+try{var raw=localStorage.getItem(KEY);if(raw){var p=JSON.parse(raw);if(p&&typeof p==='object'){S.theme=p.theme||null;}}}catch(_){}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(_){}}
+
+function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function url(u){return /^https?:\/\//i.test(u)?esc(u):'#';}
+function fs(n){return (n>0?'+':n<0?'−':'')+Math.abs(n).toFixed(2).replace('.',',');}
+function pl(n,a,b){return n+' '+(n>1?b:a);}
+function bordOf(s){return s<=-1?'gauche':s<=-0.5?'centre-gauche':s>=1?'droite':s>=0.5?'centre-droit':'centre';}
+function hash(s){var h=5381;for(var i=0;i<s.length;i++){h=((h<<5)+h+s.charCodeAt(i))|0;}return h>>>0;}
+function enc(s){return encodeURIComponent(s);}
+
+/* médias */
+var lus={};D.medias.forEach(function(m){lus[m.nom]=m;});
+var MEDIAS=C.medias.map(function(m){var l=lus[m.nom];return {nom:m.nom,score:m.score,note:m.note||null,lu:!!l,bord:l?l.bord:bordOf(m.score)};});
+var BY={};MEDIAS.forEach(function(m){BY[m.nom]=m;});
+
+/* sujets */
+var rounds=D.sujets.map(function(s){return {id:s.id,kind:'sujet',titre:s.titre,fait:s.fait,div:s.divergence,analyse:s.analyse,mots:s.mots,arts:s.articles};});
+rounds.push({id:'seuls',kind:'seuls',titre:'Les titres sans jumeau',fait:null,div:null,analyse:null,mots:[],arts:D.seuls});
+var RB={};
+rounds.forEach(function(r,i){
+  r.n=i+1;RB[r.id]=r;
+  r.arts=r.arts.map(function(a,k){var m=BY[a.media];return {media:a.media,titre:a.titre,lien:a.lien,k:k,bord:m.bord,grp:GRP[m.bord],score:m.score};});
+  r.count={g:0,c:0,d:0};r.med={g:{},c:{},d:{}};
+  r.arts.forEach(function(a){r.count[a.grp]++;r.med[a.grp][a.media]=1;});
+  r.mortes=['g','c','d'].filter(function(x){return r.count[x]===0;});
+  r.nmed=Object.keys(Object.assign({},r.med.g,r.med.c,r.med.d)).length;
+});
+
+
+/* éléments communs */
+function mdl(){return '<span class="mdl" title="Écrit par un modèle de langage">écrit par un modèle</span>';}
+function bchip(b){return '<span class="bchip b-'+b+'">'+BL[b]+'</span>';}
+function slots(r){
+  var mx=Math.max(r.count.g,r.count.c,r.count.d,1);
+  return '<div class="slots">'+['g','c','d'].map(function(x){
+    var c=r.count[x];
+    return c?'<div class="slot s-'+x+'"><span class="lab">'+GL[x]+'</span><b>'+c+'</b><i style="width:'+Math.max(8,Math.round(100*c/mx))+'%"></i></div>'
+            :'<div class="slot zero"><span class="lab">'+GL[x]+'</span><b>silence</b></div>';
+  }).join('')+'</div>';
+}
+
+/* ====== vues ====== */
+function vHome(){
+  var h='<section class="hero"><p class="mono mute">Titres du '+esc(new Date(D.recolte).toLocaleDateString('fr-FR',{timeZone:'Europe/Paris',day:'numeric',month:'long',year:'numeric'}))+'</p>'+
+  '<h1>Un même fait, titré autrement selon le bord.</h1>'+
+  '<p class="lede">Chaque sujet du jour rassemble les titres des médias français qui en parlent : qui en parle à gauche, au centre ou à droite, avec quels mots, et qui se tait.</p>'+
+  '<p class="note" style="margin-top:14px">Les « titres du jour » d’un média sont ceux rangés dans les sujets ci-dessous ou parmi les titres sans jumeau. Ce n’est pas la totalité des '+D.total+' titres récoltés.</p></section>';
+  h+='<h2 style="margin-top:28px">Les '+rounds.length+' sujets du jour</h2>';
+  h+='<div class="legend"><span><i class="f-g"></i>Gauche : gauche et centre gauche</span><span><i class="f-c"></i>Centre</span><span><i class="f-d"></i>Droite : centre droit et droite</span><span>Regroupement en trois par nos soins</span></div>';
+  h+='<ul class="grid">'+rounds.map(function(r){
+    var t=r.kind==='sujet'?esc(r.titre)+mdl():esc(r.titre);
+    return '<li class="card"><a class="cover" href="#/sujet/'+r.id+'"><span class="no">Sujet '+r.n+'</span><h3>'+t+'</h3>'+
+      '<div class="chips">'+(r.kind==='sujet'?(r.mortes.length?r.mortes.map(function(x){return '<span class="am">Angle mort : '+GL[x].toLowerCase()+'</span>';}).join(''):'<span class="mono mute">Les trois bords en parlent</span>'):'')+'</div>'+slots(r)+
+      '<span class="mute" style="font-size:.82rem">'+pl(r.arts.length,'titre','titres')+', '+pl(r.nmed,'média','médias')+(r.div!=null?' · écart de cadrage '+r.div+' sur 5':'')+'</span>'+
+      '</a></li>';
+  }).join('')+'</ul>';
+  return h;
+}
+
+function titleLi(r,a){
+  return '<li><div class="who"><a class="mname mchip" href="#/media/'+enc(a.media)+'">'+esc(a.media)+'</a>'+bchip(a.bord)+'</div><a class="t" href="'+url(a.lien)+'" target="_blank" rel="noopener noreferrer">'+esc(a.titre)+' ↗</a></li>';
+}
+function sujetView(r){
+  var h='<div><p class="crumb"><a href="#/">Sujets</a> / Sujet '+r.n+'</p>'+
+  '<p class="mono mute">Sujet '+r.n+' sur '+rounds.length+'</p><h1 tabindex="-1" id="h1">'+esc(r.titre)+(r.kind==='sujet'?mdl():'')+'</h1>';
+  if(r.fait)h+='<div class="fait"><span class="mono">Le fait commun'+mdl()+'</span><p>'+esc(r.fait)+'</p></div>';
+  /* qui en parle */
+  h+='<h2>Qui en parle</h2>'+slots(r);
+  h+='<div class="chips">'+(r.kind==='sujet'?(r.mortes.length?r.mortes.map(function(x){return '<span class="am">Angle mort : '+GL[x].toLowerCase()+'</span>';}).join(' ')+'<span class="note">Aucun média de ce bord n’a de titre rangé sous ce sujet. Comptage par formule fixe.</span>':'<span class="note">Les trois bords ont au moins un titre sur ce sujet.</span>'):'')+'</div>';
+  if(r.div!=null){h+='<p><span class="mono">Écart de cadrage</span> <span class="dots" aria-label="'+r.div+' sur 5">'+'●'.repeat(r.div)+'○'.repeat(5-r.div)+'</span> '+r.div+' sur 5'+mdl()+'</p>';}
+  /* face à face */
+  h+='<h2>'+(r.kind==='sujet'?'Le même fait, trois formulations':'Les titres, bord par bord')+'</h2><div class="cols">';
+  ['g','c','d'].forEach(function(x){
+    var list=r.arts.filter(function(a){return a.grp===x;}).sort(function(a,b){return a.score-b.score;});
+    var names=Object.keys(r.med[x]);
+    h+='<section class="col s-'+x+'"><header><span>'+GL[x]+'</span><span class="mono" style="font-weight:400">'+pl(list.length,'titre','titres')+(names.length?' · '+pl(names.length,'média','médias'):'')+'</span></header><div class="body">';
+    if(r.analyse)h+='<div class="angle"><span class="lab mono mute">Angle'+mdl()+'</span>'+esc(r.analyse[x])+'</div>';
+    if(!list.length)h+='<div class="silence">Silence : aucun titre'+'<span>'+(r.kind==='sujet'?'Aucun média de ce bord n’apparaît sous ce sujet dans les flux récoltés.':'Aucun titre de ce bord parmi les titres sans jumeau.')+'</span></div>';
+    else{
+      var first=list.slice(0,5),rest=list.slice(5);
+      h+='<ul class="tlist">'+first.map(function(a){return titleLi(r,a);}).join('')+'</ul>';
+      if(rest.length)h+='<details><summary>Voir les '+rest.length+' autres titres</summary><ul class="tlist">'+rest.map(function(a){return titleLi(r,a);}).join('')+'</ul></details>';
+    }
+    h+='</div></section>';
+  });
+  h+='</div>';
+  if(r.mots&&r.mots.length){
+    h+='<h2>Les mots qui diffèrent'+mdl()+'</h2><ul class="mots">'+r.mots.map(function(m){return '<li><q>'+esc(m.terme)+'</q><br><span class="mute">'+esc(m.qui)+'</span></li>';}).join('')+'</ul>';
+  }else if(r.kind==='sujet'){h+='<h2>Les mots qui diffèrent</h2><p class="note">Le modèle n’a repéré aucun mot qui diffère nettement sur ce sujet.</p>';}
+  h+='<p class="note">Aller vérifier : <a href="#/classement">le classement des médias</a> · <a href="#/demarche">la démarche</a>.</p>';
+  var pr=rounds[r.n-2],nx=rounds[r.n];
+  h+='<div class="pn">'+(pr?'<a class="btn" href="#/sujet/'+pr.id+'">← Sujet '+pr.n+'</a>':'<span></span>')+(nx?'<a class="btn hl" href="#/sujet/'+nx.id+'">Sujet '+nx.n+' →</a>':'<a class="btn hl" href="#/">Retour aux sujets</a>')+'</div></div>';
+  return h;
+}
+function vRound(id){var r=RB[id];if(!r)return vHome();return sujetView(r);}
+
+/* classement */
+function vClass(){
+  var min=-2.6,max=2.2,span=max-min;
+  function pos(v){return (v-min)/span*100;}
+  var h='<p class="crumb"><a href="#/">Sujets</a> / Classement</p><h1 tabindex="-1" id="h1">Le classement des médias</h1>'+
+  '<p class="lede" style="font-family:var(--serif);font-size:1.2rem;max-width:56ch">Les '+MEDIAS.length+' médias du panel, situés les uns par rapport aux autres. C’est ce classement, et lui seul, qui range les médias par bord : aucun modèle de langage n’a noté un média.</p>';
+  h+='<div class="src"><p><b>Source.</b> FrIdéo v1.0, French News Lab, Amr Sobhy, ICNLSP 2026, licence CC BY 4.0. <a href="https://frenchnewslab.org/en/medias" target="_blank" rel="noopener noreferrer">frenchnewslab.org/en/medias ↗</a>. Scores lus sur le site le 14/11/2026.</p>'+
+  '<p><b>Réserve.</b> Le zéro est la moyenne du panel, pas un centre politique : un score légèrement négatif ne fait pas un média « de gauche » : il dit seulement qu’il est un peu plus à gauche que la moyenne des 30. Les bords sont dérivés du score par nos soins : '+esc(C.seuils.replace(/^bords dérivés du score par nos soins : /,''))+'.</p>'+
+  '<p><b>Intervalles de confiance :</b> <span class="soon">à venir</span> (absents des données). Aucun modèle de langage n’a noté un média.</p></div>';
+  h+='<div class="legend">'+BORDS.map(function(b){return '<span><i class="b-'+b+'"></i>'+BL[b]+'</span>';}).join('')+'</div>';
+  h+='<div class="axis"><div class="scale"><div></div><div><span style="left:0">← gauche</span><span style="right:0;text-align:right">droite →</span><span style="left:'+pos(0)+'%;transform:translateX(-50%);top:1.5em">moy. panel</span></div><div></div></div>';
+  h+='<ul class="cl">'+MEDIAS.slice().sort(function(a,b){return a.score-b.score;}).map(function(m){
+    var z=pos(0),p=pos(m.score),l=Math.min(z,p),w=Math.abs(p-z);
+    var tk=[-1,-0.5,0.5,1].map(function(t){return '<span class="tick" style="left:'+pos(t)+'%"></span>';}).join('');
+    return '<li'+(m.lu?'':' class="off"')+'><div><a href="#/media/'+enc(m.nom)+'">'+esc(m.nom)+'</a>'+'</div><div class="track" role="img" aria-label="'+esc(m.nom)+', score '+fs(m.score)+', '+BL[m.bord]+'">'+tk+'<span class="bar b-'+m.bord+'" style="left:'+l+'%;width:'+w+'%"></span><span class="zero" style="left:calc('+z+'% - 1px)"></span></div><div class="sc">'+fs(m.score)+'</div></li>';
+  }).join('')+'</ul></div>';
+  h+='<p class="note">Traits pointillés : les seuils de bord. Trait plein : zéro, la moyenne du panel ; à gauche de ce trait, plus à gauche que cette moyenne. Le nom d’un média ouvre sa fiche.</p>';
+  return h;
+}
+
+/* médias */
+function vMedias(){
+  var h='<p class="crumb"><a href="#/">Sujets</a> / Médias</p><h1 tabindex="-1" id="h1">Les médias</h1>'+
+  '<p class="lede" style="font-family:var(--serif);font-size:1.2rem;max-width:56ch">Pour chaque média : qui il est dans le classement, ce qu’il a titré aujourd’hui, ce qu’il couvre et ce qu’il ne couvre pas.</p>';
+  BORDS.forEach(function(b){
+    var l=MEDIAS.filter(function(m){return m.bord===b;}).sort(function(x,y){return x.score-y.score;});
+    if(!l.length)return;
+    h+='<h2>'+bchip(b)+'</h2><ul class="mlist">'+l.map(function(m){
+      return '<li><a class="l-'+m.bord+'" href="#/media/'+enc(m.nom)+'"><b>'+esc(m.nom)+'</b><small>'+fs(m.score)+(m.lu?'':' · illisible')+'</small></a></li>';
+    }).join('')+'</ul>';
+  });
+  return h;
+}
+function vMedia(nom){
+  var m=BY[nom];if(!m)return vMedias();
+  var h='<p class="crumb"><a href="#/">Sujets</a> / <a href="#/medias">Médias</a> / '+esc(m.nom)+'</p><h1 tabindex="-1" id="h1">'+esc(m.nom)+'</h1>';
+  h+='<p style="margin:14px 0 0"><span class="score">'+fs(m.score)+'</span> '+bchip(m.bord)+'</p>';
+  var pos=(m.score+2.6)/4.8*100;
+  h+='<div class="mini" role="img" aria-label="Position sur l’axe du panel"><i style="left:calc('+pos+'% - 2px)"></i></div><p class="note" style="display:flex;justify-content:space-between"><span>← plus à gauche que la moyenne</span><span>plus à droite →</span></p>';
+  h+='<dl class="kv"><div><dt>D’où vient la note</dt><dd>Classement FrIdéo v1.0 (French News Lab, Amr Sobhy, ICNLSP 2026, CC BY 4.0). Le zéro est la moyenne du panel, pas un centre politique. <a href="#/classement">Voir le classement</a>.</dd></div>'+
+  '<div><dt>D’où vient le bord</dt><dd>Dérivé du score par nos soins, avec les seuils du classement. Un modèle de langage n’intervient pas.</dd></div>'+
+  '<div><dt>Intervalle de confiance</dt><dd><span class="soon">à venir</span></dd></div>'+
+  '<div><dt>Propriétaire</dt><dd><span class="soon">à venir</span> <span class="mute">(absent des données)</span></dd></div>'+
+  (m.note?'<div><dt>Note sur le flux</dt><dd>'+esc(m.note)+'</dd></div>':'')+
+  '<div><dt>Flux du jour</dt><dd>'+(m.lu?'Lu.':'Illisible aujourd’hui : on ne peut rien dire de ce qu’il a titré.')+'</dd></div></dl>';
+  /* titres du jour */
+  var its=[];rounds.forEach(function(r){r.arts.forEach(function(a){if(a.media===m.nom)its.push({r:r,a:a});});});
+  h+='<h2>Ses titres du jour</h2><p class="note">Seulement ceux rangés sous un sujet ou parmi les titres sans jumeau, pas les '+D.total+' récoltés.</p>';
+  if(!m.lu)h+='<p class="masked">Aucun : flux illisible.</p>';
+  else if(!its.length)h+='<p class="masked">Aucun titre de ce média dans les sujets du jour.</p>';
+  else{
+    h+='<ul class="tlist">'+its.map(function(x){return '<li><span class="mono mute">'+esc(x.r.titre)+(x.r.kind==='sujet'?mdl():'')+'</span><a class="t" href="'+url(x.a.lien)+'" target="_blank" rel="noopener noreferrer">'+esc(x.a.titre)+' ↗</a></li>';}).join('')+'</ul>';
   }
-  for (const e of enfants.flat()) if (e != null) n.append(e);
-  return n;
-};
-const lien = (a) => /^https?:\/\//.test(a.lien) ? el('a', { href: a.lien, target: '_blank', rel: 'noopener noreferrer' }, a.titre) : a.titre;
-
-function mesure(sujet) {
-  const total = { g: 0, c: 0, d: 0 }, vus = { g: new Set(), c: new Set(), d: new Set() };
-  for (const [m, b] of Object.entries(classement)) total[COTE[b]]++;
-  for (const a of sujet.articles) vus[COTE[classement[a.media]]].add(a.media);
-  const taux = {}; let nb = 0;
-  for (const k of 'gcd') { taux[k] = total[k] ? vus[k].size / total[k] : 0; nb += vus[k].size; }
-  let mort = null;
-  if (vus.d.size === 0 && vus.g.size > 0 && nb >= 3) mort = 'd';
-  if (vus.g.size === 0 && vus.d.size > 0 && nb >= 3) mort = 'g';
-  return { total, vus, taux, nb, mort };
+  /* couverture */
+  if(m.lu){
+    var cov=[],mute=[];
+    var mine={};rounds.forEach(function(r){if(r.kind==='sujet'&&r.arts.some(function(a){return a.media===m.nom;}))mine[r.id]=1;});
+    rounds.forEach(function(r){if(r.kind!=='sujet')return;(mine[r.id]?cov:mute).push(r);});
+    h+='<h2>Les sujets qu’il couvre</h2>'+(cov.length?'<ul class="tags">'+cov.map(function(r){return '<li><a href="#/sujet/'+r.id+'">'+esc(r.titre)+'</a></li>';}).join('')+'</ul>':'<p class="masked">Aucun parmi les sujets du jour.</p>');
+    h+='<h2>Les sujets où il ne figure pas</h2>'+(mute.length?'<ul class="tags">'+mute.map(function(r){return '<li><a href="#/sujet/'+r.id+'">'+esc(r.titre)+'</a></li>';}).join('')+'</ul><p class="note">« Ne figure pas » veut dire : aucun titre de ce média n’a été rangé sous ce sujet. Ce n’est pas la preuve qu’il n’en a jamais parlé.</p>':'<p class="masked">Aucun parmi les sujets du jour.</p>');
+  }else{h+='<h2>Les sujets qu’il couvre</h2><p class="masked">Impossible à dire : son flux n’a pas pu être lu.</p>';}
+  return h;
 }
 
-function carte(sujet) {
-  const m = mesure(sujet);
-  const somme = m.taux.g + m.taux.c + m.taux.d || 1;
-  const jauge = el('div', { class: 'jauge', role: 'img', 'aria-label': 'Part de chaque bord' },
-    [...'gcd'].map(k => el('i', { class: k, style: `width:${100 * m.taux[k] / somme}%` })));
-  const legende = el('div', { class: 'legende' },
-    [...'gcd'].map(k => el('span', {}, el('i', { class: 'pastille', style: `background:var(--${k})` }),
-      `${NOM[k]} `, el('b', {}, `${m.vus[k].size}/${m.total[k]}`))),
-    el('span', {}, `${sujet.articles.length} titres, ${m.nb} médias`),
-    m.mort ? el('span', { class: 'etiq mort' }, `Angle mort à ${NOM[m.mort].toLowerCase()}`)
-      : sujet.divergence != null ? el('span', { class: 'etiq div' }, `Écart de cadrage ${sujet.divergence}/5`) : null);
-  const ouvert = ouverts.has(sujet.id);
-  const tete = el('button', { class: 'tete', 'aria-expanded': String(ouvert), onclick: () => { ouvert ? ouverts.delete(sujet.id) : ouverts.add(sujet.id); rendre(); } },
-    el('h2', {}, sujet.titre), el('p', { class: 'fait' }, sujet.fait), jauge, legende);
-  const boite = el('article', { class: 'sujet' }, tete);
-  if (ouvert) {
-    const cols = [...'gcd'].map(k => {
-      const arts = sujet.articles.filter(a => COTE[classement[a.media]] === k)
-        .sort((x, y) => BORDS.indexOf(classement[x.media]) - BORDS.indexOf(classement[y.media]));
-      return el('section', { class: 'col ' + k }, el('h3', {}, NOM[k]), el('p', { class: 'angle' }, sujet.analyse[k]),
-        arts.length ? el('ul', {}, arts.map(a => el('li', {}, el('span', {}, a.media), lien(a)))) : el('p', { class: 'vide' }, 'Aucun titre récolté de ce côté.'));
-    });
-    boite.append(el('div', { class: 'corps' }, el('div', { class: 'colonnes' }, cols),
-      sujet.mots.length ? el('ul', { class: 'mots' }, sujet.mots.map(x => el('li', {}, x.terme + ' ', el('em', {}, x.qui)))) : null));
-  }
-  return { boite, m };
+/* démarche */
+function vDemarche(){
+  var tot=0;D.sujets.forEach(function(s){tot+=s.articles.length;});
+  var dt=new Date(D.recolte).toLocaleString('fr-FR',{timeZone:'Europe/Paris',day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  var h='<p class="crumb"><a href="#/">Sujets</a> / Démarche</p><h1 tabindex="-1" id="h1">La démarche</h1>'+
+  '<p class="lede" style="font-family:var(--serif);font-size:1.2rem;max-width:56ch">Comment les titres arrivent jusqu’à cette page, et ce que chaque étape doit à un modèle de langage ou n’en doit rien.</p>';
+  h+='<h2>Pourquoi des titres</h2><p style="max-width:68ch">Un titre est ce que la rédaction choisit de mettre en avant : lire plusieurs titres d’un même fait côte à côte, c’est voir ce que chaque bord retient, avec quels mots, et ce qu’il laisse de côté.</p>';
+  h+='<div class="nums"><div><b>'+D.total+'</b><span>titres récoltés sur '+D.heures+' h</span></div><div><b>'+D.medias.length+'</b><span>médias lus sur '+MEDIAS.length+'</span></div><div><b>'+D.sujets.length+'</b><span>sujets, '+tot+' titres rangés</span></div><div><b>'+D.seuls.length+'</b><span>titres sans jumeau</span></div></div>';
+  h+='<p class="note">Récolte du '+esc(dt)+'.</p>';
+  h+='<h2>Quatre étapes</h2><ol class="steps">'+
+  '<li><h3>Récolte des flux RSS <span class="nomdl">sans modèle</span></h3><p>Un programme lit les flux publics des médias du panel et garde les titres parus dans les '+D.heures+' dernières heures : '+D.total+' titres.</p></li>'+
+  '<li><h3>Regroupement en sujets <span class="mdl" style="margin:0">modèle</span></h3><p>Un modèle de langage range les titres qui parlent du même fait sous un même sujet : '+D.sujets.length+' sujets. Ce qui ne se rattache à rien reste « sans jumeau » : '+D.seuls.length+' titres.</p></li>'+
+  '<li><h3>Analyse du cadrage <span class="mdl" style="margin:0">modèle</span></h3><p>Pour chaque sujet, le modèle écrit le fait commun, l’angle de chaque bord, les mots qui diffèrent et un écart de cadrage de 0 à 5.</p></li>'+
+  '<li><h3>Comptage par bord et angles morts <span class="nomdl">formule fixe, sans modèle</span></h3><p>On compte les titres par bord, à partir du score FrIdéo du média. Un bord est un angle mort sur un sujet quand aucun de ses médias n’a de titre rangé sous ce sujet. Trois bords : gauche (gauche et centre gauche), centre, droite (centre droit et droite).</p></li></ol>';
+  h+='<h2>Ce qu’un modèle fait, et ne fait pas</h2><div class="two"><div><h3>Il fait</h3><ul><li>Regrouper des titres en sujets.</li><li>Décrire, à partir des seuls titres, l’angle de chaque bord.</li><li>Repérer des mots qui diffèrent.</li></ul></div><div><h3>Il ne fait pas</h3><ul><li>Il ne note jamais un média : les notes viennent du classement FrIdéo.</li><li>Il ne place aucun média sur l’axe gauche-droite.</li><li>Il ne lit pas les articles.</li></ul></div></div>';
+  h+='<p style="max-width:68ch;margin-top:14px"><b>Pour ce test,</b> les sujets, les faits communs, les analyses et les mots ont été écrits par Claude, à partir des seuls titres. Chaque passage ainsi produit porte l’étiquette <span class="mdl" style="margin:0">écrit par un modèle</span>.</p>';
+  h+='<h2>Les limites</h2><ul class="lim" style="max-width:68ch"><li><b>Des titres, pas des articles.</b> Un titre peut être plus neutre ou plus appuyé que le texte qu’il coiffe.</li><li><b>Un seul jour</b>, le '+esc(new Date(D.recolte).toLocaleDateString('fr-FR',{timeZone:'Europe/Paris'}))+', sur '+D.heures+' h. Un silence aujourd’hui n’est pas un silence habituel.</li><li><b>Trois flux illisibles :</b> '+D.absents.map(esc).join(', ')+'. Leur silence n’est donc pas compté comme un silence, et ils sont absents des comptages par bord.</li><li><b>Les bords sont à nous :</b> dérivés du score par des seuils, regroupés en trois pour la lecture.</li></ul>';
+  h+='<p class="note" style="margin-top:20px">Le classement est détaillé ici : <a href="#/classement">le classement des médias</a>. Les idées dont cette page s’inspire : <a href="#/origine">d’où vient l’idée</a>.</p>';
+  return h;
 }
 
-function rendre() {
-  const rendus = DONNEES.sujets.map(s => ({ s, ...carte(s) }));
-  const compte = {
-    tous: rendus.length, mortg: rendus.filter(r => r.m.mort === 'g').length,
-    mortd: rendus.filter(r => r.m.mort === 'd').length, ecart: rendus.filter(r => (r.s.divergence || 0) >= 3).length
-  };
-  const garde = { tous: () => true, mortg: r => r.m.mort === 'g', mortd: r => r.m.mort === 'd', ecart: r => (r.s.divergence || 0) >= 3 }[filtre];
-  const visibles = rendus.filter(garde);
-  if (tri === 'couverture') visibles.sort((a, b) => b.m.nb - a.m.nb);
-  if (tri === 'ecart') visibles.sort((a, b) => (b.s.divergence ?? -1) - (a.s.divergence ?? -1));
-  const liste = document.getElementById('liste');
-  liste.replaceChildren(...(visibles.length ? visibles.map(r => r.boite) : [el('p', { class: 'note' }, 'Aucun sujet dans ce filtre avec ce classement.')]));
-
-  const libelles = { tous: 'Tous les sujets', ecart: 'Cadrages qui divergent', mortd: 'Angles morts à droite', mortg: 'Angles morts à gauche' };
-  const select = el('select', { 'aria-label': 'Trier', onchange: (e) => { tri = e.target.value; rendre(); } },
-    el('option', { value: 'couverture' }, 'les plus couverts'), el('option', { value: 'ecart' }, 'les plus divergents'));
-  select.value = tri;
-  document.getElementById('filtres').replaceChildren(
-    ...Object.keys(libelles).map(k => el('button', { class: 'puce', 'aria-pressed': String(filtre === k), onclick: () => { filtre = k; rendre(); } },
-      libelles[k], el('small', {}, String(compte[k])))),
-    el('label', { class: 'tri' }, 'Trier par', select));
+/* origine */
+function vOrigine(){
+  return '<p class="crumb"><a href="#/">Sujets</a> / Origine</p><h1 tabindex="-1" id="h1">D’où vient l’idée</h1>'+
+  '<p class="lede" style="font-family:var(--serif);font-size:1.2rem;max-width:56ch">Comparer la couverture d’un même sujet selon le bord des médias n’est pas une idée neuve. Deux projets nous ont montré la voie. Nous les citons avec estime, et nous n’avons repris ni leur habillage ni leurs textes.</p>'+
+  '<div class="origin"><article><span class="for">Pour le principe</span><h2 style="margin:.6rem 0 .4rem">Ground News</h2><p>Mettre côte à côte la manière dont des médias de bords différents traitent un même sujet, et rendre visible ce qu’un bord laisse de côté : ce geste de lecture, ils l’ont rendu simple et courant. C’est de là que vient la comparaison par bord et l’attention portée aux silences.</p><p><a href="https://ground.news/rating-system" target="_blank" rel="noopener noreferrer">ground.news/rating-system ↗</a></p></article>'+
+  '<article><span class="for">Pour la méthode</span><h2 style="margin:.6rem 0 .4rem">AllSides</h2><p>Exposer, page à l’appui, comment on évalue le positionnement d’un média, en croisant plusieurs approches plutôt qu’en assénant une note. Leur exigence de transparence est la nôtre : ici chaque classement dit d’où il vient, et chaque texte écrit par un modèle le dit aussi.</p><p><a href="https://www.allsides.com/about/media-bias-rating-methods" target="_blank" rel="noopener noreferrer">allsides.com/about/media-bias-rating-methods ↗</a></p></article></div>'+
+  '<h2>Ce que cette page fait autrement</h2><ul class="lim" style="max-width:68ch"><li>Elle met chaque fait en regard, bord par bord, avec les angles morts et les mots qui diffèrent.</li><li>Elle ne note aucun média elle-même : le classement vient de FrIdéo (<a href="#/classement">détails</a>).</li><li>Elle sépare ce qui est compté par formule de ce qui est écrit par un modèle (<a href="#/demarche">la démarche</a>).</li></ul>';
 }
 
-function rendreSeuls() {
-  const par = { g: [], d: [] };
-  for (const a of DONNEES.seuls) { const k = COTE[classement[a.media]]; if (par[k]) par[k].push(a); }
-  document.getElementById('seuls').replaceChildren(...['g', 'd'].map(k => el('section', { class: 'col ' + k },
-    el('h3', {}, `Seulement à ${NOM[k].toLowerCase()}`),
-    par[k].length ? el('ul', {}, par[k].map(a => el('li', {}, el('span', {}, a.media), lien(a)))) : el('p', { class: 'vide' }, 'Rien relevé.'))));
+/* routage */
+var app=document.getElementById('app');
+function route(opt){
+  var hsh=location.hash.replace(/^#\/?/,'');var parts=hsh.split('/');var v=parts[0]||'home';var html,nav=v;
+  if(v==='sujet'){html=vRound(parts[1]);nav='home';}
+  else if(v==='media'){html=vMedia(decodeURIComponent(parts.slice(1).join('/')));nav='medias';}
+  else if(v==='medias')html=vMedias();
+  else if(v==='classement')html=vClass();
+  else if(v==='demarche')html=vDemarche();
+  else if(v==='origine')html=vOrigine();
+  else{html=vHome();nav='home';}
+  var y=window.scrollY;
+  app.innerHTML=html;
+  document.querySelectorAll('nav.main a').forEach(function(a){if(a.getAttribute('data-nav')===nav)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});
+  if(opt&&opt.keep){window.scrollTo(0,y);if(opt.focus){var f=app.querySelector(opt.focus);if(f)f.focus({preventScroll:true});}}
+  else{window.scrollTo(0,0);var h1=document.getElementById('h1')||app.querySelector('h1');if(h1){h1.setAttribute('tabindex','-1');h1.focus({preventScroll:true});}}
+  document.title=(app.querySelector('h1')?app.querySelector('h1').textContent.replace(/écrit par un modèle/,'').trim()+' · ':'')+'Cadrages';
 }
+window.addEventListener('hashchange',function(){route();});
 
-function rendreMedias() {
-  document.getElementById('medias').replaceChildren(...DONNEES.medias.map(m => {
-    const s = el('select', { onchange: (e) => { classement[m.nom] = e.target.value; garder(); tout(); } }, BORDS.map(b => el('option', { value: b }, b)));
-    s.value = classement[m.nom];
-    return el('label', {}, `${m.nom} (${m.score > 0 ? '+' : ''}${m.score.toFixed(2).replace('.', ',')})`, s);
-  }));
-}
-function garder() {
-  const ecart = Object.fromEntries(Object.entries(classement).filter(([m, b]) => depart[m] !== b));
-  try { localStorage.setItem(CLE, JSON.stringify(ecart)); } catch (e) {}
-}
-function tout() { rendre(); rendreSeuls(); rendreMedias(); }
+function effDark(){return S.theme?S.theme==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;}
+function applyTheme(){var d=document.documentElement;if(S.theme)d.setAttribute('data-theme',S.theme);else d.removeAttribute('data-theme');
+  var b=document.getElementById('btnTheme');b.textContent=effDark()?'Thème : sombre':'Thème : clair';}
+document.getElementById('btnTheme').addEventListener('click',function(){S.theme=effDark()?'light':'dark';save();applyTheme();});
+try{window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',applyTheme);}catch(_){}
 
-document.getElementById('raz').addEventListener('click', () => { classement = { ...depart }; garder(); tout(); });
-const quand = new Date(DONNEES.recolte).toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short' });
-document.getElementById('chapo').textContent =
-  `${DONNEES.total} titres de ${DONNEES.medias.length} médias français, récoltés le ${quand} sur les ${DONNEES.heures} dernières heures. ` +
-  `Pour chaque sujet : quels bords en parlent, et sous quel angle. Touche un sujet pour lire les titres côte à côte.`;
-document.getElementById('pied').textContent =
-  `Test de concept. Les chiffres « 3/6 » comptent les médias de ce bord qui ont au moins un titre sur le sujet. ` +
-  (DONNEES.mode === 'auto'
-    ? `Version automatique, sans relecture humaine : regroupement en sujets par Claude Haiku, textes d'analyse par Claude Sonnet, à partir des seuls titres ; `
-    : `Le regroupement en sujets et les textes d'analyse ont été écrits par Claude à partir des seuls titres, sans lire les articles : `) +
-  `ils décrivent le traitement, pas le fond. ` +
-  `Classement des médias : scores FrIdéo v1.0 du French News Lab (Amr Sobhy, ICNLSP 2026), licence CC BY 4.0 ; le découpage en bords à partir du score est le nôtre. ` +
-  (DONNEES.absents.length ? `Absents de cette récolte : ${DONNEES.absents.join(', ')} (leur flux refuse les lecteurs automatiques).` : '');
-if (DONNEES.sujets.length) ouverts.add(DONNEES.sujets[0].id);
-if (!DONNEES.seuls.length) { const r = document.getElementById('seuls'); r.previousElementSibling.hidden = true; r.previousElementSibling.previousElementSibling.hidden = true; r.hidden = true; }
-tout();
+document.getElementById('foot').innerHTML='<p><span class="mdl" style="margin:0">écrit par un modèle</span> signale tout texte rédigé par un modèle de langage (sujets, faits, angles, mots). Les scores viennent de FrIdéo v1.0 (French News Lab, CC BY 4.0), les comptages d’une formule fixe. Données du '+esc(new Date(D.recolte).toLocaleDateString('fr-FR',{timeZone:'Europe/Paris'}))+'. Aucune donnée n’est envoyée : seul le choix du thème reste dans votre navigateur.</p>';
+applyTheme();route();
+})();
 </script>
 </body>
 </html>
