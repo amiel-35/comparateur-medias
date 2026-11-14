@@ -75,6 +75,10 @@ main:focus,h1:focus{outline:none}
 .hero .lede{font-family:var(--serif);font-size:clamp(1.1rem,2.6vw,1.45rem);max-width:46ch;margin:14px 0 18px}
 .hero .row{display:flex;flex-wrap:wrap;gap:10px}
 .note{font-size:.88rem;color:var(--mute);max-width:70ch}
+.why{border:3px solid var(--ink);background:var(--paper);padding:18px 20px 16px;margin:26px 0 6px;max-width:74ch}
+.why h2{margin:0 0 10px;font-size:clamp(1.5rem,4vw,2.1rem)}
+.why p{font-family:var(--serif);font-size:clamp(1.02rem,2.2vw,1.2rem);margin:0 0 10px;max-width:none}
+.why p.note{font-family:inherit;font-size:.88rem;margin:12px 0 0}
 
 .legend{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:.82rem;color:var(--mute);margin:8px 0}
 .legend span{display:inline-flex;align-items:center;gap:5px}
@@ -273,6 +277,11 @@ function vHome(){
   '<h1>Un même fait, titré autrement selon le bord.</h1>'+
   '<p class="lede">Chaque sujet du jour rassemble les titres des médias français qui en parlent : qui en parle à gauche, au centre ou à droite, avec quels mots, et qui se tait.</p>'+
   '<p class="note" style="margin-top:14px">Les « titres du jour » d’un média sont ceux rangés dans les sujets ci-dessous ou parmi les titres sans jumeau.</p></section>';
+  h+='<section class="why" aria-labelledby="why-h"><h2 id="why-h">Pourquoi ce site</h2>'+
+  '<p>Un même fait n’est pas titré de la même façon partout. Ce site met les titres côte à côte pour le montrer : qui en parle, avec quels mots, et qui n’en parle pas.</p>'+
+  '<p>Il ne dit pas qui a raison. Il ne classe pas les journaux : le classement vient d’une étude publiée, FrIdéo. <a href="#/classement">Voir le classement</a>.</p>'+
+  '<p>Un journal classé « à gauche » est plus à gauche que les autres journaux du panel. Ça ne veut pas dire qu’il est de gauche.</p>'+
+  '<p class="note">L’idée vient de Ground News : <a href="#/origine">d’où vient l’idée</a>. Comment ça marche : <a href="#/demarche">la démarche</a>. Le code est public : <a href="https://github.com/amiel-35/comparateur-medias" target="_blank" rel="noopener noreferrer">github.com/amiel-35/comparateur-medias ↗</a>.</p></section>';
   h+='<h2 style="margin-top:28px">Les '+rounds.length+' sujets du jour</h2>';
   h+='<div class="legend"><span><i class="f-g"></i>Gauche : gauche et centre gauche</span><span><i class="f-c"></i>Centre</span><span><i class="f-d"></i>Droite : centre droit et droite</span><span>Regroupement en trois par nos soins</span></div>';
   h+='<ul class="grid">'+rounds.map(function(r){
@@ -329,7 +338,8 @@ function vClass(){
   var h='<p class="crumb"><a href="#/">Sujets</a> / Classement</p><h1 tabindex="-1" id="h1">Le classement des médias</h1>'+
   '<p class="lede" style="font-family:var(--serif);font-size:1.2rem;max-width:56ch">Les '+MEDIAS.length+' médias du panel, situés les uns par rapport aux autres. C’est ce classement, et lui seul, qui range les médias par bord : aucun modèle de langage n’a noté un média.</p>';
   h+='<div class="src"><p><b>Source.</b> FrIdéo v1.0, French News Lab, Amr Sobhy, ICNLSP 2026, licence CC BY 4.0. <a href="https://frenchnewslab.org/en/medias" target="_blank" rel="noopener noreferrer">frenchnewslab.org/en/medias ↗</a>. Scores lus sur le site le 14/11/2026.</p>'+
-  '<p><b>Réserve.</b> Le zéro est la moyenne du panel, pas un centre politique : un score légèrement négatif ne fait pas un média « de gauche » : il dit seulement qu’il est un peu plus à gauche que la moyenne des 30. Les bords sont dérivés du score par nos soins : '+esc(C.seuils.replace(/^bords dérivés du score par nos soins : /,''))+'.</p>'+
+  '<p><b>Réserve.</b> Un journal classé « à gauche » est plus à gauche que les autres journaux du panel. Ça ne veut pas dire qu’il est de gauche. Ce classement peut ne pas correspondre à l’idée que vous vous faites d’un journal. Classer les journaux n’est pas le but de ce site.</p>'+
+  '<p><b>Comment lire les scores.</b> Zéro est la moyenne des '+MEDIAS.length+' médias. Les bords sont tirés du score par ce site, avec ces seuils : '+esc(C.seuils.replace(/^bords dérivés du score par nos soins : /,''))+'.</p>'+
   '<p><b>Intervalles de confiance :</b> <span class="soon">à venir</span> (absents des données). Aucun modèle de langage n’a noté un média.</p></div>';
   h+='<div class="legend">'+BORDS.map(function(b){return '<span><i class="b-'+b+'"></i>'+BL[b]+'</span>';}).join('')+'</div>';
   h+='<div class="axis"><div class="scale"><div></div><div><span style="left:0">← gauche</span><span style="right:0;text-align:right">droite →</span><span style="left:'+pos(0)+'%;transform:translateX(-50%);top:1.5em">moy. panel</span></div><div></div></div>';
