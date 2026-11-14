@@ -63,3 +63,10 @@ def fabrique_minutes():
 def edition_heure():
     """Heure (0-23, heure de Paris) à laquelle l'édition du jour est fabriquée, une fois par jour."""
     return max(0, min(23, int(env("COMPARATEUR_EDITION_HEURE", "6"))))
+
+
+def rubriques_ecartees():
+    """Rubriques dont les articles ne sont ni proposés au regroupement ni comptés dans les sujets (ils restent
+    en base). Liste séparée par des virgules ; « aucune » pour ne rien écarter."""
+    v = env("COMPARATEUR_RUBRIQUES_ECARTEES", "sport,culture").lower()
+    return sorted({x.strip() for x in v.split(",") if x.strip() and x.strip() != "aucune"})

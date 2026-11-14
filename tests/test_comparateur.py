@@ -235,6 +235,47 @@ class Editions(unittest.TestCase):
         self.assertEqual(accueil["edition"]["jour"], "2026-01-02")   # la dernière édition est l'accueil
         self.assertEqual(json.load(open(os.path.join(pub, "data", "editions.json"))), ["2026-01-01", "2026-01-02"])
 
+    def test_le_suivi_des_sujets_est_injecte_dans_les_pages(self):
+        medias = [{"nom": "Gauche Hebdo", "score": -1.5, "bord": "gauche"}, {"nom": "Le Milieu", "score": 0.0, "bord": "centre"},
+                  {"nom": "Centre Info", "score": 0.1, "bord": "centre"}, {"nom": "Droite Matin", "score": 1.2, "bord": "droite"}]
+
+        def edition(sujets):   # la forme d'une édition gardée avant ce changement : ni suivi, ni rubriques écartées
+            return {"recolte": "2026-01-01T05:00:00+00:00", "heures": 24, "total": 9, "medias": medias, "absents": [],
+                    "classement": {"source": "essai", "seuils": "", "medias": [{"nom": m["nom"], "score": m["score"]} for m in medias]},
+                    "seuls": [], "sujets": [
+                        {"id": i, "titre": t, "fait": "", "divergence": None, "analyse": {"g": "", "c": "", "d": ""}, "mots": [],
+                         "articles": [{"media": m, "titre": f"{t} {m}", "lien": f"https://x.test/{i}/{m}"} for m in ms]}
+                        for i, t, ms in sujets]}
+
+        jours = {"2026-01-01": edition([("s1", "Grève", ["Gauche Hebdo", "Le Milieu", "Centre Info", "Droite Matin"]),
+                                        ("s2", "Budget", ["Le Milieu", "Droite Matin"])]),
+                 "2026-01-02": edition([("s1", "Grève, suite", ["Le Milieu", "Centre Info"])]),
+                 "2026-01-03": edition([("s3", "Autre chose", ["Le Milieu"])])}
+        for jour, charge in jours.items():
+            self.db.execute("INSERT INTO editions (jour, cree, donnees) VALUES (?, ?, ?)", (jour, base.iso(), json.dumps(charge)))
+        self.db.commit()
+        self.assertEqual(publier.ecrire_pages(self.db), list(jours))
+        pub = publier.config.public()
+
+        def lire(j):
+            with open(os.path.join(pub, "data", "editions", j + ".json"), encoding="utf-8") as f:
+                return json.load(f)
+
+        un, deux, trois = (lire(j) for j in jours)
+        self.assertEqual(list(un["suivi"]), ["s1"])                # s2 ne vit qu'un jour : pas de frise
+        self.assertEqual(un["suivi"], deux["suivi"])               # le même suivi, vu des deux éditions
+        self.assertEqual([(x["jour"], x["titres"], x["medias"]) for x in un["suivi"]["s1"]],
+                         [("2026-01-01", 4, 4), ("2026-01-02", 2, 2)])
+        self.assertEqual(un["suivi"]["s1"][0]["par"], {"gauche": 1, "centre-gauche": 0, "centre": 2, "centre-droit": 0, "droite": 1})
+        self.assertEqual(un["suivi"]["s1"][1]["par"]["centre"], 2)
+        self.assertEqual(trois["suivi"], {})
+        self.assertEqual(un["min_medias"], syntheses.MIN_MEDIAS)
+        self.assertEqual(list(un["periodes"]["semaine"]["bords"]), list(syntheses.BORDS))
+        # ce qui est gardé en base n'est pas réécrit : le suivi se recalcule à chaque écriture des pages
+        self.assertNotIn("suivi", json.loads(self.db.execute("SELECT donnees FROM editions WHERE jour = '2026-01-01'").fetchone()["donnees"]))
+        with open(os.path.join(pub, "editions", "2026-01-01.html"), encoding="utf-8") as f:
+            self.assertIn('"suivi": {"s1"', f.read())
+
     def test_refaire_un_jour_le_remplace(self):
         publier.publier(self.db, jour="2026-01-01")
         publier.publier(self.db, jour="2026-01-01")
@@ -250,6 +291,117 @@ class Editions(unittest.TestCase):
     def test_le_demarrage_fait_la_premiere_edition(self):
         publier.pages(self.db)
         self.assertEqual(self.db.execute("SELECT COUNT(*) AS n FROM editions").fetchone()["n"], 1)
+
+
+class Rubriques(unittest.TestCase):
+    """La rubrique d'un article se lit dans son adresse, sans modèle ; le sport et la culture sont écartés."""
+
+    def test_rubrique_lue_dans_l_adresse(self):
+        cas = {
+            "https://www.lemonde.fr/sport/article/2026/11/14/le-xv-de-france-s-impose_1.html": "sport",
+            "https://www.francetvinfo.fr/sports/foot/ligue-1/psg-om-le-resume_2.html": "sport",
+            "https://sport24.lefigaro.fr/football/un-titre-123": "sport",
+            "https://www.liberation.fr/culture/cinema/le-film-de-la-semaine-20261114/": "culture",
+            "https://www.leparisien.fr/culture-loisirs/tv/une-serie-14-11-2026.php": "culture",
+            "https://www.bfmtv.com/people/une-vedette_AN-1.html": "culture",
+            "https://www.lefigaro.fr/musique/un-concert-20261114": "culture",
+            "https://www.20minutes.fr/Télé/4-une-emission": "culture",
+            "https://www.lemonde.fr/politique/article/2026/11/14/budget_3.html": "politique",
+            # un mot du titre ne fait pas une rubrique : seuls les segments entiers comptent, pas le dernier
+            "https://www.lemonde.fr/politique/article/2026/11/14/le-sport-a-l-ecole_4.html": "politique",
+            "https://www.causeur.fr/culture": "",
+            "https://www.causeur.fr/le-budget-de-la-culture-en-baisse-123": "",
+            "https://exemple.test/7": "", "": "", None: "",
+        }
+        for lien, attendu in cas.items():
+            self.assertEqual(fabrique.rubrique(lien), attendu, lien)
+
+    def test_liste_des_rubriques_ecartees_reglable(self):
+        self.assertEqual(fabrique.config.rubriques_ecartees(), ["culture", "sport"])
+        os.environ["COMPARATEUR_RUBRIQUES_ECARTEES"] = " Sport, opinions ,"
+        try:
+            self.assertEqual(fabrique.config.rubriques_ecartees(), ["opinions", "sport"])
+            self.assertEqual(fabrique.hors_ecartees("a"), ("COALESCE(a.rubrique, '') NOT IN (?, ?)", ("opinions", "sport")))
+            os.environ["COMPARATEUR_RUBRIQUES_ECARTEES"] = "aucune"
+            self.assertEqual(fabrique.config.rubriques_ecartees(), [])
+            self.assertEqual(fabrique.hors_ecartees("a"), ("1 = 1", ()))
+        finally:
+            del os.environ["COMPARATEUR_RUBRIQUES_ECARTEES"]
+
+    def test_migration_d_une_base_existante_sans_perte(self):
+        import sqlite3
+        db = sqlite3.connect(":memory:")
+        db.row_factory = sqlite3.Row
+        db.execute("""CREATE TABLE articles (id INTEGER PRIMARY KEY, cle TEXT NOT NULL UNIQUE, media_id INTEGER NOT NULL,
+                      titre TEXT NOT NULL, lien TEXT NOT NULL DEFAULT '', date TEXT, recolte TEXT NOT NULL,
+                      trie INTEGER NOT NULL DEFAULT 0)""")   # le schéma d'avant, sans la colonne rubrique
+        db.executemany("INSERT INTO articles (cle, media_id, titre, lien, recolte, trie) VALUES (?,?,?,?,?,?)",
+                       [("a", 1, "Un match", "https://x.test/sport/un-match", "2026-11-14T06:00:00+00:00", 1),
+                        ("b", 1, "Un vote", "https://x.test/politique/un-vote", "2026-11-14T06:00:00+00:00", 0),
+                        ("c", 2, "Sans adresse", "", "2026-11-14T06:00:00+00:00", 0)])
+        self.assertTrue(base.migrer(db))
+        self.assertEqual([tuple(r) for r in db.execute("SELECT cle, titre, trie, rubrique FROM articles ORDER BY id")],
+                         [("a", "Un match", 1, "sport"), ("b", "Un vote", 0, "politique"), ("c", "Sans adresse", 0, "")])
+        self.assertFalse(base.migrer(db))   # déjà faite : rien à refaire
+        db.close()
+
+    def test_sport_et_culture_hors_du_regroupement_et_des_sujets(self):
+        db = base.connexion()
+        base.charger_medias(db)
+        ids = {r["nom"]: r["id"] for r in db.execute("SELECT id, nom FROM medias")}
+        avant = {t: db.execute(f"SELECT COALESCE(MAX(id), 0) AS n FROM {t}").fetchone()["n"] for t in ("articles", "sujets")}
+        medias = ["Libération", "Le Monde", "Ouest-France", "Le Figaro"]
+        lignes = [(m, f"Finale de la coupe : la victoire des Bleus vue par {m}", f"https://x.test/{k}/sport/finale-coupe") for k, m in enumerate(medias)]
+        lignes += [(m, f"Budget de la sécurité sociale : le vote des députés vu par {m}", f"https://x.test/{k}/politique/budget-secu") for k, m in enumerate(medias)]
+        # des titres sans rapport, pour que les mots du budget soient rares (la présélection compte les mots rares)
+        divers = ["Tempête annoncée sur le littoral breton", "Grève surprise dans les transports lyonnais",
+                  "Hausse inattendue du chômage au trimestre", "Incendie maîtrisé dans une usine chimique"]
+        lignes += [("Le Monde", t, f"https://x.test/societe/divers-{k}") for k, t in enumerate(divers)]
+        lignes.append(("Le Monde", "Prix Goncourt : le palmarès de la saison littéraire", "https://x.test/culture/livres/goncourt"))
+        for media, titre, lien in lignes:
+            db.execute("INSERT INTO articles (cle, media_id, titre, lien, recolte, rubrique) VALUES (?,?,?,?,?,?)",
+                       (lien, ids[media], titre, lien, base.iso(), fabrique.rubrique(lien)))
+        db.commit()
+        vus = []
+
+        def faux_modele(prompt, nature, etape):
+            vus.append(prompt)
+            if etape == "regroupement A":
+                return {str(n): "N: Budget de la sécurité sociale" for n in range(1, 21)}
+            return {"fusions": []} if etape == "regroupement fusion" else {}
+
+        vrai, fabrique.demander = fabrique.demander, faux_modele
+        try:
+            rendu = fabrique.regrouper(db)
+            self.assertEqual(rendu["nouveaux"], 8)                           # budget et divers, pas les 5 écartés
+            self.assertTrue(vus and not any("Finale" in p or "Goncourt" in p for p in vus))   # jamais montrés au modèle
+            sujets = [s for s in fabrique.sujets_du_jour(db) if s["id"] > avant["sujets"]]
+            self.assertEqual([(s["libelle"], s["medias"], len(s["articles"])) for s in sujets], [("Budget de la sécurité sociale", 4, 4)])
+            # ils restent en base, non triés, avec leur rubrique
+            self.assertEqual([(r["rubrique"], r["trie"], r["n"]) for r in db.execute(
+                "SELECT rubrique, trie, COUNT(*) AS n FROM articles WHERE id > ? GROUP BY rubrique, trie ORDER BY rubrique",
+                (avant["articles"],))], [("culture", 0, 1), ("politique", 1, 4), ("societe", 1, 4), ("sport", 0, 4)])
+            # un article de sport rangé sous un sujet avant ce changement n'y est plus compté
+            sport = db.execute("SELECT id FROM articles WHERE rubrique = 'sport' AND id > ? LIMIT 1", (avant["articles"],)).fetchone()["id"]
+            db.execute("INSERT INTO sujet_articles (sujet_id, article_id) VALUES (?, ?)", (sujets[0]["id"], sport))
+            db.commit()
+            self.assertEqual(len([s for s in fabrique.sujets_du_jour(db) if s["id"] == sujets[0]["id"]][0]["articles"]), 4)
+            jour = publier.donnees_du_jour(db)
+            self.assertEqual(jour["ecartes"], {"rubriques": ["culture", "sport"], "titres": 5})
+            self.assertFalse([t for t in jour["seuls"] if "Finale" in t["titre"] or "Goncourt" in t["titre"]])
+            # la liste est réglable : sans rubrique écartée, les mêmes titres sont proposés
+            os.environ["COMPARATEUR_RUBRIQUES_ECARTEES"] = "aucune"
+            self.assertEqual(fabrique.regrouper(db)["nouveaux"], 5)
+            self.assertTrue(any("Finale" in p for p in vus))
+        finally:
+            os.environ.pop("COMPARATEUR_RUBRIQUES_ECARTEES", None)
+            fabrique.demander = vrai
+            db.execute("DELETE FROM sujet_articles WHERE article_id > ?", (avant["articles"],))
+            db.execute("DELETE FROM analyses WHERE sujet_id > ?", (avant["sujets"],))
+            db.execute("DELETE FROM sujets WHERE id > ?", (avant["sujets"],))
+            db.execute("DELETE FROM articles WHERE id > ?", (avant["articles"],))
+            db.commit()
+            db.close()
 
 
 class Syntheses(unittest.TestCase):
@@ -273,12 +425,39 @@ class Syntheses(unittest.TestCase):
         greve = s["top"][0]
         self.assertEqual((greve["id"], greve["titre"], greve["jours"], greve["medias"], greve["ecart"]), ("s1", "Grève, suite", 2, 5, 4))
         self.assertEqual(greve["titres"], 5)                      # un article repris le lendemain ne compte qu'une fois
-        self.assertEqual(greve["par"], {"g": 1, "c": 2, "d": 2})
-        self.assertEqual(s["bords"]["g"]["silences"], 1)          # la gauche n'a rien sur le budget
-        self.assertEqual(s["bords"]["g"]["tus"][0]["id"], "s2")
-        self.assertEqual(s["bords"]["d"]["silences"], 0)
+        self.assertEqual(greve["par"], {"gauche": 1, "centre-gauche": 0, "centre": 2, "centre-droit": 1, "droite": 1})
+        self.assertEqual(list(s["bords"]), list(syntheses.BORDS))  # cinq bords, de la gauche à la droite
+        self.assertEqual(s["bords"]["gauche"]["silences"], 1)      # la gauche n'a rien sur le budget
+        self.assertEqual(s["bords"]["gauche"]["tus"], [{"id": "s2", "titre": "Budget", "dernier": "2026-11-09", "medias": 4}])
+        self.assertEqual(s["bords"]["droite"]["silences"], 0)
+        self.assertEqual(s["bords"]["centre-droit"]["silences"], 0)
+        # aucun média de centre gauche n'est lu : ce bord ne peut pas être dit silencieux
+        self.assertEqual((s["bords"]["centre-gauche"]["medias"], s["bords"]["centre-gauche"]["silences"]), (0, 0))
+        self.assertEqual({m["nom"]: m["bord"] for m in s["medias"]}["Droite Soir"], "centre-droit")
         self.assertEqual(mois["2026-11"]["debut"], "2026-11-01")
         self.assertEqual(mois["2026-11"]["fin"], "2026-11-30")
+
+    def test_un_silence_se_compte_sur_cinq_bords(self):
+        # Sur trois côtés la droite aurait un titre (Droite Soir, centre droit) ; sur cinq bords, la droite se tait.
+        e = self.edition([("s1", "Grève", 2, ["Gauche Hebdo", "Le Milieu", "Centre Info", "Droite Soir"])])
+        b = syntheses.toutes([("2026-11-09", e)])[0]["2026-S46"]["bords"]
+        self.assertEqual({k: v["silences"] for k, v in b.items()},
+                         {"gauche": 0, "centre-gauche": 0, "centre": 0, "centre-droit": 0, "droite": 1})
+        # en dessous de MIN_MEDIAS médias, un silence ne dit rien
+        petit = self.edition([("s1", "Grève", 2, ["Gauche Hebdo", "Le Milieu", "Centre Info"])])
+        b = syntheses.toutes([("2026-11-09", petit)])[0]["2026-S46"]["bords"]
+        self.assertEqual(sum(v["silences"] for v in b.values()), 0)
+
+    def test_le_suivi_d_un_sujet_jour_par_jour(self):
+        lundi = self.edition([("s1", "Grève", 2, ["Gauche Hebdo", "Le Milieu", "Centre Info", "Droite Matin"]),
+                              ("s2", "Budget", 1, ["Le Milieu", "Centre Info", "Droite Matin", "Droite Soir"])])
+        mardi = self.edition([("s1", "Grève, suite", 4, ["Gauche Hebdo", "Le Milieu", "Droite Soir"])])
+        suivi = syntheses.suivi([("2026-11-09", lundi), ("2026-11-10", mardi)])
+        self.assertEqual([x["jour"] for x in suivi["s1"]], ["2026-11-09", "2026-11-10"])
+        self.assertEqual(suivi["s1"][0], {"jour": "2026-11-09", "titres": 4, "medias": 4, "silences": ["centre-droit"],
+                                          "par": {"gauche": 1, "centre-gauche": 0, "centre": 2, "centre-droit": 0, "droite": 1}})
+        self.assertEqual((suivi["s1"][1]["titres"], suivi["s1"][1]["medias"], suivi["s1"][1]["silences"]), (3, 3, []))
+        self.assertEqual(len(suivi["s2"]), 1)
 
     def test_la_semaine_change_au_lundi(self):
         self.assertEqual(syntheses.cle_semaine("2026-11-15"), "2026-S46")

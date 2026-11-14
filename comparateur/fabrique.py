@@ -9,6 +9,7 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
+from urllib.parse import urlsplit
 
 from . import base, config
 from .llm import demander
@@ -90,6 +91,51 @@ def items(xml_bytes):
     return out
 
 
+# ---------------------------------------------------------------- rubriques
+
+# La rubrique se lit dans l'adresse de l'article, sans modèle : un segment du chemin (/sport/, /culture/) ou un
+# sous-domaine (sport24.lefigaro.fr). Seuls des segments entiers comptent, jamais un mot du titre.
+RUBRIQUES = {
+    "sport": """sport sports sport24 rmcsport football foot rugby tennis cyclisme basket handball athletisme
+                formule-1 f1 jeux-olympiques jo""",
+    "culture": """culture cultures loisirs culture-loisirs people cinema musique musiques tele television
+                  televisions-radio tv tvmag series livres litterature arts arts-stars spectacles theatre
+                  divertissement pop-culture jeux-video bd""",
+    "politique": "politique elections",
+    "international": "international monde",
+    "economie": "economie eco entreprises bourse",
+    "societe": "societe",
+    "faits-divers": "faits-divers justice police-justice",
+    "sciences": "sciences science sante",
+    "environnement": "environnement planete climat",
+    "opinions": "opinions idees debats tribunes editos chroniques",
+}
+_SEGMENTS = {seg: nom for nom, segs in RUBRIQUES.items() for seg in segs.split()}
+
+
+def rubrique(lien):
+    """Rubrique d'un article d'après son adresse : 'sport', 'culture'... ou '' si rien ne se reconnaît.
+    Le premier segment reconnu l'emporte ; le dernier segment du chemin (le titre de l'article) n'est pas lu."""
+    try:
+        u = urlsplit(lien or "")
+    except ValueError:
+        return ""
+    chemin = [x for x in u.path.split("/") if x]
+    for seg in (u.hostname or "").split(".")[:-2] + chemin[:-1]:
+        nom = _SEGMENTS.get(norm(seg).replace("_", "-"))
+        if nom:
+            return nom
+    return ""
+
+
+def hors_ecartees(table="a"):
+    """Condition SQL (et ses paramètres) qui laisse de côté les articles des rubriques écartées."""
+    r = config.rubriques_ecartees()
+    if not r:
+        return "1 = 1", ()
+    return f"COALESCE({table}.rubrique, '') NOT IN ({', '.join('?' * len(r))})", tuple(r)
+
+
 def recolter(db):
     """Lit les flux des médias actifs et range les titres nouveaux. Rend le détail par média."""
     borne, quand, detail = base.depuis(), base.iso(), {}
@@ -111,9 +157,9 @@ def recolter(db):
                 neufs = 0
                 for a in gardes[:MAX_PAR_MEDIA]:
                     cur = db.execute(
-                        "INSERT OR IGNORE INTO articles (cle, media_id, titre, lien, date, recolte) VALUES (?,?,?,?,?,?)",
+                        "INSERT OR IGNORE INTO articles (cle, media_id, titre, lien, date, recolte, rubrique) VALUES (?,?,?,?,?,?,?)",
                         (base.cle_article(m["nom"], a["titre"], a["lien"]), m["id"], a["titre"], a["lien"],
-                         base.iso(a["date"]) if a["date"] else None, quand))
+                         base.iso(a["date"]) if a["date"] else None, quand, rubrique(a["lien"])))
                     neufs += cur.rowcount
                 etat = f"{len(gardes)} dans la fenêtre, {neufs} nouveaux"
                 break
@@ -131,9 +177,9 @@ def importer_json(db, chemin):
     for a in data["articles"]:
         if a["media"] not in ids:
             continue
-        cur = db.execute("INSERT OR IGNORE INTO articles (cle, media_id, titre, lien, date, recolte) VALUES (?,?,?,?,?,?)",
+        cur = db.execute("INSERT OR IGNORE INTO articles (cle, media_id, titre, lien, date, recolte, rubrique) VALUES (?,?,?,?,?,?,?)",
                          (base.cle_article(a["media"], a["title"], a["link"]), ids[a["media"]], a["title"], a["link"],
-                          a.get("date"), data["recolte"][:19] + "+00:00"))
+                          a.get("date"), data["recolte"][:19] + "+00:00", rubrique(a["link"])))
         n += cur.rowcount
     db.commit()
     return n
@@ -229,10 +275,11 @@ Réponds par un seul objet JSON : {{"1": "S3", "2": 0, ...}} avec tous les numé
 
 def _sujets_ouverts(db):
     """Sujets ayant au moins un titre dans la fenêtre : {id: libellé}, dans l'ordre de création."""
+    garde, rubs = hors_ecartees("a")
     return {r["id"]: r["libelle"] for r in db.execute(
-        """SELECT DISTINCT s.id, s.libelle FROM sujets s JOIN sujet_articles sa ON sa.sujet_id = s.id
-           JOIN articles a ON a.id = sa.article_id WHERE COALESCE(a.date, a.recolte) >= ? ORDER BY s.id""",
-        (base.depuis(),))}
+        f"""SELECT DISTINCT s.id, s.libelle FROM sujets s JOIN sujet_articles sa ON sa.sujet_id = s.id
+            JOIN articles a ON a.id = sa.article_id WHERE COALESCE(a.date, a.recolte) >= ? AND {garde}
+            ORDER BY s.id""", (base.depuis(),) + rubs)}
 
 
 def _liste(sujets):
@@ -240,17 +287,20 @@ def _liste(sujets):
 
 
 def _medias_par_sujet(db):
+    garde, rubs = hors_ecartees("a")
     return {r["sujet_id"]: r["n"] for r in db.execute(
-        """SELECT sa.sujet_id, COUNT(DISTINCT a.media_id) AS n FROM sujet_articles sa
-           JOIN articles a ON a.id = sa.article_id GROUP BY sa.sujet_id""")}
+        f"""SELECT sa.sujet_id, COUNT(DISTINCT a.media_id) AS n FROM sujet_articles sa
+            JOIN articles a ON a.id = sa.article_id WHERE {garde} GROUP BY sa.sujet_id""", rubs)}
 
 
 def regrouper(db):
-    """Range les titres pas encore triés dans des sujets. Le modèle ne voit jamais le nom des médias."""
+    """Range les titres pas encore triés dans des sujets. Le modèle ne voit jamais le nom des médias.
+    Les articles des rubriques écartées (sport, culture) ne sont pas proposés : ils restent en base, non triés."""
     with base.Etape(db, "regroupement") as etape:
+        garde, rubs = hors_ecartees("articles")
         arts = [dict(r) for r in db.execute(
-            "SELECT id, titre FROM articles WHERE trie = 0 AND COALESCE(date, recolte) >= ? ORDER BY id",
-            (base.depuis(),))]
+            f"SELECT id, titre FROM articles WHERE trie = 0 AND COALESCE(date, recolte) >= ? AND {garde} ORDER BY id",
+            (base.depuis(),) + rubs)]
         if not arts:
             etape.detail = {"nouveaux": 0}
             return etape.detail
@@ -379,14 +429,16 @@ def empreinte(ids):
 
 
 def sujets_du_jour(db):
-    """Sujets de la fenêtre avec leurs titres : [{id, libelle, articles:[{id, titre, lien, media, cote}]}]."""
+    """Sujets de la fenêtre avec leurs titres : [{id, libelle, articles:[{id, titre, lien, media, cote}]}].
+    Un article d'une rubrique écartée n'est pas compté, même s'il a été rangé sous un sujet auparavant."""
     notes = base.scores(db)
+    garde, rubs = hors_ecartees("a")
     out = {}
     for r in db.execute(
-            """SELECT s.id AS sid, s.libelle, a.id, a.titre, a.lien, a.media_id, m.nom FROM sujets s
-               JOIN sujet_articles sa ON sa.sujet_id = s.id JOIN articles a ON a.id = sa.article_id
-               JOIN medias m ON m.id = a.media_id WHERE COALESCE(a.date, a.recolte) >= ? ORDER BY s.id, a.id""",
-            (base.depuis(),)):
+            f"""SELECT s.id AS sid, s.libelle, a.id, a.titre, a.lien, a.media_id, m.nom FROM sujets s
+                JOIN sujet_articles sa ON sa.sujet_id = s.id JOIN articles a ON a.id = sa.article_id
+                JOIN medias m ON m.id = a.media_id WHERE COALESCE(a.date, a.recolte) >= ? AND {garde}
+                ORDER BY s.id, a.id""", (base.depuis(),) + rubs):
         s = out.setdefault(r["sid"], {"id": r["sid"], "libelle": r["libelle"], "articles": []})
         s["articles"].append({"id": r["id"], "titre": r["titre"], "lien": r["lien"], "media": r["nom"],
                               "cote": base.COTE[base.bord(notes.get(r["media_id"], 0.0))]})
