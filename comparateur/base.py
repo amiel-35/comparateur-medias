@@ -109,9 +109,10 @@ def charger_medias(db, chemin=None):
 
 
 def scores(db):
-    """Note de référence par média : la note 'etude tierce' (FrIdéo). Rend {media_id: note}."""
-    return {r["media_id"]: r["note"] for r in
-            db.execute("SELECT media_id, note FROM notes_media WHERE methode = 'etude tierce'")}
+    """Note de référence par média : la note 'etude tierce' (FrIdéo) la plus récente. Rend {media_id: note}.
+    Une nouvelle version du classement s'ajoute sans effacer l'ancienne : l'historique des scores est gardé."""
+    return {r["media_id"]: r["note"] for r in   # la plus récente écrase les précédentes, qui restent en base
+            db.execute("SELECT media_id, note FROM notes_media WHERE methode = 'etude tierce' ORDER BY cree, id")}
 
 
 class Etape:

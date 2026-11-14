@@ -31,6 +31,22 @@ def noms(media):
     return sorted({norm(media)} | {norm(a) for a in ALIAS.get(media, [])}, key=len, reverse=True)
 
 
+def uniformiser(t):
+    """Efface la typographie maison : guillemets, apostrophes, tirets, espaces, milliers. Un lecteur reconnaît
+    un journal à ces détails plus qu'à ses mots (French News Lab, « Qui a publié ce titre ? », 2026) ; à
+    l'aveugle, on ne doit juger que ce que le titre dit."""
+    t = t.replace("\u00a0", " ").replace("\u202f", " ").replace("\u2009", " ")
+    t = re.sub(r"[«»“”„‟]", '"', t)                      # tous les guillemets deviennent droits
+    t = re.sub(r'"\s*([^"]*?)\s*"', r'"\1"', t)          # sans espace à l'intérieur
+    t = re.sub(r"[’‘ʼ`´]", "'", t)
+    t = re.sub(r"\s*[–—]\s*", " - ", t)
+    t = t.replace("…", "...")
+    t = re.sub(r"(?<=\d)[.\s](?=\d{3}(?!\d))", " ", t)   # 6.000 et 6 000 s'écrivent pareil
+    t = re.sub(r"\s*([:;!?])", r" \1", t)               # une espace avant la ponctuation double, toujours
+    t = re.sub(r"\s+", " ", t).strip()
+    return re.sub(r"(?<!\.)\.$", "", t).rstrip()          # pas de point final (les points de suspension restent)
+
+
 def nettoyer(titre, media):
     """Rend le titre sans indice sur le média, ou None s'il ne peut pas être rendu anonyme."""
     t = titre.strip()
@@ -42,6 +58,7 @@ def nettoyer(titre, media):
         if t2 == t:
             break
         t = t2
+    t = uniformiser(t)
     t = t[:1].upper() + t[1:] if t else t
     bas = norm(t)
     if len(t) < 25 or any(re.search(r"(?<![a-z0-9])%s(?![a-z0-9])" % re.escape(n), bas) for n in noms(media)):

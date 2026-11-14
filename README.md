@@ -16,7 +16,7 @@ sauf le SDK Anthropic (mode `api` seulement).
 ## En local
 
 ```bash
-python3 -m unittest discover -s tests          # 18 tests, sans réseau ni modèle
+python3 -m unittest discover -s tests          # 21 tests, sans réseau ni modèle
 python3 -m comparateur init                    # base SQLite + 30 médias (scores FrIdéo)
 python3 -m comparateur tout                    # l'édition du jour : récolte, regroupement, analyse, lots, publication
 python3 -m comparateur inviter 3               # trois codes d'invitation
@@ -64,6 +64,14 @@ publie **l'édition du jour**, qui ne bouge plus ensuite.
   changement du gabarit vaut aussi pour les archives.
 - `python -m comparateur tout` refait l'édition du jour ; `python -m comparateur pages` réécrit seulement le site.
 
+## La semaine et le mois
+
+`syntheses.py` met bout à bout les éditions gardées : les sujets les plus couverts, ce que chaque bord a traité
+et laissé de côté, la présence de chaque journal. Ce sont des comptages, sans modèle. Un sujet qui dure garde
+le même identifiant d'un jour à l'autre, ce qui permet de le suivre ; deux sujets ouverts séparément sur le
+même fait sont comptés deux fois. Les synthèses sont recalculées à chaque publication et s'ouvrent depuis
+l'accueil (« la semaine », « le mois »).
+
 ## L'API des votes
 
 | Route | Corps | Réponse |
@@ -87,6 +95,10 @@ minute et par adresse ; corps limité à 4 Ko.
 ## Garde-fous de la fabrique
 
 - Un modèle ne note jamais un média : les notes viennent de `medias.json` (FrIdéo, CC BY 4.0) et, plus tard, des votes.
+- Les scores et leurs intervalles de confiance viennent du jeu de données officiel FrIdéo (data.gouv.fr). Une
+  nouvelle version du classement s'ajoute en base sans effacer l'ancienne.
+- À l'aveugle, la typographie maison est effacée (guillemets, apostrophes, tirets, milliers) : le French News Lab
+  a montré qu'on reconnaît un journal à ces détails plus qu'à ses mots.
 - Au regroupement, le modèle ne voit pas le nom des médias.
 - Toute citation entre « » absente des titres est retirée par le code (`verifier_citations`).
 - Chaque appel est mis en cache par empreinte : relancer la fabrique ne repaie pas ce qui est déjà fait.

@@ -5,7 +5,7 @@ Les lecteurs ne lisent que ces fichiers : ni la base ni les modèles ne sont sol
 """
 import json, os, shutil
 
-from . import aveugle, base, config
+from . import aveugle, base, config, syntheses
 from .fabrique import sujets_du_jour
 
 
@@ -22,8 +22,11 @@ def _ecrire(chemin, texte):
 
 def donnees_du_jour(db):
     notes = base.scores(db)
+    fiche = {m["nom"]: m for m in json.load(open(os.path.join(config.ICI, "medias.json"), encoding="utf-8"))["medias"]}
     medias = [{"nom": r["nom"], "score": notes.get(r["id"], 0.0), "bord": base.bord(notes.get(r["id"], 0.0)),
-               "proprietaire": r["proprietaire"], "id": r["id"]}
+               "proprietaire": r["proprietaire"], "id": r["id"], "ic": fiche.get(r["nom"], {}).get("ic"),
+               "sources": fiche.get(r["nom"], {}).get("sources"),
+               "peu_documente": bool(fiche.get(r["nom"], {}).get("peu_documente"))}
               for r in db.execute("SELECT id, nom, proprietaire FROM medias WHERE actif = 1").fetchall()]
     presents = {r["media_id"] for r in db.execute(
         "SELECT DISTINCT media_id FROM articles WHERE COALESCE(date, recolte) >= ?", (base.depuis(),))}
@@ -47,14 +50,15 @@ def donnees_du_jour(db):
            WHERE COALESCE(a.date, a.recolte) >= ? AND m.actif = 1 ORDER BY m.nom, a.id""", (base.depuis(),))
              if r["id"] not in ranges]
     total = db.execute("SELECT COUNT(*) AS n FROM articles WHERE COALESCE(date, recolte) >= ?", (base.depuis(),)).fetchone()["n"]
-    source = db.execute("SELECT source FROM notes_media WHERE methode = 'etude tierce' LIMIT 1").fetchone()
+    source = db.execute("SELECT source FROM notes_media WHERE methode = 'etude tierce' ORDER BY cree DESC, id DESC LIMIT 1").fetchone()
     return {"recolte": base.iso(), "heures": config.heures(), "total": total, "mode": "auto",
             "medias": sorted(({k: m[k] for k in ("nom", "score", "bord", "proprietaire")} for m in medias if m["id"] in presents),
                              key=lambda m: m["score"]),
             "absents": [m["nom"] for m in medias if m["id"] not in presents],
             "source_classement": source["source"] if source else "",
             "classement": {"source": source["source"] if source else "", "seuils": SEUILS,
-                           "medias": sorted(({"nom": m["nom"], "score": m["score"]} for m in medias), key=lambda m: m["score"])},
+                           "medias": sorted(({k: m[k] for k in ("nom", "score", "ic", "sources", "peu_documente")} for m in medias),
+                                             key=lambda m: m["score"])},
             "sujets": sujets, "seuls": seuls,
             "aveugle": aveugle.resultats(db)}
 
@@ -81,8 +85,21 @@ def ecrire_pages(db):
     gabarit = open(os.path.join(config.ICI, "site", "gabarit.html"), encoding="utf-8").read()
     lignes = db.execute("SELECT jour, donnees FROM editions ORDER BY jour").fetchall()
     jours = [r["jour"] for r in lignes]
-    for i, r in enumerate(lignes):
-        charge = json.loads(r["donnees"])
+    charges = [(r["jour"], json.loads(r["donnees"])) for r in lignes]
+    # Une édition faite avant que les intervalles de confiance soient connus les reçoit ici, sans rien réécrire d'autre.
+    fiche = {m["nom"]: m for m in json.load(open(os.path.join(config.ICI, "medias.json"), encoding="utf-8"))["medias"]}
+    for _, charge in charges:
+        for m in charge.get("classement", {}).get("medias", []):
+            if m.get("ic") is None and m["nom"] in fiche:
+                m.update({k: fiche[m["nom"]].get(k) for k in ("ic", "sources")},
+                         peu_documente=bool(fiche[m["nom"]].get("peu_documente")))
+    semaines, mois = syntheses.toutes(charges)
+    # pour passer d'une période à l'autre : la dernière édition de chacune porte sa synthèse
+    liste_s = [{"cle": k, "jour": v["jours"][-1]} for k, v in sorted(semaines.items())]
+    liste_m = [{"cle": k, "jour": v["jours"][-1]} for k, v in sorted(mois.items())]
+    for i, (r, (_, charge)) in enumerate(zip(lignes, charges)):
+        charge["periodes"] = {"semaine": semaines[syntheses.cle_semaine(r["jour"])], "mois": mois[r["jour"][:7]],
+                              "semaines": liste_s, "mois_liste": liste_m}
         charge["edition"] = {"jour": r["jour"], "precedent": jours[i - 1] if i else None,
                              "suivant": jours[i + 1] if i + 1 < len(jours) else None, "toutes": jours}
         texte = json.dumps(charge, ensure_ascii=False)

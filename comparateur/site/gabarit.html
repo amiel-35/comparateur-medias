@@ -81,6 +81,23 @@ main:focus,h1:focus{outline:none}
 .ed-j{font-family:var(--mono,monospace);font-size:.82rem;letter-spacing:.06em;text-transform:uppercase;order:-1;flex:1 0 100%}
 @media (min-width:720px){.ed-j{order:0;flex:1 1 auto;text-align:center}}
 .ed-s{margin:0 0 14px;font-size:.78rem}
+.ptop{list-style:none;counter-reset:pt;padding:0;margin:14px 0 26px;max-width:78ch}
+.ptop li{counter-increment:pt;position:relative;padding:12px 0 12px 2.6rem;border-bottom:1px solid var(--line)}
+.ptop li::before{content:counter(pt);position:absolute;left:0;top:10px;font-family:var(--serif);font-weight:700;font-size:1.5rem}
+.ptop a{font-family:var(--serif);font-size:1.12rem;font-weight:700}
+.ptop .pm{display:block;margin:4px 0 6px;font-size:.72rem}
+.pbar{display:flex;gap:2px;height:20px;max-width:26rem}
+.pbar i{display:flex;align-items:center;justify-content:center;min-width:2.6rem;font-style:normal}
+.pbar i b{font-family:var(--mono,monospace);font-size:.68rem;font-weight:700}
+.pbar .f-g{background:var(--g);color:var(--on-g)}.pbar .f-c{background:var(--c);color:var(--on-c)}.pbar .f-d{background:var(--d);color:var(--on-d)}
+.pbar i.nul{background:repeating-linear-gradient(135deg,transparent 0 5px,var(--line) 5px 6px);color:var(--mute);outline:1px dashed var(--mute);outline-offset:-1px}
+.pk{margin:0 0 10px}
+.pl{list-style:none;padding:0;margin:4px 0 14px}
+.pl li{padding:5px 0;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
+.ptw{overflow-x:auto;max-width:100%;margin:10px 0}
+.pt{border-collapse:collapse;width:100%;max-width:60rem;font-size:.92rem}
+.pt th,.pt td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+.pt thead th{font-family:var(--mono,monospace);font-size:.68rem;letter-spacing:.05em;text-transform:uppercase;border-bottom:2px solid var(--ink)}
 .eds{list-style:none;padding:0;margin:18px 0;max-width:60ch}
 .eds li{border-bottom:1px solid var(--line);padding:10px 0;font-family:var(--serif);font-size:1.15rem}
 .eds a[aria-current]{font-weight:700}
@@ -165,6 +182,9 @@ details>summary{cursor:pointer;font-weight:700;font-size:.9rem;padding:8px 0;min
 .scale div:nth-child(2){position:relative;height:3.2em}
 .scale span{position:absolute;white-space:nowrap}
 .src{background:var(--paper);border:1px solid var(--line);padding:12px 14px;margin:14px 0}
+.track .ci{position:absolute;top:50%;height:2px;margin-top:-1px;background:var(--ink);opacity:.75}
+.track .ci::before,.track .ci::after{content:"";position:absolute;top:-4px;width:2px;height:10px;background:var(--ink)}
+.track .ci::before{left:0}.track .ci::after{right:0}
 
 /* médias */
 .mlist{list-style:none;margin:0;padding:0;display:grid;gap:8px;grid-template-columns:minmax(0,1fr)}
@@ -257,7 +277,7 @@ function enc(s){return encodeURIComponent(s);}
 
 /* médias */
 var lus={};D.medias.forEach(function(m){lus[m.nom]=m;});
-var MEDIAS=C.medias.map(function(m){var l=lus[m.nom];return {nom:m.nom,score:m.score,note:m.note||null,lu:!!l,bord:l?l.bord:bordOf(m.score)};});
+var MEDIAS=C.medias.map(function(m){var l=lus[m.nom];return {nom:m.nom,score:m.score,note:m.note||null,lu:!!l,bord:l?l.bord:bordOf(m.score),ic:m.ic||null,sources:m.sources||null,peu:!!m.peu_documente};});
 var BY={};MEDIAS.forEach(function(m){BY[m.nom]=m;});
 
 /* sujets */
@@ -284,7 +304,7 @@ function edNav(){
   h+=ED.precedent?'<a class="btn sm" href="'+edUrl(ED.precedent)+'" rel="prev">← '+esc(jourCourt(ED.precedent))+'</a>':'<span class="btn sm off" aria-hidden="true">←</span>';
   h+='<span class="ed-j">Édition du '+esc(jourLong(ED.jour))+'</span>';
   h+=ED.suivant?'<a class="btn sm" href="'+edUrl(ED.suivant)+'" rel="next">'+esc(jourCourt(ED.suivant))+' →</a>':'<span class="btn sm off" aria-hidden="true">→</span>';
-  h+='</nav><p class="mono mute ed-s">'+(ED.suivant?'Vous lisez une édition passée. <a href="/">Dernière édition</a> · ':'Dernière édition · ')+'<a href="#/editions">toutes les éditions</a></p>';
+  h+='</nav><p class="mono mute ed-s">'+(ED.suivant?'Vous lisez une édition passée. <a href="/">Dernière édition</a> · ':'Dernière édition · ')+'<a href="#/editions">toutes les éditions</a> · <a href="#/semaine">la semaine</a> · <a href="#/mois">le mois</a></p>';
   return h;
 }
 function vEditions(){
@@ -292,6 +312,53 @@ function vEditions(){
   var h='<p class="crumb"><a href="#/">Sujets</a> / Éditions</p><h1 tabindex="-1" id="h1">Toutes les éditions</h1>'+
   '<p class="lede" style="font-family:var(--serif);font-size:1.2rem;max-width:56ch">Une édition par jour. Chacune garde les sujets, les titres et les analyses tels qu’ils ont été publiés ce jour-là.</p>';
   h+=js.length?'<ul class="eds">'+js.map(function(j){return '<li><a href="'+edUrl(j)+'"'+(j===ED.jour?' aria-current="true"':'')+'>'+esc(jourLong(j))+'</a>'+(j===ED.jour?' <span class="mono mute">vous y êtes</span>':'')+'</li>';}).join('')+'</ul>':'<p class="vide">Aucune édition gardée.</p>';
+  return h;
+}
+
+/* la semaine et le mois : des comptages sur les éditions gardées, sans modèle */
+var PER=D.periodes||null;
+function jourNum(j){return new Date(j+'T12:00:00Z').toLocaleDateString('fr-FR',{timeZone:'UTC',day:'numeric',month:'long'});}
+function perTitre(p,type){
+  if(type==='mois')return 'Le mois de '+new Date(p.debut+'T12:00:00Z').toLocaleDateString('fr-FR',{timeZone:'UTC',month:'long',year:'numeric'});
+  return 'La semaine du '+jourNum(p.debut)+' au '+jourNum(p.fin)+' '+p.fin.slice(0,4);
+}
+function sujLien(x){return (x.dernier===ED.jour?'':edUrl(x.dernier))+'#/sujet/'+x.id;}
+function vPeriode(type){
+  var nomV=type==='mois'?'Mois':'Semaine';
+  if(!PER)return '<p class="crumb"><a href="#/">Sujets</a> / '+nomV+'</p><h1 tabindex="-1" id="h1">'+nomV+'</h1><p class="vide">Pas encore de synthèse.</p>';
+  var p=type==='mois'?PER.mois:PER.semaine, liste=type==='mois'?PER.mois_liste:PER.semaines;
+  var i=liste.map(function(x){return x.cle;}).indexOf(p.cle), av=i>0?liste[i-1]:null, ap=i>=0&&i<liste.length-1?liste[i+1]:null;
+  var h='<p class="crumb"><a href="#/">Sujets</a> / '+nomV+'</p>';
+  h+='<nav class="ed" aria-label="Périodes">'+(av?'<a class="btn sm" href="'+edUrl(av.jour)+'#/'+type+'" rel="prev">← précédent</a>':'<span class="btn sm off" aria-hidden="true">←</span>')+
+     '<span class="ed-j">'+(type==='mois'?'Synthèse du mois':'Synthèse de la semaine')+'</span>'+
+     (ap?'<a class="btn sm" href="'+edUrl(ap.jour)+'#/'+type+'" rel="next">suivant →</a>':'<span class="btn sm off" aria-hidden="true">→</span>')+'</nav>';
+  h+='<h1 tabindex="-1" id="h1">'+esc(perTitre(p,type))+'</h1>';
+  h+='<p class="lede" style="font-family:var(--serif);font-size:1.2rem;max-width:58ch">Ce que les éditions de la période disent, mises bout à bout : les sujets les plus couverts, ce que chaque bord a traité, et ce qu’il a laissé de côté.</p>';
+  h+='<p class="note">'+pl(p.jours.length,'édition gardée','éditions gardées')+' sur la période'+(p.jours.length<(type==='mois'?28:7)?' : la synthèse est partielle':'')+'. Tout est compté par une formule fixe, sans modèle de langage. Seuls les titres des sujets sont écrits par un modèle.</p>';
+  h+='<div class="nums"><div><b>'+p.jours.length+'</b><span>'+(p.jours.length>1?'éditions':'édition')+'</span></div><div><b>'+p.sujets+'</b><span>sujets</span></div><div><b>'+p.titres+'</b><span>titres rangés</span></div><div><b>'+p.larges+'</b><span>sujets repris par '+p.min_medias+' médias ou plus</span></div></div>';
+  /* les sujets les plus couverts */
+  h+='<h2>Les sujets les plus couverts</h2><ol class="ptop">'+p.top.map(function(x){
+    var mx=Math.max(x.par.g,x.par.c,x.par.d,1);
+    return '<li><a href="'+sujLien(x)+'">'+esc(x.titre)+'</a>'+mdl()+'<span class="pm mono mute">'+pl(x.medias,'média','médias')+' · '+pl(x.titres,'titre','titres')+(x.jours>1?' · '+x.jours+' jours':'')+(x.ecart!=null?' · écart '+x.ecart+' sur 5':'')+'</span>'+
+      '<span class="pbar" role="img" aria-label="Gauche '+x.par.g+', centre '+x.par.c+', droite '+x.par.d+'">'+['g','c','d'].map(function(c){return '<i class="f-'+c+(x.par[c]?'':' nul')+'" style="flex:'+Math.max(x.par[c],0.35)+'"><b>'+(x.par[c]||'aucun')+'</b></i>';}).join('')+'</span></li>';
+  }).join('')+'</ol>';
+  /* par bord */
+  h+='<h2>Par bord</h2><p class="note">Un silence : un sujet repris par '+p.min_medias+' médias ou plus, sans aucun titre de ce bord.</p><div class="cols">';
+  ['g','c','d'].forEach(function(c){
+    var b=p.bords[c];
+    h+='<section class="col s-'+c+'"><header><span>'+GL[c]+'</span><span class="mono" style="font-weight:400">'+pl(b.titres,'titre','titres')+'</span></header><div class="body">';
+    h+='<p class="pk"><b>'+b.sujets+' sur '+b.sur+'</b> grands sujets couverts · <b>'+b.silences+'</b> '+(b.silences>1?'silences':'silence')+'</p>';
+    h+='<p class="lab mono mute">Ce qu’il a le plus traité</p>'+(b.plus_couverts.length?'<ul class="pl">'+b.plus_couverts.map(function(x){return '<li><a href="'+sujLien(x)+'">'+esc(x.titre)+'</a> <span class="mono mute">'+pl(x.titres,'titre','titres')+'</span></li>';}).join('')+'</ul>':'<p class="vide">Rien relevé.</p>');
+    h+='<p class="lab mono mute">Ce qu’il a laissé de côté</p>'+(b.tus.length?'<ul class="pl">'+b.tus.map(function(x){return '<li><a href="'+sujLien(x)+'">'+esc(x.titre)+'</a> <span class="mono mute">'+x.medias+' médias ailleurs</span></li>';}).join('')+'</ul>':'<p class="vide">Aucun silence sur les grands sujets.</p>');
+    h+='</div></section>';
+  });
+  h+='</div>';
+  /* par journal */
+  h+='<h2>Par journal</h2><p class="note">« Grands sujets » : ceux repris par '+p.min_medias+' médias ou plus. « Dans le top » : présence parmi les '+p.top.length+' sujets les plus couverts.</p>';
+  h+='<div class="ptw"><table class="pt"><thead><tr><th scope="col">Journal</th><th scope="col">Bord</th><th scope="col">Titres rangés</th><th scope="col">Grands sujets</th><th scope="col">Dans le top</th></tr></thead><tbody>'+p.medias.map(function(m){
+    return '<tr><th scope="row"><a href="#/media/'+enc(m.nom)+'">'+esc(m.nom)+'</a></th><td>'+GL[m.cote]+'</td><td>'+m.titres+'</td><td>'+m.sujets+' sur '+p.larges+'</td><td>'+m.top+' sur '+p.top.length+'</td></tr>';
+  }).join('')+'</tbody></table></div>';
+  h+='<p class="note">Limites. Un journal absent d’un sujet n’en a peut-être pas parlé, ou son titre n’a pas été rangé sous ce sujet. Deux sujets ouverts séparément sur le même fait sont comptés deux fois. Les journaux dont le flux est illisible n’apparaissent pas.</p>';
   return h;
 }
 
@@ -369,20 +436,20 @@ function vRound(id){var r=RB[id];if(!r)return vHome();return sujetView(r);}
 
 /* classement */
 function vClass(){
-  var min=-2.6,max=2.2,span=max-min;
+  var min=-3.2,max=2.8,span=max-min;
   function pos(v){return (v-min)/span*100;}
   var h='<p class="crumb"><a href="#/">Sujets</a> / Classement</p><h1 tabindex="-1" id="h1">Le classement des médias</h1>'+
   '<p class="lede" style="font-family:var(--serif);font-size:1.2rem;max-width:56ch">Les '+MEDIAS.length+' médias du panel, situés les uns par rapport aux autres. C’est ce classement, et lui seul, qui range les médias par bord : aucun modèle de langage n’a noté un média.</p>';
-  h+='<div class="src"><p><b>Source.</b> FrIdéo v1.0, French News Lab, Amr Sobhy, ICNLSP 2026, licence CC BY 4.0. <a href="https://frenchnewslab.org/en/medias" target="_blank" rel="noopener noreferrer">frenchnewslab.org/en/medias ↗</a>. Scores lus sur le site le 14/11/2026.</p>'+
+  h+='<div class="src"><p><b>Source.</b> FrIdéo v1.0, French News Lab, Amr Sobhy, ICNLSP 2026, licence CC BY 4.0. <a href="https://frenchnewslab.org/fr/publications/frideo-french-news-ideology-scale" target="_blank" rel="noopener noreferrer">frenchnewslab.org ↗</a>. Scores et intervalles du jeu de données officiel publié sur data.gouv.fr.</p>'+
   '<p><b>Réserve.</b> Un journal classé « à gauche » est plus à gauche que les autres journaux du panel. Ça ne veut pas dire qu’il est de gauche. Ce classement peut ne pas correspondre à l’idée que vous vous faites d’un journal. Classer les journaux n’est pas le but de ce site.</p>'+
   '<p><b>Comment lire les scores.</b> Zéro est la moyenne des '+MEDIAS.length+' médias. Les bords sont tirés du score par ce site, avec ces seuils : '+esc(C.seuils.replace(/^bords dérivés du score par nos soins : /,''))+'.</p>'+
-  '<p><b>Intervalles de confiance :</b> <span class="soon">à venir</span> (absents des données). Aucun modèle de langage n’a noté un média.</p></div>';
+  '<p><b>Intervalles de confiance.</b> Le trait fin autour de chaque barre est l’intervalle à 95 % publié par FrIdéo : plus il est long, moins le classement est sûr de la place du journal. Pour '+MEDIAS.filter(function(m){return m.ic&&m.ic[0]<0&&m.ic[1]>0;}).length+' médias sur '+MEDIAS.length+', ce trait traverse la moyenne : le classement ne dit pas de quel côté ils se trouvent. Aucun modèle de langage n’a noté un média.</p></div>';
   h+='<div class="legend">'+BORDS.map(function(b){return '<span><i class="b-'+b+'"></i>'+BL[b]+'</span>';}).join('')+'</div>';
   h+='<div class="axis"><div class="scale"><div></div><div><span style="left:0">← gauche</span><span style="right:0;text-align:right">droite →</span><span style="left:'+pos(0)+'%;transform:translateX(-50%);top:1.5em">moy. panel</span></div><div></div></div>';
   h+='<ul class="cl">'+MEDIAS.slice().sort(function(a,b){return a.score-b.score;}).map(function(m){
     var z=pos(0),p=pos(m.score),l=Math.min(z,p),w=Math.abs(p-z);
     var tk=[-1,-0.5,0.5,1].map(function(t){return '<span class="tick" style="left:'+pos(t)+'%"></span>';}).join('');
-    return '<li'+(m.lu?'':' class="off"')+'><div><a href="#/media/'+enc(m.nom)+'">'+esc(m.nom)+'</a>'+'</div><div class="track" role="img" aria-label="'+esc(m.nom)+', score '+fs(m.score)+', '+BL[m.bord]+'">'+tk+'<span class="bar b-'+m.bord+'" style="left:'+l+'%;width:'+w+'%"></span><span class="zero" style="left:calc('+z+'% - 1px)"></span></div><div class="sc">'+fs(m.score)+'</div></li>';
+    return '<li'+(m.lu?'':' class="off"')+'><div><a href="#/media/'+enc(m.nom)+'">'+esc(m.nom)+'</a>'+'</div><div class="track" role="img" aria-label="'+esc(m.nom)+', score '+fs(m.score)+', '+BL[m.bord]+'">'+tk+'<span class="bar b-'+m.bord+'" style="left:'+l+'%;width:'+w+'%"></span>'+(m.ic?'<span class="ci" style="left:'+pos(m.ic[0])+'%;width:'+(pos(m.ic[1])-pos(m.ic[0]))+'%"></span>':'')+'<span class="zero" style="left:calc('+z+'% - 1px)"></span></div><div class="sc">'+fs(m.score)+'</div></li>';
   }).join('')+'</ul></div>';
   h+='<p class="note">Traits pointillés : les seuils de bord. Trait plein : zéro, la moyenne du panel ; à gauche de ce trait, plus à gauche que cette moyenne. Le nom d’un média ouvre sa fiche.</p>';
   return h;
@@ -409,7 +476,7 @@ function vMedia(nom){
   h+='<div class="mini" role="img" aria-label="Position sur l’axe du panel"><i style="left:calc('+pos+'% - 2px)"></i></div><p class="note" style="display:flex;justify-content:space-between"><span>← plus à gauche que la moyenne</span><span>plus à droite →</span></p>';
   h+='<dl class="kv"><div><dt>D’où vient la note</dt><dd>Classement FrIdéo v1.0 (French News Lab, Amr Sobhy, ICNLSP 2026, CC BY 4.0). Le zéro est la moyenne du panel, pas un centre politique. <a href="#/classement">Voir le classement</a>.</dd></div>'+
   '<div><dt>D’où vient le bord</dt><dd>Dérivé du score par nos soins, avec les seuils du classement. Un modèle de langage n’intervient pas.</dd></div>'+
-  '<div><dt>Intervalle de confiance</dt><dd><span class="soon">à venir</span></dd></div>'+
+  '<div><dt>Intervalle de confiance</dt><dd>'+(m.ic?'De '+fs(m.ic[0])+' à '+fs(m.ic[1])+' (à 95 %).'+(m.ic[0]<0&&m.ic[1]>0?' Il traverse la moyenne du panel : le classement ne dit pas de quel côté se trouve ce journal.':'')+(m.sources?' Score établi sur '+m.sources+' familles d’indices sur 9'+(m.peu?', ce qui est peu : à lire avec prudence.':'.'):''):'<span class="soon">à venir</span>')+'</dd></div>'+
   '<div><dt>Propriétaire</dt><dd><span class="soon">à venir</span> <span class="mute">(absent des données)</span></dd></div>'+
   (m.note?'<div><dt>Note sur le flux</dt><dd>'+esc(m.note)+'</dd></div>':'')+
   '<div><dt>Flux du jour</dt><dd>'+(m.lu?'Lu.':'Illisible aujourd’hui : on ne peut rien dire de ce qu’il a titré.')+'</dd></div></dl>';
@@ -474,6 +541,7 @@ function route(opt){
   else if(v==='demarche')html=vDemarche();
   else if(v==='origine')html=vOrigine();
   else if(v==='editions'){html=vEditions();nav='home';}
+  else if(v==='semaine'||v==='mois'){html=vPeriode(v);nav='home';}
   else{html=vHome();nav='home';}
   var y=window.scrollY;
   app.innerHTML=html;

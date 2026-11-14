@@ -6,7 +6,7 @@ os.environ["COMPARATEUR_DONNEES"] = DOSSIER
 os.environ["COMPARATEUR_MIN_PAR_BORD"] = "2"
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-from comparateur import aveugle, base, fabrique, llm, publier, serveur  # noqa: E402
+from comparateur import aveugle, base, fabrique, llm, publier, serveur, syntheses  # noqa: E402
 
 
 def tearDownModule():
@@ -50,6 +50,13 @@ class Aveugle(unittest.TestCase):
         self.assertIsNone(aveugle.nettoyer("Blocage des lycées : sur LCI, Jordan Bardella prône la tolérance zéro", "TF1 INFO"))
         self.assertIsNone(aveugle.nettoyer("Ukraine : invitée par Zelensky dans L'Express, Marine Le Pen accepte", "L'Express"))
         self.assertIsNone(aveugle.nettoyer("Trop court", "Le Monde"))
+
+    def test_la_typographie_maison_est_effacee(self):
+        a = aveugle.uniformiser("«Ce n’est pas arrivé depuis le 11-Septembre» : 6.000 vols annulés…")
+        b = aveugle.uniformiser('« Ce n\'est pas arrivé depuis le 11-Septembre »: 6\u00a0000 vols annulés...')
+        self.assertEqual(a, b)
+        self.assertEqual(a, '"Ce n\'est pas arrivé depuis le 11-Septembre" : 6 000 vols annulés...')
+        self.assertEqual(aveugle.uniformiser("Budget 2027 – la gauche vote contre."), "Budget 2027 - la gauche vote contre")
 
     def test_un_bord_nombreux_ne_pese_pas_plus(self):
         # 100 votants de gauche disent « centre » (0), 2 du centre et 2 de droite disent « gauche » (-2).
@@ -243,6 +250,39 @@ class Editions(unittest.TestCase):
     def test_le_demarrage_fait_la_premiere_edition(self):
         publier.pages(self.db)
         self.assertEqual(self.db.execute("SELECT COUNT(*) AS n FROM editions").fetchone()["n"], 1)
+
+
+class Syntheses(unittest.TestCase):
+    """La semaine et le mois : des comptages sur les éditions gardées."""
+
+    def edition(self, sujets):
+        medias = [{"nom": "Gauche Hebdo", "bord": "gauche"}, {"nom": "Le Milieu", "bord": "centre"},
+                  {"nom": "Centre Info", "bord": "centre"}, {"nom": "Droite Matin", "bord": "droite"},
+                  {"nom": "Droite Soir", "bord": "centre-droit"}]
+        return {"medias": medias, "sujets": [
+            {"id": i, "titre": t, "divergence": e, "articles": [{"media": m, "titre": f"{t} {m}", "lien": f"https://x.test/{i}/{m}"}
+                                                              for m in ms]} for i, t, e, ms in sujets]}
+
+    def test_un_sujet_qui_dure_est_suivi_et_les_silences_comptes(self):
+        lundi = self.edition([("s1", "Grève", 2, ["Gauche Hebdo", "Le Milieu", "Centre Info", "Droite Matin"]),
+                              ("s2", "Budget", 1, ["Le Milieu", "Centre Info", "Droite Matin", "Droite Soir"])])
+        mardi = self.edition([("s1", "Grève, suite", 4, ["Gauche Hebdo", "Le Milieu", "Droite Soir"])])
+        semaines, mois = syntheses.toutes([("2026-11-09", lundi), ("2026-11-10", mardi)])
+        s = semaines["2026-S46"]
+        self.assertEqual((s["debut"], s["fin"], s["jours"]), ("2026-11-09", "2026-11-15", ["2026-11-09", "2026-11-10"]))
+        greve = s["top"][0]
+        self.assertEqual((greve["id"], greve["titre"], greve["jours"], greve["medias"], greve["ecart"]), ("s1", "Grève, suite", 2, 5, 4))
+        self.assertEqual(greve["titres"], 5)                      # un article repris le lendemain ne compte qu'une fois
+        self.assertEqual(greve["par"], {"g": 1, "c": 2, "d": 2})
+        self.assertEqual(s["bords"]["g"]["silences"], 1)          # la gauche n'a rien sur le budget
+        self.assertEqual(s["bords"]["g"]["tus"][0]["id"], "s2")
+        self.assertEqual(s["bords"]["d"]["silences"], 0)
+        self.assertEqual(mois["2026-11"]["debut"], "2026-11-01")
+        self.assertEqual(mois["2026-11"]["fin"], "2026-11-30")
+
+    def test_la_semaine_change_au_lundi(self):
+        self.assertEqual(syntheses.cle_semaine("2026-11-15"), "2026-S46")
+        self.assertEqual(syntheses.cle_semaine("2026-11-16"), "2026-S47")
 
 
 class Budget(unittest.TestCase):
