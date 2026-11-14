@@ -1,0 +1,52 @@
+/* Les briques partagées par plusieurs vues : navigation des éditions, barres sur cinq bords, colonnes, listes. */
+.ed{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0 0 4px}
+.ed .btn{text-decoration:none;white-space:nowrap}
+.ed .btn.off{opacity:.3;cursor:default}
+.ed-j{font-family:var(--mono,monospace);font-size:.82rem;letter-spacing:.06em;text-transform:uppercase;order:-1;flex:1 0 100%}
+@media (min-width:720px){.ed-j{order:0;flex:1 1 auto;text-align:center}}
+.ed-s{margin:0 0 14px;font-size:.78rem}
+/* répartition des titres sur cinq bords : une case par bord, de la gauche à la droite */
+.pbar{display:flex;gap:2px;height:22px;max-width:26rem}
+.pbar i{display:flex;align-items:center;justify-content:center;min-width:1.9rem;font-style:normal;box-shadow:inset 0 0 0 1px rgba(0,0,0,.25)}
+.pbar i b{font-family:var(--mono,monospace);font-size:.68rem;font-weight:700}
+.pbar i.nul{background:repeating-linear-gradient(135deg,transparent 0 5px,var(--line) 5px 6px);color:var(--mute);box-shadow:none;border-bottom:4px solid var(--mute)}
+.pbar i.z-gauche{border-bottom-color:var(--g)}.pbar i.z-centre-gauche{border-bottom-color:var(--cg)}.pbar i.z-centre{border-bottom-color:var(--c)}.pbar i.z-centre-droit{border-bottom-color:var(--cd)}.pbar i.z-droite{border-bottom-color:var(--d)}
+.pbar.fin{height:14px;max-width:none}
+.pbar.fin i{min-width:3px}
+.pk{margin:0 0 10px}
+.pl{list-style:none;padding:0;margin:4px 0 14px}
+.pl li{padding:5px 0;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
+.legend{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:.82rem;color:var(--mute);margin:8px 0}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.legend i{width:12px;height:12px;display:inline-block;box-shadow:inset 0 0 0 1px rgba(0,0,0,.25)}
+.chips{display:flex;flex-wrap:wrap;align-items:flex-start;gap:6px;margin:8px 0}
+.am{display:inline-block;font-family:var(--mono);font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;background:var(--ko);color:var(--paper);padding:2px 7px}
+:root[data-theme="dark"] .am{color:#14130f}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .am{color:#14130f}}
+.dots{letter-spacing:2px;font-size:.9rem}
+.crumb{font-size:.85rem;margin:22px 0 10px}
+.cols{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
+@media (min-width:900px){.cols{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.col{background:var(--paper);border:2px solid var(--ink);display:flex;flex-direction:column;min-width:0}
+.col>header{padding:8px 12px;font-weight:800;display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap}
+.col.s-g>header{background:var(--g);color:var(--on-g)}.col.s-c>header{background:var(--c);color:var(--on-c)}.col.s-d>header{background:var(--d);color:var(--on-d)}
+.col.k-gauche>header{background:var(--g);color:var(--on-g)}.col.k-centre-gauche>header{background:var(--cg);color:var(--on-cg)}.col.k-centre>header{background:var(--c);color:var(--on-c)}.col.k-centre-droit>header{background:var(--cd);color:var(--on-cd)}.col.k-droite>header{background:var(--d);color:var(--on-d)}
+@media (min-width:720px){.cols.cinq{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (min-width:1080px){.cols.cinq{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.col .body{padding:12px}
+.tlist{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.tlist li{min-width:0}
+.tlist .who{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:2px}
+.mname{font-weight:700;font-size:.9rem}
+.tlist a.t{font-family:var(--serif);font-size:1.02rem;line-height:1.3;display:block;overflow-wrap:anywhere}
+details>summary{cursor:pointer;font-weight:700;font-size:.9rem;padding:8px 0;min-height:36px}
+.two{display:grid;gap:14px;grid-template-columns:minmax(0,1fr)}
+@media (min-width:800px){.two{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.two>div{background:var(--paper);border:1px solid var(--line);padding:12px 14px}
+.two ul,.lim{margin:.4em 0;padding-left:1.2em}
+.two li,.lim li{margin:.35em 0;overflow-wrap:anywhere}
+.nums{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:14px 0}
+@media (min-width:720px){.nums{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.nums div{border:1px solid var(--line);background:var(--paper);padding:10px}
+.nums b{display:block;font-family:var(--serif);font-size:1.9rem;line-height:1.1}
+.nums span{font-size:.82rem;color:var(--mute)}

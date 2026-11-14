@@ -1,0 +1,5 @@
+/* démarche */
+.steps{list-style:none;counter-reset:s;margin:14px 0;padding:0;display:grid;gap:12px}
+.steps li{counter-increment:s;background:var(--paper);border:2px solid var(--ink);padding:12px 14px 12px 58px;position:relative}
+.steps li::before{content:counter(s);position:absolute;left:12px;top:10px;font-family:var(--serif);font-size:2rem;font-weight:800;line-height:1}
+.steps h3{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin-bottom:4px}

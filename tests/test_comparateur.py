@@ -293,6 +293,49 @@ class Editions(unittest.TestCase):
         self.assertEqual(self.db.execute("SELECT COUNT(*) AS n FROM editions").fetchone()["n"], 1)
 
 
+class Gabarit(unittest.TestCase):
+    """La page unique est assemblée à partir de morceaux : une vue, un fichier (voir DOCTRINE.md)."""
+
+    def test_tous_les_morceaux_sont_assembles_une_fois(self):
+        site = publier.SITE
+        with open(os.path.join(site, "gabarit.html"), encoding="utf-8") as f:
+            nommes = publier.INCLURE.findall(f.read())
+        presents = sorted(os.path.relpath(os.path.join(d, n), site).replace(os.sep, "/")
+                          for sous in ("styles", "js") for d, _, noms in os.walk(os.path.join(site, sous)) for n in noms)
+        self.assertEqual(sorted(nommes), presents)          # ni morceau oublié, ni morceau nommé deux fois
+        self.assertEqual(nommes[0], "styles/base.css")      # le socle d'abord
+        self.assertLess(nommes.index("js/donnees.js"), nommes.index("js/commun.js"))
+        self.assertEqual(nommes[-1], "js/routage.js")       # le routage en dernier : il lance la première vue
+        page = publier.gabarit()
+        self.assertNotIn("INCLURE", page)
+        self.assertEqual(page.count("/*DONNEES*/null"), 1)
+        for attendu in ("function vHome()", "function vSilences()", "function route(", "function bar5(", ":root{"):
+            self.assertEqual(page.count(attendu), 1, attendu)
+        self.assertNotIn("</script", page.split('<script id="app-js">')[1].rsplit("</script>", 1)[0])
+
+    def test_un_morceau_absent_arrete_la_publication(self):
+        vrai, publier.SITE = publier.SITE, tempfile.mkdtemp(prefix="gabarit-")
+        try:
+            with open(os.path.join(publier.SITE, "gabarit.html"), "w", encoding="utf-8") as f:
+                f.write("<style>\n/*INCLURE styles/absent.css*/\n</style>")
+            with self.assertRaises(FileNotFoundError):
+                publier.gabarit()
+        finally:
+            shutil.rmtree(publier.SITE, ignore_errors=True)
+            publier.SITE = vrai
+
+    def test_les_morceaux_ne_sont_pas_publies(self):
+        db = base.connexion()
+        try:
+            publier.pages(db)
+        finally:
+            db.close()
+        pub = publier.config.public()
+        self.assertTrue(os.path.isfile(os.path.join(pub, "aveugle.html")))
+        self.assertFalse(os.path.exists(os.path.join(pub, "js")) or os.path.exists(os.path.join(pub, "styles")))
+        self.assertFalse(os.path.exists(os.path.join(pub, "gabarit.html")))
+
+
 class Rubriques(unittest.TestCase):
     """La rubrique d'un article se lit dans son adresse, sans modèle ; le sport et la culture sont écartés."""
 

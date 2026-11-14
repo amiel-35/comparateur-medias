@@ -1,0 +1,10 @@
+/* Semaine et mois : sujets les plus couverts, tableau par journal. */
+.ptop{list-style:none;counter-reset:pt;padding:0;margin:14px 0 26px;max-width:78ch}
+.ptop li{counter-increment:pt;position:relative;padding:12px 0 12px 2.6rem;border-bottom:1px solid var(--line)}
+.ptop li::before{content:counter(pt);position:absolute;left:0;top:10px;font-family:var(--serif);font-weight:700;font-size:1.5rem}
+.ptop a{font-family:var(--serif);font-size:1.12rem;font-weight:700}
+.ptop .pm{display:block;margin:4px 0 6px;font-size:.72rem}
+.ptw{overflow-x:auto;max-width:100%;margin:10px 0}
+.pt{border-collapse:collapse;width:100%;max-width:60rem;font-size:.92rem}
+.pt th,.pt td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+.pt thead th{font-family:var(--mono,monospace);font-size:.68rem;letter-spacing:.05em;text-transform:uppercase;border-bottom:2px solid var(--ink)}
