@@ -24,7 +24,7 @@ if (!B) { console.error('usage : node essais/rendu.js <adresse du site> [emprein
       page.on('pageerror', e => errs.push('PAGEERROR ' + e.message));
       for (const j of jours) {
         const d = await (await fetch(`${B}/data/editions/${j}.json`)).json();
-        const vues = ['#/', '#/silences', '#/sujet/seuls', '#/semaine', '#/mois', '#/demarche', '#/origine', '#/classement', '#/medias',
+        const vues = ['#/', '#/pourquoi', '#/silences', '#/sujet/seuls', '#/semaine', '#/mois', '#/demarche', '#/origine', '#/classement', '#/medias',
           '#/media/' + encodeURIComponent(d.medias[0].nom), '#/editions'].concat(d.sujets.map(s => '#/sujet/' + s.id));
         for (const v of vues) {
           await page.goto('about:blank'); await page.waitForTimeout(250);   // le guichet limite à 300 requêtes par minute

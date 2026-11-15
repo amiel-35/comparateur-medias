@@ -11,6 +11,7 @@ function route(opt){
   else if(v==='editions'){html=vEditions();nav='home';}
   else if(v==='semaine'||v==='mois'){html=vPeriode(v);nav='home';}
   else if(v==='silences'){html=vSilences();nav='home';}
+  else if(v==='pourquoi'){html=vPourquoi();nav='home';}
   else{html=vHome();nav='home';}
   var y=window.scrollY;
   app.innerHTML=html;

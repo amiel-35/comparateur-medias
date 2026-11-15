@@ -1,15 +1,10 @@
 /* ====== vues ====== */
 function vHome(){
+  /* Le contenu d'abord : une ligne pour dire ce que c'est, le reste sur sa page (#/pourquoi). */
   var h='<section class="hero">'+edNav()+
   '<h1>Un même fait, titré autrement selon le bord.</h1>'+
-  '<p class="lede">Chaque sujet du jour rassemble les titres des médias français qui en parlent : qui en parle à gauche, au centre ou à droite, avec quels mots, et qui se tait.</p>'+
-  '<p class="note" style="margin-top:14px">Les « titres du jour » d’un média sont ceux rangés dans les sujets ci-dessous ou parmi les titres sans jumeau.</p></section>';
-  h+='<details class="why"><summary><span class="why-t">Pourquoi ce site</span><span class="why-i" aria-hidden="true"></span></summary>'+
-  '<p>Un même fait n’est pas titré de la même façon partout. Ce site met les titres côte à côte pour le montrer : qui en parle, avec quels mots, et qui n’en parle pas.</p>'+
-  '<p>Il ne dit pas qui a raison. Il ne classe pas les journaux : le classement vient de FrIdéo, une étude publiée par le French News Lab. <a href="#/classement">Voir le classement</a>.</p>'+
-  '<p>Un journal classé « à gauche » est plus à gauche que les autres journaux du panel. Ça ne veut pas dire qu’il est de gauche.</p>'+
-  '<p class="note">Ce site doit son classement au French News Lab et son idée à Ground News : <a href="#/origine">d’où vient ce site</a>. Comment ça marche : <a href="#/demarche">la démarche</a>. Le code est public : <a href="https://github.com/amiel-35/comparateur-medias" target="_blank" rel="noopener noreferrer">github.com/amiel-35/comparateur-medias ↗</a>.</p></details>';
-  h+='<h2 style="margin-top:28px">Les '+rounds.length+' sujets du jour</h2>';
+  '<p class="lede">Les titres des médias français, sujet par sujet, de la gauche à la droite. <a href="#/pourquoi">Pourquoi ce site</a></p></section>';
+  h+='<h2 class="h-suj">Les '+rounds.length+' sujets du jour</h2>';
   var nsil=LARGES.filter(function(r){return r.sil.length;}).length;
   if(LARGES.length)h+='<p class="note">'+(nsil?'<b>'+nsil+' sur '+LARGES.length+'</b> '+(LARGES.length>1?'sujets repris':'sujet repris')+' par '+MIN+' médias ou plus '+(nsil>1?'ont':'a')+' un côté entier silencieux. <a href="#/silences">Voir les silences</a>.':'Aucun bord silencieux sur les '+LARGES.length+' sujets repris par '+MIN+' médias ou plus.')+'</p>';
   h+=legende();
