@@ -10,6 +10,8 @@ var BL={'extreme-gauche':'Extrême gauche','gauche':'Gauche','centre-gauche':'Ce
 var BORDS=['extreme-gauche','gauche','centre-gauche','centre','centre-droit','droite','extreme-droite'];
 var SEUILS=[-1.5,-0.75,-0.25,0.25,0.75,1.5];
 var KEY='cadrages.v1';
+/* l'invitation à installer du navigateur (beforeinstallprompt), gardée par le routage pour la vue Installer */
+var INVITE=null;
 var S={theme:null};
 try{var raw=localStorage.getItem(KEY);if(raw){var p=JSON.parse(raw);if(p&&typeof p==='object'){S.theme=p.theme||null;}}}catch(_){}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(_){}}

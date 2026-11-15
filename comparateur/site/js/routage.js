@@ -13,6 +13,7 @@ function route(opt){
   else if(v==='silences'){html=vSilences();nav='home';}
   else if(v==='pourquoi'){html=vPourquoi();nav='home';}
   else if(v==='mentions'){html=vMentions();nav='home';}
+  else if(v==='installer'){html=vInstaller();nav='home';}
   else{html=vHome();nav='home';}
   var y=window.scrollY;
   app.innerHTML=html;
@@ -23,11 +24,23 @@ function route(opt){
 }
 window.addEventListener('hashchange',function(){route();});
 
+/* L'application installable. Le service worker est enregistré s'il existe dans ce navigateur, sans erreur sinon.
+   L'invitation à installer (beforeinstallprompt, Chrome, Edge, Android) est gardée pour le bouton de #/installer :
+   le site n'affiche aucune invitation ailleurs. */
+if('serviceWorker' in navigator){try{navigator.serviceWorker.register('/sw.js').catch(function(){});}catch(_){}}
+window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();INVITE=e;if(/^#\/installer/.test(location.hash))route({keep:true});});
+window.addEventListener('appinstalled',function(){INVITE=null;if(/^#\/installer/.test(location.hash))route({keep:true});});
+app.addEventListener('click',function(e){
+  var b=e.target.closest&&e.target.closest('#btnInstaller');if(!b||!INVITE)return;
+  var inv=INVITE;INVITE=null;inv.prompt();
+  Promise.resolve(inv.userChoice).catch(function(){}).then(function(){route({keep:true});});
+});
+
 function effDark(){return S.theme?S.theme==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;}
 function applyTheme(){var d=document.documentElement;if(S.theme)d.setAttribute('data-theme',S.theme);else d.removeAttribute('data-theme');
   var b=document.getElementById('btnTheme');b.textContent=effDark()?'Thème : sombre':'Thème : clair';}
 document.getElementById('btnTheme').addEventListener('click',function(){S.theme=effDark()?'light':'dark';save();applyTheme();});
 try{window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',applyTheme);}catch(_){}
 
-document.getElementById('foot').innerHTML='<p><span class="mdl" style="margin:0">écrit par un modèle</span> signale tout texte rédigé par un modèle de langage (sujets, faits, angles, mots). Les scores viennent de FrIdéo v1.0 (French News Lab, CC BY 4.0), les comptages d’une formule fixe. Données du '+esc(new Date(D.recolte).toLocaleDateString('fr-FR',{timeZone:'Europe/Paris'}))+'. '+(D.mesure==='umami'?'Aucun cookie. La fréquentation est mesurée sans cookie ni donnée personnelle.':'Aucun cookie. Seul le choix du thème reste dans votre navigateur.')+' <a href="#/mentions">Mentions légales et données personnelles</a>.</p>';
+document.getElementById('foot').innerHTML='<p><span class="mdl" style="margin:0">écrit par un modèle</span> signale tout texte rédigé par un modèle de langage (sujets, faits, angles, mots). Les scores viennent de FrIdéo v1.0 (French News Lab, CC BY 4.0), les comptages d’une formule fixe. Données du '+esc(new Date(D.recolte).toLocaleDateString('fr-FR',{timeZone:'Europe/Paris'}))+'. '+(D.mesure==='umami'?'Aucun cookie. La fréquentation est mesurée sans cookie ni donnée personnelle.':'Aucun cookie. Seul le choix du thème reste dans votre navigateur.')+' <a href="#/mentions">Mentions légales et données personnelles</a>. <a href="#/installer">Installer Cadrages comme une application</a>.</p>';
 applyTheme();route();

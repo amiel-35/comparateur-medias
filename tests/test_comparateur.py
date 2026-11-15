@@ -574,3 +574,83 @@ class Mesure(unittest.TestCase):
         p = serveur.politique()
         self.assertIn("script-src 'self' 'unsafe-inline' https://stats.inflexion.me;", p)
         self.assertIn("connect-src 'self' https://stats.inflexion.me;", p)
+
+
+class Application(unittest.TestCase):
+    """Le site s'installe comme une application : manifest, icônes, service worker, liens dans les pages."""
+
+    @classmethod
+    def setUpClass(cls):
+        db = base.connexion()
+        try:
+            publier.pages(db)
+        finally:
+            db.close()
+        cls.pub = publier.config.public()
+        cls.srv = serveur.creer(port=0, hote="127.0.0.1")
+        cls.url = "http://127.0.0.1:%d" % cls.srv.server_address[1]
+        threading.Thread(target=cls.srv.serve_forever, daemon=True).start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.srv.shutdown()
+        cls.srv.server_close()
+
+    def lire(self, chemin):
+        with urllib.request.urlopen(self.url + chemin, timeout=10) as r:
+            return r.status, r.headers, r.read()
+
+    def taille_png(self, brut):
+        import struct
+        self.assertEqual(brut[:8], b"\x89PNG\r\n\x1a\n")
+        return struct.unpack(">II", brut[16:24])
+
+    def test_manifest_publie_et_valide(self):
+        statut, entetes, brut = self.lire("/manifest.webmanifest")
+        self.assertEqual(statut, 200)
+        self.assertTrue(entetes["Content-Type"].startswith("application/manifest+json"))
+        m = json.loads(brut)
+        self.assertEqual((m["name"], m["short_name"], m["start_url"], m["scope"], m["display"], m["lang"]),
+                         ("Cadrages", "Cadrages", "/", "/", "standalone", "fr"))
+        self.assertEqual((m["background_color"], m["theme_color"]), ("#f1ede4", "#16140f"))
+        tailles = {(i["sizes"], i.get("purpose", "any")) for i in m["icons"]}
+        self.assertTrue({("192x192", "any"), ("512x512", "any"), ("512x512", "maskable")} <= tailles)
+        for i in m["icons"]:   # chaque icône nommée est publiée, à la taille annoncée
+            chemin = os.path.join(self.pub, i["src"].lstrip("/"))
+            self.assertTrue(os.path.isfile(chemin), i["src"])
+            if i["type"] == "image/png":
+                with open(chemin, "rb") as f:
+                    n = int(i["sizes"].split("x")[0])
+                    self.assertEqual(self.taille_png(f.read()), (n, n))
+
+    def test_icones_d_ecran_d_accueil(self):
+        for chemin in ("/apple-touch-icon.png", "/apple-touch-icon-precomposed.png"):   # Safari demande les deux
+            statut, entetes, brut = self.lire(chemin)
+            self.assertEqual((statut, entetes["Content-Type"]), (200, "image/png"), chemin)
+            self.assertEqual(self.taille_png(brut), (180, 180))
+
+    def test_service_worker_a_la_racine(self):
+        statut, entetes, brut = self.lire("/sw.js")
+        self.assertEqual(statut, 200)
+        self.assertIn("javascript", entetes["Content-Type"])
+        self.assertEqual(entetes["Cache-Control"], "no-cache")
+        self.assertIn(b"fetch(r)", brut)   # réseau d'abord
+        p = entetes["Content-Security-Policy"]
+        self.assertIn("manifest-src 'self'", p)
+        self.assertIn("worker-src 'self'", p)
+
+    def test_liens_dans_les_pages(self):
+        for nom in ("index.html", "aveugle.html"):
+            with open(os.path.join(self.pub, nom), encoding="utf-8") as f:
+                page = f.read()
+            for attendu in ('<link rel="manifest" href="/manifest.webmanifest">',
+                            '<link rel="apple-touch-icon" href="/apple-touch-icon.png">',
+                            'name="theme-color" content="#f1ede4" media="(prefers-color-scheme: light)"',
+                            'name="theme-color" content="#14130f" media="(prefers-color-scheme: dark)"',
+                            '<meta name="apple-mobile-web-app-title" content="Cadrages">',
+                            "navigator.serviceWorker.register('/sw.js')"):
+                self.assertIn(attendu, page, nom)
+        page = publier.gabarit()
+        self.assertIn("function vInstaller()", page)
+        self.assertIn("v==='installer'", page)
+        self.assertIn('href="#/installer"', page)

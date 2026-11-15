@@ -1,0 +1,19 @@
+{
+  "id": "/",
+  "name": "Cadrages",
+  "short_name": "Cadrages",
+  "description": "Les titres de la presse française, côte à côte, du plus à gauche au plus à droite.",
+  "lang": "fr",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f1ede4",
+  "theme_color": "#16140f",
+  "icons": [
+    {"src": "/icone-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "/icone-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "/icone-masquable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
+    {"src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"}
+  ]
+}
