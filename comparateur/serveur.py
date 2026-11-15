@@ -6,16 +6,20 @@
   POST /api/avis-aveugle           {lot, note}   note de -2 (gauche) à +2 (droite)
   POST /api/avis-note              {media, accord}
   GET  /api/resultats              notes à l'aveugle par média, avec effectifs par bord
+  POST /api/mail/inscription       {adresse}     -> 202, toujours la même réponse (synthèse de la semaine par mail)
+  POST /api/mail/confirmation      {jeton}       confirme l'inscription (bouton de mail.html)
+  POST /api/mail/desinscription    {jeton}, ou ?jeton= avec List-Unsubscribe=One-Click (RFC 8058) : supprime l'abonné
   tout le reste                    fichiers de <données>/public/
 
 Anonymat : la base ne garde que l'empreinte du jeton et le bord déclaré. Aucun lien entre une
-invitation et un votant, aucun nom, aucune adresse (ni courriel ni IP).
+invitation et un votant, aucun nom, aucune adresse (ni courriel ni IP). Les abonnés au mail de la semaine
+sont à part (table abonnes, voir lettre.py) : leur adresse n'est écrite dans aucun journal.
 """
-import hashlib, json, mimetypes, os, secrets, threading, time
+import hashlib, json, mimetypes, os, re, secrets, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
-from . import aveugle, base, config
+from . import aveugle, base, config, lettre
 
 CORPS_MAX = 4096
 # Le manifest de l'application : type exigé par certains navigateurs, absent des vieilles tables de Python.
@@ -75,7 +79,8 @@ class Guichet(BaseHTTPRequestHandler):
     server_version = "Comparateur"
     protocol_version = "HTTP/1.1"
 
-    def log_message(self, fmt, *args):  # journal sans adresse du visiteur
+    def log_message(self, fmt, *args):  # journal sans adresse du visiteur, et sans paramètres d'adresse (jetons)
+        args = tuple(re.sub(r"\?\S*", "?…", a) if isinstance(a, str) else a for a in args)
         print("%s %s" % (time.strftime("%H:%M:%S"), fmt % args), flush=True)
 
     # ---- utilitaires
@@ -100,15 +105,19 @@ class Guichet(BaseHTTPRequestHandler):
         if self.command != "HEAD":
             self.wfile.write(corps)
 
-    def corps_json(self):
+    def corps_brut(self):
         try:
             n = int(self.headers.get("Content-Length", "0"))
         except ValueError:
             raise Erreur(400, "longueur invalide")
         if n > CORPS_MAX:
             raise Erreur(413, "requête trop longue")
+        return self.rfile.read(n) if n > 0 else b""
+
+    def corps_json(self, brut=None):
+        brut = self.corps_brut() if brut is None else brut
         try:
-            d = json.loads(self.rfile.read(n) or b"{}")
+            d = json.loads(brut or b"{}")
         except (ValueError, UnicodeDecodeError):
             raise Erreur(400, "JSON invalide")
         if not isinstance(d, dict):
@@ -227,6 +236,53 @@ class Guichet(BaseHTTPRequestHandler):
             db.commit()
             return self.envoyer(201, {"ok": True})
 
+        if chemin.startswith("/api/mail/") and config.mail():
+            return self.mail(route, db)
+
+        raise Erreur(404, "route inconnue")
+
+    def mail(self, route, db):
+        """La synthèse de la semaine par mail. Routes absentes (404) quand le mail est éteint."""
+        if route == ("POST", "/api/mail/inscription"):
+            if not DEBIT.autorise("mail:" + self.adresse(), 5, 3600):
+                raise Erreur(429, "trop d'essais, réessayez plus tard")
+            d = self.corps_json()
+            # Champ caché : un humain ne le voit pas, un robot le remplit. Même réponse, rien n'est fait.
+            if not str(d.get("site", "")).strip():
+                a = lettre.inscrire(db, d.get("adresse"))
+                # une adresse en attente ne reçoit pas plus de deux liens par jour, d'où qu'ils soient demandés
+                if a and DEBIT.autorise("mailadr:" + empreinte(a[0]), 2, 86400):
+                    lettre.confirmation_plus_tard(*a)
+            # La même réponse, que l'adresse soit nouvelle, déjà inscrite ou invalide : rien n'est révélé.
+            return self.envoyer(202, {"ok": True})
+
+        if route == ("POST", "/api/mail/confirmation"):
+            if not DEBIT.autorise("mailj:" + self.adresse(), 20, 3600):
+                raise Erreur(429, "trop d'essais, réessayez plus tard")
+            if not lettre.confirmer(db, str(self.corps_json().get("jeton", ""))):
+                raise Erreur(404, "lien inconnu ou expiré")
+            return self.envoyer(200, {"ok": True})
+
+        if route[1] == "/api/mail/desinscription":
+            jeton = (parse_qs(urlsplit(self.path).query).get("jeton") or [""])[0]
+            if route[0] == "GET":   # un lien ouvert ne désinscrit pas : il mène à la page et à son bouton
+                self.send_response(303)
+                self.send_header("Location", "/mail.html#desinscrire=" + re.sub(r"[^\w-]", "", jeton))
+                self.send_header("Content-Length", "0")
+                self.send_header("Cache-Control", "no-store")
+                for k, v in ENTETES.items():
+                    self.send_header(k, v)
+                self.end_headers()
+                return
+            if route[0] == "POST":
+                brut = self.corps_brut()
+                if not jeton:   # depuis la page : {jeton} en JSON ; en un clic (RFC 8058) : ?jeton= dans l'adresse
+                    jeton = str(self.corps_json(brut).get("jeton", ""))
+                if not DEBIT.autorise("mailj:" + self.adresse(), 20, 3600):
+                    raise Erreur(429, "trop d'essais, réessayez plus tard")
+                lettre.desinscrire(db, jeton)
+                return self.envoyer(200, {"ok": True})   # déjà désinscrit : même réponse
+
         raise Erreur(404, "route inconnue")
 
     def fichier(self, chemin):
@@ -285,6 +341,20 @@ def _planifier(minutes):
             except Exception as e:
                 dire(f"arrêt inattendu : {type(e).__name__} {e}")
                 derniere = time.time()               # pas de boucle serrée sur une panne
+            try:
+                # Le lundi, une fois l'édition du jour faite : la synthèse de la semaine finie, par mail.
+                # envoyer_semaine ne renvoie rien à qui l'a déjà reçue (abonnes.dernier_envoi).
+                ici = base.paris()
+                if config.mail():
+                    db = base.connexion()
+                    try:
+                        lettre.purger(db)            # inscriptions non confirmées sous 7 jours
+                        if ici.weekday() == 0 and edition_faite(ici.strftime("%Y-%m-%d")):
+                            lettre.envoyer_semaine(db, ici.strftime("%Y-%m-%d"))
+                    finally:
+                        db.close()
+            except Exception as e:
+                dire(f"mail de la semaine : arrêt inattendu {type(e).__name__}")
             time.sleep(60)
 
     threading.Thread(target=boucle, daemon=True, name="fabrique").start()

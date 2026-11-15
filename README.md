@@ -33,6 +33,11 @@ En local la fabrique appelle les modèles par `claude -p` (abonnement Claude Cod
 2. **Environment Variables** : `ANTHROPIC_API_KEY` (secret), et au besoin les réglages de `.env.example`.
    `COMPARATEUR_UMAMI_ID` (le `data-website-id` du site dans Umami, stats.inflexion.me) active la mesure de
    fréquentation, sans cookie ; la page `#/mentions` et la politique de sécurité suivent d'elles-mêmes.
+   `COMPARATEUR_SMTP_UTILISATEUR` et `COMPARATEUR_SMTP_MOT_DE_PASSE` (secret : la clé SMTP de Brevo) allument la
+   synthèse de la semaine par mail ; sans eux, ni formulaire ni envoi. Réglages facultatifs : `COMPARATEUR_SMTP_HOTE`
+   (`smtp-relay.brevo.com`), `COMPARATEUR_SMTP_PORT` (587, STARTTLS), `COMPARATEUR_MAIL_EXPEDITEUR`
+   (`no-reply@inflexion.me`, adresse à valider dans Brevo), `COMPARATEUR_MAIL_NOM` (« Cadrages »),
+   `COMPARATEUR_SITE_URL` (`https://compare-media.inflexion.me`, pour les liens des mails).
 3. **Domaine** : Domains → Add domain, service `comparateur`, port interne `8080` (forme `https://mon-domaine:8080` : le
    suffixe dit au proxy quel port du conteneur viser, le public reste en 443 ; Coolify n'affiche plus
    le suffixe ensuite mais le garde pour son proxy). Coolify fournit le HTTPS. Aucun `ports:` dans le compose.
@@ -76,6 +81,28 @@ iPhone, Mac, Android, Windows et Firefox, avec en tête la section de l'appareil
 menu y ont été relevés dans l'aide d'Apple, de Google et de Microsoft le 15/11/2026 ; ceux de Firefox n'ont pas
 pu l'être (pages de Mozilla illisibles par un robot) et sont écrits avec prudence. Les icônes se refont avec
 `python3 essais/icones.py`.
+
+## La synthèse de la semaine par mail
+
+Allumée par les deux réglages SMTP (voir « Sur Coolify »), éteinte sans eux : `D.mail` vaut alors `null`, aucun
+formulaire n'est montré, aucune route `/api/mail/` ne répond. Pas de compte, pas de mot de passe, pas de cookie.
+
+- **Inscription** en double confirmation, depuis l'encart de la page Semaine (`#/semaine/mail`). La réponse est
+  toujours la même, que l'adresse soit nouvelle, déjà inscrite ou invalide ; le mail de confirmation part dans un
+  fil à part. Un champ caché écarte les robots. 5 essais par heure et par adresse IP, 2 liens par jour et par
+  adresse mail.
+- **Confirmation et désinscription** sur la page `mail.html`, par un bouton (POST). Rien ne se fait sur un simple
+  GET : les antivirus de messagerie ouvrent les liens. Le jeton est dans le fragment (`#`) de l'adresse.
+  Chaque mail porte `List-Unsubscribe` et `List-Unsubscribe-Post: List-Unsubscribe=One-Click` (RFC 8058) : le POST
+  du logiciel de messagerie désinscrit directement. Une désinscription supprime la ligne. Une inscription non
+  confirmée sous 7 jours est supprimée.
+- **Envoi** le lundi, une fois l'édition du jour faite, par la boucle de la fabrique : la semaine ISO qui vient de
+  finir, calculée par `syntheses.py` (sujets les plus couverts, silences par bord, éditions gardées, « synthèse
+  partielle » sous 7, lien vers la page Semaine). Un mail par abonné, texte et HTML. `abonnes.dernier_envoi` garde
+  la semaine envoyée : pas de double envoi, même après un redémarrage. Une adresse en échec ne bloque pas les
+  autres (trois essais espacés de 30 minutes). Les journaux comptent, ils ne nomment personne.
+- **Essai** : `python -m comparateur mail-essai <adresse>` envoie la synthèse de la dernière semaine à cette seule
+  adresse, sans l'inscrire.
 
 ## Sept bords, trois côtés
 
@@ -138,6 +165,9 @@ l'accueil (« la semaine », « le mois »).
 | `POST /api/avis-note` | `{media, accord}` | `201` ; simple alerte, ne change aucune note |
 | `GET /api/resultats` | | note à l'aveugle par média, effectifs par bord, statut `indicatif` ou `publiable` |
 | `GET /sante` | | `{ok, derniere_publication}` |
+| `POST /api/mail/inscription` | `{adresse}` | `202 {ok}`, toujours ; seulement si le mail est réglé |
+| `POST /api/mail/confirmation` | `{jeton}` | `200` ; `404` si le lien est inconnu ou expiré |
+| `POST /api/mail/desinscription` | `{jeton}`, ou `?jeton=` en un clic (RFC 8058) | `200`, toujours |
 
 **Anonymat.** La base ne garde que l'empreinte du jeton et le bord déclaré : ni nom, ni adresse, ni lien entre
 une invitation et un votant ; les dates sont arrondies au jour. Le journal du serveur n'écrit pas l'adresse du visiteur.

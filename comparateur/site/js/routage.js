@@ -20,6 +20,7 @@ function route(opt){
   document.querySelectorAll('nav.main a').forEach(function(a){if(a.getAttribute('data-nav')===nav)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});
   if(opt&&opt.keep){window.scrollTo(0,y);if(opt.focus){var f=app.querySelector(opt.focus);if(f)f.focus({preventScroll:true});}}
   else{window.scrollTo(0,0);var h1=document.getElementById('h1')||app.querySelector('h1');if(h1){h1.setAttribute('tabindex','-1');h1.focus({preventScroll:true});}}
+  if(v==='semaine'&&parts[1]==='mail'){var em=document.getElementById('mailAdr');if(em){em.scrollIntoView({block:'center'});em.focus({preventScroll:true});}}
   document.title=(app.querySelector('h1')?app.querySelector('h1').textContent.replace(/écrit par un modèle/,'').trim()+' · ':'')+'Cadrages';
 }
 window.addEventListener('hashchange',function(){route();});
@@ -30,6 +31,20 @@ window.addEventListener('hashchange',function(){route();});
 if('serviceWorker' in navigator){try{navigator.serviceWorker.register('/sw.js').catch(function(){});}catch(_){}}
 window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();INVITE=e;if(/^#\/installer/.test(location.hash))route({keep:true});});
 window.addEventListener('appinstalled',function(){INVITE=null;if(/^#\/installer/.test(location.hash))route({keep:true});});
+/* Inscription au mail de la semaine (encart de #/semaine). La réponse du serveur est toujours la même. */
+app.addEventListener('submit',function(e){
+  if(e.target.id!=='fMail')return;
+  e.preventDefault();
+  var f=e.target,msg=document.getElementById('mailMsg'),b=f.querySelector('button');
+  if(!f.adresse.value.trim()){msg.textContent='Saisissez une adresse mail.';f.adresse.focus();return;}
+  b.disabled=true;msg.textContent='Un instant…';
+  fetch('/api/mail/inscription',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({adresse:f.adresse.value.trim(),site:f.site.value})})
+    .then(function(r){
+      if(r.status===202){f.adresse.value='';msg.textContent='Si l’adresse est valide, un mail de confirmation est parti. Le lien qu’il contient finit l’inscription. Pensez à regarder dans les indésirables.';}
+      else msg.textContent=r.status===429?'Trop d’essais depuis cette connexion. Réessayez dans une heure.':'L’inscription n’a pas abouti. Réessayez plus tard.';
+    },function(){msg.textContent='Pas de réseau. Réessayez plus tard.';})
+    .then(function(){b.disabled=false;});
+});
 app.addEventListener('click',function(e){
   var b=e.target.closest&&e.target.closest('#btnInstaller');if(!b||!INVITE)return;
   var inv=INVITE;INVITE=null;inv.prompt();
@@ -42,5 +57,5 @@ function applyTheme(){var d=document.documentElement;if(S.theme)d.setAttribute('
 document.getElementById('btnTheme').addEventListener('click',function(){S.theme=effDark()?'light':'dark';save();applyTheme();});
 try{window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',applyTheme);}catch(_){}
 
-document.getElementById('foot').innerHTML='<p><span class="mdl" style="margin:0">écrit par un modèle</span> signale tout texte rédigé par un modèle de langage (sujets, faits, angles, mots). Les scores viennent de FrIdéo v1.0 (French News Lab, CC BY 4.0), les comptages d’une formule fixe. Données du '+esc(new Date(D.recolte).toLocaleDateString('fr-FR',{timeZone:'Europe/Paris'}))+'. '+(D.mesure==='umami'?'Aucun cookie. La fréquentation est mesurée sans cookie ni donnée personnelle.':'Aucun cookie. Seul le choix du thème reste dans votre navigateur.')+' <a href="#/mentions">Mentions légales et données personnelles</a>. <a href="#/installer">Installer Cadrages comme une application</a>.</p>';
+document.getElementById('foot').innerHTML='<p><span class="mdl" style="margin:0">écrit par un modèle</span> signale tout texte rédigé par un modèle de langage (sujets, faits, angles, mots). Les scores viennent de FrIdéo v1.0 (French News Lab, CC BY 4.0), les comptages d’une formule fixe. Données du '+esc(new Date(D.recolte).toLocaleDateString('fr-FR',{timeZone:'Europe/Paris'}))+'. '+(D.mesure==='umami'?'Aucun cookie. La fréquentation est mesurée sans cookie ni donnée personnelle.':'Aucun cookie. Seul le choix du thème reste dans votre navigateur.')+(D.mail?' <a href="#/semaine/mail">La synthèse de la semaine par mail</a>.':'')+' <a href="#/mentions">Mentions légales et données personnelles</a>. <a href="#/installer">Installer Cadrages comme une application</a>.</p>';
 applyTheme();route();

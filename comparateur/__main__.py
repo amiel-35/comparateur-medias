@@ -13,10 +13,11 @@
   jetons               bilan des appels aux modèles (jetons, coût)
   journal              dernières étapes de la fabrique
   servir               lance le site et le guichet des votes
+  mail-essai <adresse> envoie à cette seule adresse la synthèse de la dernière semaine (SMTP réglé)
 """
 import secrets, sys
 
-from . import aveugle, base, chaine, config, fabrique, llm, publier, serveur
+from . import aveugle, base, chaine, config, fabrique, lettre, llm, publier, serveur
 
 
 def main(argv):
@@ -63,6 +64,16 @@ def main(argv):
                     total[k] += b[k]
             print(f"  TOTAL {total['appels']} appels, {total['entree']} jetons en entrée, {total['sortie']} en sortie, "
                   f"{total['cout']:.4f} $ au tarif public")
+        elif cmd == "mail-essai":
+            if len(argv) < 3:
+                print("usage : python -m comparateur mail-essai <adresse>")
+                return 2
+            if not config.mail():
+                print("mail éteint : COMPARATEUR_SMTP_UTILISATEUR et COMPARATEUR_SMTP_MOT_DE_PASSE manquent")
+                return 1
+            cle = lettre.essai(db, argv[2])
+            print(f"synthèse {cle} envoyée" if cle else "rien envoyé : adresse invalide, aucune édition, ou échec SMTP")
+            return 0 if cle else 1
         elif cmd == "journal":
             for r in db.execute("SELECT etape, debut, fin, ok, detail FROM journal_fabrique ORDER BY id DESC LIMIT 15"):
                 print(f"  {r['debut'][:19]}  {r['etape']:14} {'ok ' if r['ok'] else 'KO ' if r['ok'] == 0 else '...'} {r['detail'] or ''}"[:220])

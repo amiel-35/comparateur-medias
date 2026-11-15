@@ -8,3 +8,10 @@
 .pt{border-collapse:collapse;width:100%;max-width:60rem;font-size:.92rem}
 .pt th,.pt td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
 .pt thead th{font-family:var(--mono,monospace);font-size:.68rem;letter-spacing:.05em;text-transform:uppercase;border-bottom:2px solid var(--ink)}
+/* l'encart du mail de la semaine (seulement quand le mail est réglé) */
+.encart-mail{border:2px solid var(--ink);background:var(--paper);padding:4px 16px 12px;margin:0 0 26px;max-width:78ch}
+.encart-mail h2{margin:.8rem 0 .4rem}
+.fmail label{display:block;font-weight:700;margin:.6rem 0 .3rem}
+.fmail .fl{display:flex;flex-wrap:wrap;gap:8px}
+.fmail input[type=email]{flex:1 1 14rem;min-width:0;font:inherit;padding:8px 10px;min-height:40px;border:2px solid var(--ink);border-radius:0;background:var(--bg);color:var(--ink)}
+.fmail .pot{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}

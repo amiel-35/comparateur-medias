@@ -1,4 +1,5 @@
-/* Mentions légales et données personnelles. D.mesure (facultatif) : "umami" si la fréquentation est mesurée. */
+/* Mentions légales et données personnelles. D.mesure (facultatif) : "umami" si la fréquentation est mesurée.
+   D.mail (facultatif) : réglé si la synthèse de la semaine part par mail. */
 function vMentions(){
   var UM=D.mesure==='umami';
   var mail='<a href="mailto:amiel@inflexion.me">amiel@inflexion.me</a>';
@@ -13,6 +14,9 @@ function vMentions(){
   '<li><b>Aucun cookie.</b> Le navigateur garde seulement le choix du thème. Ce choix ne quitte pas l’appareil.</li>'+
   (UM?'<li><b>Fréquentation.</b> Elle est mesurée avec Umami, un outil hébergé par l’éditeur, sans cookie, sans identifiant et sans donnée personnelle. Umami compte des pages vues, pas des personnes.</li>'
      :'<li><b>Fréquentation.</b> Elle n’est pas mesurée.</li>')+
+  (D.mail?'<li><b>Mail de la semaine.</b> Si vous vous y inscrivez, la base garde votre adresse mail, un jeton aléatoire pour les liens de confirmation et de désinscription, la date d’inscription, celle de la confirmation et la semaine du dernier envoi. L’adresse sert au mail de la semaine, rien d’autre. Elle est gardée jusqu’à la désinscription. Une inscription non confirmée sous 7 jours est effacée.</li>'+
+     '<li><b>Envoi du mail.</b> Il passe par Brevo (Brevo SAS, 17 rue Salneuve, 75017 Paris, France), prestataire d’envoi. Brevo reçoit l’adresse pour chaque envoi.</li>'+
+     '<li><b>Se désinscrire.</b> Le lien en bas de chaque mail mène à une page avec un bouton. Un clic supprime l’adresse de la base. Les logiciels de messagerie qui proposent « se désabonner » le font aussi, en un clic. L’inscription ne dépose aucun cookie.</li>':'')+
   '<li><b>Adresse IP.</b> Le serveur la garde en mémoire, pour limiter les abus. Il ne l’écrit ni dans un fichier ni dans la base.</li>'+
   '<li><b>Vote à l’aveugle.</b> Il est réservé aux invités. La base garde l’empreinte d’un jeton anonyme, le bord déclaré par le votant et ses avis, datés au jour. Aucun nom, aucune adresse, aucun lien entre une invitation et un votant. Le jeton reste dans le navigateur du votant.</li>'+
   '<li><b>Vos droits.</b> Pour toute question sur vos données : '+mail+'. Vous pouvez aussi saisir la <a href="https://www.cnil.fr/fr/plaintes" target="_blank" rel="noopener noreferrer">CNIL ↗</a>.</li></ul>'+

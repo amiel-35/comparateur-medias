@@ -1,4 +1,15 @@
 /* La semaine et le mois : des comptages sur les éditions gardées, sans modèle. */
+/* L'encart d'inscription au mail de la semaine, seulement quand D.mail (facultatif) est réglé. Envoyé par le routage. */
+function encartMail(){
+  if(!D.mail)return '';
+  return '<section class="encart-mail" id="encart-mail" aria-labelledby="hMail"><h2 id="hMail">La synthèse de la semaine, chaque lundi, par mail</h2>'+
+    '<p>Les sujets les plus couverts et les silences de chaque bord. Une adresse suffit : ni compte, ni mot de passe. Un mail de confirmation part d’abord.</p>'+
+    '<form id="fMail" class="fmail"><label for="mailAdr">Adresse mail</label><span class="fl"><input id="mailAdr" type="email" name="adresse" autocomplete="email" required maxlength="254" inputmode="email">'+
+    '<button class="btn hl" type="submit">S’inscrire</button></span>'+
+    '<span class="pot" aria-hidden="true"><label>Ne pas remplir <input name="site" type="text" tabindex="-1" autocomplete="off"></label></span>'+
+    '<p id="mailMsg" class="note" role="status" aria-live="polite"></p></form>'+
+    '<p class="note">Une désinscription en un clic dans chaque mail. <a href="#/mentions">Ce que ce site garde</a>.</p></section>';
+}
 function perTitre(p,type){
   if(type==='mois')return 'Le mois de '+new Date(p.debut+'T12:00:00Z').toLocaleDateString('fr-FR',{timeZone:'UTC',month:'long',year:'numeric'});
   return 'La semaine du '+jourNum(p.debut)+' au '+jourNum(p.fin)+' '+p.fin.slice(0,4);
@@ -21,6 +32,7 @@ function vPeriode(type){
     return '<li><a href="'+sujLien(x)+'">'+esc(x.titre)+'</a>'+mdl()+'<span class="pm mono mute">'+pl(x.medias,'média','médias')+' · '+pl(x.titres,'titre','titres')+(x.jours>1?' · '+x.jours+' jours':'')+(x.ecart!=null?' · écart '+x.ecart+' sur 5':'')+'</span>'+
       bar5(x.par)+'</li>';
   }).join('')+'</ol>'+legende();
+  if(type==='semaine')h+=encartMail();
   /* par bord */
   h+='<h2>Par bord</h2><p class="note">Les sept bandes du classement FrIdéo. Un silence : un sujet repris par '+p.min_medias+' médias ou plus, sans aucun titre de tout un côté (les bandes de gauche (extrême gauche, gauche, centre gauche), le centre, les bandes de droite (centre droit, droite, extrême droite)). Il est compté pour chaque bord de ce côté.</p><div class="cols cinq">';
   BORDS.forEach(function(c){

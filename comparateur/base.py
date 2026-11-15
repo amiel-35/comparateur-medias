@@ -42,6 +42,11 @@ CREATE TABLE IF NOT EXISTS avis_note (
   accord INTEGER NOT NULL, cree TEXT NOT NULL, PRIMARY KEY (votant_id, media_id));
 -- Une édition par jour : la photographie complète de ce que le site affichait ce jour-là.
 CREATE TABLE IF NOT EXISTS editions (jour TEXT PRIMARY KEY, cree TEXT NOT NULL, donnees TEXT NOT NULL);
+-- La synthèse de la semaine par mail. Une désinscription supprime la ligne. dernier_envoi : clé de la dernière
+-- semaine envoyée (« 2026-S46 »), contre tout double envoi.
+CREATE TABLE IF NOT EXISTS abonnes (
+  id INTEGER PRIMARY KEY, adresse TEXT NOT NULL UNIQUE, jeton TEXT NOT NULL UNIQUE, cree TEXT NOT NULL,
+  confirme_le TEXT, dernier_envoi TEXT);
 CREATE TABLE IF NOT EXISTS journal_fabrique (
   id INTEGER PRIMARY KEY, etape TEXT NOT NULL, debut TEXT NOT NULL, fin TEXT, ok INTEGER, detail TEXT);
 """

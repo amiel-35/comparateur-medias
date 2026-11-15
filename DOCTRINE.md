@@ -22,6 +22,8 @@ comparateur/site/
   js/vues/<vue>.js    une vue par fichier
   js/routage.js       les routes #/…, le thème, le pied de page
   aveugle.html        la page du vote à l'aveugle, à part
+  mail.html           la page qui confirme ou supprime une inscription au mail de la semaine, à part
+  manifest.webmanifest, sw.js, icone-*.png, apple-touch-icon.png   l'application installable (essais/icones.py)
 ```
 
 Le squelette nomme chaque morceau par une ligne `/*INCLURE chemin*/`. L'ordre des lignes est l'ordre de la page.
