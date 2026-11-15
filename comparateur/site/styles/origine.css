@@ -1,10 +1,9 @@
-/* Origine : le bloc French News Lab, puis Ground News et AllSides. */
-.fnl{border:3px solid var(--ink);border-top-width:10px;background:var(--paper);padding:18px 20px 14px;margin:22px 0 26px;max-width:78ch}
-.fnl h2{margin:.5rem 0 .5rem;font-size:clamp(1.5rem,4vw,2.1rem)}
-.fnl p{max-width:none}
-.fnl .lim{margin:10px 0 12px}
-.fnl .liens{font-size:.92rem;line-height:1.9}
-.origin{display:grid;gap:16px;grid-template-columns:minmax(0,1fr)}
-@media (min-width:800px){.origin{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* Origine : trois sources à place égale, Ground News, le French News Lab, AllSides. */
+.origin{display:grid;gap:16px;grid-template-columns:minmax(0,1fr);margin:18px 0}
+@media (min-width:1080px){.origin{grid-template-columns:repeat(3,minmax(0,1fr))}}
 .origin article{background:var(--paper);border:2px solid var(--ink);padding:16px}
-.origin .for,.fnl .for{display:inline-block;background:var(--ink);color:var(--bg);font-family:var(--mono);font-size:.72rem;padding:2px 8px;text-transform:uppercase;letter-spacing:.06em}
+.origin .for{display:inline-block;background:var(--ink);color:var(--bg);font-family:var(--mono);font-size:.72rem;padding:2px 8px;text-transform:uppercase;letter-spacing:.06em}
+.origin h2{margin:.6rem 0 .4rem;font-size:clamp(1.3rem,3vw,1.6rem)}
+.origin .lab{margin:14px 0 4px;font-size:.7rem}
+.origin .lim{margin:0 0 12px;padding-left:1.1em}
+.origin .liens{font-size:.88rem;line-height:1.8;margin:0;overflow-wrap:anywhere}
