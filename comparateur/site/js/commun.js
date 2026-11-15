@@ -25,4 +25,4 @@ function barFine(par,pct){
     var n=par[b]||0;return n?'<i class="b-'+b+'" style="flex:'+n+'" title="'+BL[b]+' : '+pl(n,'titre','titres')+'"></i>':'';
   }).join('')+'</span>';
 }
-function silChip(r){return r.sil.length?'<span class="am">Silence : '+r.sil.map(bl).join(', ')+'</span>':'';}
+function silChip(r){return r.sil.length?'<span class="am">Silence : '+r.sil.map(function(x){return GL[x].toLowerCase();}).join(', ')+'</span>':'';}

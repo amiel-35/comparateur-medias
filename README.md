@@ -73,18 +73,19 @@ côtés (gauche et centre gauche, centre, centre droit et droite, `base.COTE`) :
 
 ## Les silences
 
-Un bord est silencieux sur un sujet quand il n'y a aucun titre, que le sujet est repris par
-`syntheses.MIN_MEDIAS` médias ou plus (4) et que le bord a au moins un média lu ce jour-là. C'est un comptage,
-sans modèle. La vue `#/silences` liste les silences de l'édition affichée, bord par bord, les sujets les plus
-couverts d'abord ; l'accueil marque les cartes concernées. Deux réserves, écrites sur la page : les bords n'ont
-pas le même nombre de journaux (12 au centre, 4 ou 5 ailleurs), et sur un sujet repris par 4 médias seulement
-un bord au moins est forcément absent.
+Un **côté** est silencieux sur un sujet quand il n'a aucun titre, que le sujet est repris par
+`syntheses.MIN_MEDIAS` médias ou plus (4) et que ce côté a au moins un média lu. Trois côtés : gauche (gauche
+et centre gauche), centre, droite (centre droit et droite). Les comptages et les barres restent sur cinq bords,
+mais le silence se juge sur trois côtés : sur cinq bords, 21 sujets sur 23 avaient un absent dans l'édition du
+15/11/2026, contre 7 sur trois côtés. Un repère présent partout ne dit plus rien. Tout est compté par formule,
+sans modèle. La vue `#/silences` liste les silences de l'édition affichée, côté par côté, les sujets les plus
+couverts d'abord ; dans les synthèses, le silence d'un côté est compté pour chacun de ses bords lus.
 
 ## Suivre un sujet
 
 Un sujet garde son identifiant (`s45`) d'une édition à l'autre. À chaque écriture des pages,
 `publier.ecrire_pages` calcule sa présence dans toutes les éditions gardées (`syntheses.suivi` : jour, titres,
-médias, répartition sur cinq bords, bords silencieux) et l'injecte dans la page (`suivi`). Quand un sujet figure
+médias, répartition sur cinq bords, côtés silencieux) et l'injecte dans la page (`suivi`). Quand un sujet figure
 dans plus d'une édition, sa page montre une frise jour par jour ; chaque jour mène à
 `/editions/<jour>.html#/sujet/<id>`. Rien n'est ajouté aux éditions gardées en base.
 
@@ -154,7 +155,7 @@ minute et par adresse ; corps limité à 4 Ko.
 - Un titre resté seul n'est pas reproposé aux sujets ouverts après lui.
 - **Rubriques lues dans l'adresse seulement.** Un article de sport dont l'adresse ne porte pas de rubrique passe.
   Les lots à l'aveugle ne tiennent pas compte des rubriques.
-- **Un silence sur cinq bords est fréquent** sur les sujets peu repris : voir « Les silences ».
+- **Les côtés n'ont pas le même nombre de journaux** : un côté de sept journaux se tait plus souvent qu'un côté de douze. Voir « Les silences ».
 
 ## Essais
 

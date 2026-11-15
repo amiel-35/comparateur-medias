@@ -4,7 +4,7 @@ function brows(r){
   var mx=1;BORDS.forEach(function(b){mx=Math.max(mx,r.par[b]);});
   return '<ul class="brows">'+BORDS.map(function(b){
     var n=r.par[b],nm=Object.keys(r.medb[b]).length;
-    var txt=n?'<b>'+pl(n,'titre','titres')+'</b> · '+pl(nm,'média','médias'):(!LUS[b]?'<span class="mute">aucun média lu</span>':r.large?'<span class="ko">silence</span>':'<span class="mute">aucun titre</span>');
+    var txt=n?'<b>'+pl(n,'titre','titres')+'</b> · '+pl(nm,'média','médias'):(!LUS[b]?'<span class="mute">aucun média lu</span>':r.sil.indexOf(GRP[b])>=0?'<span class="ko">silence</span>':'<span class="mute">aucun titre</span>');
     return '<li><span class="bl">'+bchip(b)+'</span><span class="bt'+(n?'':' nul')+'">'+(n?'<i class="b-'+b+'" style="width:'+Math.max(2,Math.round(100*n/mx))+'%"></i>':'')+'</span><span class="bn">'+txt+'</span></li>';
   }).join('')+'</ul>';
 }
@@ -20,8 +20,8 @@ function frise(r){
     var x=by[j],ici=j===ED.jour;
     var lab=ici?'<b aria-current="true">'+esc(jourFrise(j))+'</b> <span class="mono mute">cette édition</span>':x?'<a href="'+edUrl(j)+'#/sujet/'+esc(r.id)+'">'+esc(jourFrise(j))+'</a>':'<span class="mute">'+esc(jourFrise(j))+'</span>';
     if(!x){h+='<li><span class="bl">'+lab+'</span><span class="bt nul"></span><span class="bn mute">absent de cette édition</span></li>';return;}
-    var sl=(x.silences||[]).filter(function(b){return BL[b];});
-    h+='<li><span class="bl">'+lab+'</span><span class="bt">'+barFine(x.par||{},Math.max(4,Math.round(100*x.titres/mx)))+'</span><span class="bn">'+pl(x.titres,'titre','titres')+' · '+pl(x.medias,'média','médias')+(sl.length?' <span class="ko">silence : '+sl.map(bl).join(', ')+'</span>':'')+'</span></li>';
+    var sl=(x.silences||[]).filter(function(b){return GL[b];});
+    h+='<li><span class="bl">'+lab+'</span><span class="bt">'+barFine(x.par||{},Math.max(4,Math.round(100*x.titres/mx)))+'</span><span class="bn">'+pl(x.titres,'titre','titres')+' · '+pl(x.medias,'média','médias')+(sl.length?' <span class="ko">silence : '+sl.map(function(x){return GL[x].toLowerCase();}).join(', ')+'</span>':'')+'</span></li>';
   });
   return h+'</ol>'+legende();
 }
@@ -34,7 +34,7 @@ function sujetView(r){
   if(r.fait)h+='<div class="fait"><span class="mono">Le fait commun'+mdl()+'</span><p>'+esc(r.fait)+'</p></div>';
   /* qui en parle */
   h+='<h2>Qui en parle</h2><p class="note">Les titres comptés sur cinq bords, par formule fixe, sans modèle.</p>'+brows(r);
-  if(r.kind==='sujet')h+='<div class="chips">'+(r.sil.length?silChip(r)+'<span class="note">Aucun média de '+(r.sil.length>1?'ces bords':'ce bord')+' n’a de titre rangé sous ce sujet, repris par '+r.nmed+' médias. <a href="#/silences">Tous les silences de l’édition</a>.</span>':r.large?'<span class="note">Chaque bord lu a au moins un titre sur ce sujet.</span>':'<span class="note">Sujet repris par moins de '+MIN+' médias : les silences n’y sont pas relevés.</span>')+'</div>';
+  if(r.kind==='sujet')h+='<div class="chips">'+(r.sil.length?silChip(r)+'<span class="note">Aucun média de '+(r.sil.length>1?'ces côtés':'ce côté')+' n’a de titre rangé sous ce sujet, repris par '+r.nmed+' médias. <a href="#/silences">Tous les silences de l’édition</a>.</span>':r.large?'<span class="note">Gauche, centre et droite ont chacun au moins un titre sur ce sujet.</span>':'<span class="note">Sujet repris par moins de '+MIN+' médias : les silences n’y sont pas relevés.</span>')+'</div>';
   if(r.div!=null){h+='<p><span class="mono">Écart de cadrage</span> <span class="dots" aria-label="'+r.div+' sur 5">'+'●'.repeat(r.div)+'○'.repeat(5-r.div)+'</span> '+r.div+' sur 5'+mdl()+'</p>';}
   /* face à face */
   h+='<h2>'+(r.kind==='sujet'?'Le même fait, trois formulations':'Les titres, côté par côté')+'</h2>';

@@ -480,12 +480,22 @@ class Syntheses(unittest.TestCase):
         self.assertEqual(mois["2026-11"]["debut"], "2026-11-01")
         self.assertEqual(mois["2026-11"]["fin"], "2026-11-30")
 
-    def test_un_silence_se_compte_sur_cinq_bords(self):
-        # Sur trois côtés la droite aurait un titre (Droite Soir, centre droit) ; sur cinq bords, la droite se tait.
+    def test_un_silence_se_juge_sur_trois_cotes(self):
+        # La droite (bord) n'a pas de titre, mais le centre droit en a un : le côté droit parle, pas de silence.
         e = self.edition([("s1", "Grève", 2, ["Gauche Hebdo", "Le Milieu", "Centre Info", "Droite Soir"])])
         b = syntheses.toutes([("2026-11-09", e)])[0]["2026-S46"]["bords"]
+        self.assertEqual(sum(v["silences"] for v in b.values()), 0)
+        # Tout le côté droit se tait : le silence est compté pour chacun de ses bords lus.
+        e = self.edition([("s1", "Grève", 2, ["Gauche Hebdo", "Le Milieu", "Centre Info"]),
+                          ("s2", "Budget", 1, ["Gauche Hebdo", "Le Milieu", "Centre Info", "Droite Matin"])])
+        e["sujets"][0]["articles"].append({"media": "Gauche Hebdo", "titre": "Grève bis", "lien": "https://x.test/s1/bis"})
+        e["medias"].append({"nom": "Gauche Soir", "bord": "gauche"})
+        e["sujets"][0]["articles"].append({"media": "Gauche Soir", "titre": "Grève ter", "lien": "https://x.test/s1/ter"})
+        b = syntheses.toutes([("2026-11-09", e)])[0]["2026-S46"]["bords"]
         self.assertEqual({k: v["silences"] for k, v in b.items()},
-                         {"gauche": 0, "centre-gauche": 0, "centre": 0, "centre-droit": 0, "droite": 1})
+                         {"gauche": 0, "centre-gauche": 0, "centre": 0, "centre-droit": 1, "droite": 1})
+        self.assertEqual(syntheses.silencieux({"gauche": 2, "centre-gauche": 0, "centre": 2, "centre-droit": 0, "droite": 0},
+                                              {"gauche": 2, "centre-gauche": 0, "centre": 2, "centre-droit": 1, "droite": 1}, 4), ["d"])
         # en dessous de MIN_MEDIAS médias, un silence ne dit rien
         petit = self.edition([("s1", "Grève", 2, ["Gauche Hebdo", "Le Milieu", "Centre Info"])])
         b = syntheses.toutes([("2026-11-09", petit)])[0]["2026-S46"]["bords"]
@@ -497,7 +507,7 @@ class Syntheses(unittest.TestCase):
         mardi = self.edition([("s1", "Grève, suite", 4, ["Gauche Hebdo", "Le Milieu", "Droite Soir"])])
         suivi = syntheses.suivi([("2026-11-09", lundi), ("2026-11-10", mardi)])
         self.assertEqual([x["jour"] for x in suivi["s1"]], ["2026-11-09", "2026-11-10"])
-        self.assertEqual(suivi["s1"][0], {"jour": "2026-11-09", "titres": 4, "medias": 4, "silences": ["centre-droit"],
+        self.assertEqual(suivi["s1"][0], {"jour": "2026-11-09", "titres": 4, "medias": 4, "silences": [],
                                           "par": {"gauche": 1, "centre-gauche": 0, "centre": 2, "centre-droit": 0, "droite": 1}})
         self.assertEqual((suivi["s1"][1]["titres"], suivi["s1"][1]["medias"], suivi["s1"][1]["silences"]), (3, 3, []))
         self.assertEqual(len(suivi["s2"]), 1)

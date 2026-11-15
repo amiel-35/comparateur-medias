@@ -33,9 +33,14 @@ def repartition(medias, bord):
 
 
 def silencieux(par, lus, medias):
-    """Bords silencieux sur un sujet : aucun titre, alors que le sujet est repris par MIN_MEDIAS médias ou plus
-    et que le bord a au moins un média lu."""
-    return [b for b in BORDS if lus.get(b) and not par[b]] if medias >= MIN_MEDIAS else []
+    """Côtés silencieux sur un sujet (« g », « c », « d ») : aucun titre de tout un côté, alors que le sujet est
+    repris par MIN_MEDIAS médias ou plus et que ce côté a au moins un média lu. Les comptages se font sur cinq
+    bords, mais sur cinq bords presque chaque sujet aurait un absent : le silence se juge donc sur trois côtés
+    (gauche et centre gauche, centre, centre droit et droite)."""
+    if medias < MIN_MEDIAS:
+        return []
+    return [c for c in "gcd" if sum(lus.get(b, 0) for b in BORDS if base.COTE[b] == c)
+            and not sum(par[b] for b in BORDS if base.COTE[b] == c)]
 
 
 def suivi(editions):
@@ -95,7 +100,8 @@ def periode(editions, cle, debut, fin):
     larges = [s for s in lignes if s["medias"] >= MIN_MEDIAS]
     bords = {}
     for c in BORDS:
-        tus = [s for s in larges if c in silencieux(s["par"], lus, s["medias"])]
+        # le silence d'un côté est compté pour chacun de ses bords qui a au moins un média lu
+        tus = [s for s in larges if lus.get(c) and base.COTE[c] in silencieux(s["par"], lus, s["medias"])]
         bords[c] = {"medias": lus[c], "titres": sum(s["par"][c] for s in lignes),
                     "sujets": sum(1 for s in larges if s["par"][c]), "sur": len(larges), "silences": len(tus),
                     "plus_couverts": [{"id": s["id"], "titre": s["titre"], "dernier": s["dernier"], "titres": s["par"][c]}
