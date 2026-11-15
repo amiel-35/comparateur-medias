@@ -227,6 +227,8 @@ class Guichet(BaseHTTPRequestHandler):
     def fichier(self, chemin):
         racine = os.path.realpath(config.public())
         rel = chemin.lstrip("/") or "index.html"
+        if rel == "favicon.ico":   # demandé d'office par certains navigateurs : l'icône SVG répond
+            rel = "favicon.svg"
         if rel.endswith("/"):
             rel += "index.html"
         cible = os.path.realpath(os.path.join(racine, rel))

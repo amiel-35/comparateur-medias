@@ -337,6 +337,7 @@ class Gabarit(unittest.TestCase):
             db.close()
         pub = publier.config.public()
         self.assertTrue(os.path.isfile(os.path.join(pub, "aveugle.html")))
+        self.assertTrue(os.path.isfile(os.path.join(pub, "favicon.svg")))   # l'icône : sans elle, une 404 à chaque visite
         self.assertFalse(os.path.exists(os.path.join(pub, "js")) or os.path.exists(os.path.join(pub, "styles")))
         self.assertFalse(os.path.exists(os.path.join(pub, "gabarit.html")))
 
