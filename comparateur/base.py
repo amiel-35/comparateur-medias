@@ -81,8 +81,15 @@ def connexion():
 
 
 def migrer(db):
-    """Met une base d'avant au schéma courant, sans rien perdre. Aujourd'hui : la colonne articles.rubrique.
-    NULL = rubrique pas encore déduite (article d'avant la colonne), '' = aucune rubrique reconnue."""
+    """Met une base d'avant au schéma courant, sans rien perdre. Rend True si quelque chose a changé."""
+    a = migrer_rubrique(db)
+    b = migrer_dates(db)
+    return a or b
+
+
+def migrer_rubrique(db):
+    """La colonne articles.rubrique. NULL = rubrique pas encore déduite (article d'avant la colonne),
+    '' = aucune rubrique reconnue."""
     if "rubrique" in {c[1] for c in db.execute("PRAGMA table_info(articles)")}:
         return False
     try:
@@ -92,6 +99,24 @@ def migrer(db):
     from .fabrique import rubrique     # import tardif : fabrique importe base
     db.executemany("UPDATE articles SET rubrique = ? WHERE id = ?",
                    [(rubrique(r[1]), r[0]) for r in db.execute("SELECT id, lien FROM articles").fetchall()])
+    db.commit()
+    return True
+
+
+def migrer_dates(db):
+    """Ramène en temps universel les dates gardées avec le décalage de leur flux (+01:00 par exemple).
+    Elles sont comparées comme du texte à des bornes en temps universel : un autre décalage les fausse."""
+    lignes = db.execute("SELECT id, date FROM articles WHERE date IS NOT NULL AND date NOT LIKE '%+00:00'").fetchall()
+    maj = []
+    for i, d in lignes:
+        try:
+            x = datetime.fromisoformat(d)
+        except ValueError:   # date illisible : on la laisse telle quelle
+            continue
+        maj.append((iso((x if x.tzinfo else x.replace(tzinfo=timezone.utc)).astimezone(timezone.utc)), i))
+    if not maj:
+        return False
+    db.executemany("UPDATE articles SET date = ? WHERE id = ?", maj)
     db.commit()
     return True
 

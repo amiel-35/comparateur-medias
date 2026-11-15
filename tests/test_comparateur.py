@@ -34,6 +34,12 @@ class Flux(unittest.TestCase):
         self.assertEqual((its[0]["titre"], its[0]["lien"]), ("Titre atom", "https://exemple.test/c"))
         self.assertIsNotNone(its[0]["date"])
 
+    def test_dates_ramenees_en_temps_universel(self):
+        # Une date en heure de Paris, gardée telle quelle, se compare mal en texte à une borne en temps universel.
+        d = fabrique.lire_date("Sat, 14 Nov 2026 07:30:00 +0100")
+        self.assertEqual(fabrique.base.iso(d), "2026-11-14T06:30:00+00:00")
+        self.assertEqual(fabrique.base.iso(fabrique.lire_date("2026-11-14T07:30:00+01:00")), "2026-11-14T06:30:00+00:00")
+
     def test_flux_mal_forme(self):
         casse = b"<rss><channel><item><title>Titre & casse</title><link>https://exemple.test/d</link></item></channel>"
         self.assertEqual(fabrique.items(casse)[0]["titre"], "Titre & casse")
@@ -392,6 +398,20 @@ class Rubriques(unittest.TestCase):
         self.assertEqual([tuple(r) for r in db.execute("SELECT cle, titre, trie, rubrique FROM articles ORDER BY id")],
                          [("a", "Un match", 1, "sport"), ("b", "Un vote", 0, "politique"), ("c", "Sans adresse", 0, "")])
         self.assertFalse(base.migrer(db))   # déjà faite : rien à refaire
+        db.close()
+
+    def test_migration_des_dates_en_temps_universel(self):
+        db = base.connexion()
+        base.charger_medias(db)
+        mid = db.execute("SELECT id FROM medias LIMIT 1").fetchone()[0]
+        db.executemany("INSERT INTO articles (cle, media_id, titre, date, recolte) VALUES (?,?,?,?,?)",
+                       [("p", mid, "Paris", "2026-11-14T07:30:00+01:00", "2026-11-14T09:00:00+00:00"),
+                        ("u", mid, "UTC", "2026-11-14T06:30:00+00:00", "2026-11-14T09:00:00+00:00"),
+                        ("n", mid, "Sans date", None, "2026-11-14T09:00:00+00:00")])
+        self.assertTrue(base.migrer(db))
+        self.assertEqual([tuple(r) for r in db.execute("SELECT cle, date FROM articles WHERE cle IN ('p','u','n') ORDER BY cle")],
+                         [("n", None), ("p", "2026-11-14T06:30:00+00:00"), ("u", "2026-11-14T06:30:00+00:00")])
+        self.assertFalse(base.migrer(db))
         db.close()
 
     def test_sport_et_culture_hors_du_regroupement_et_des_sujets(self):

@@ -40,7 +40,9 @@ def lire_date(s):
             d = datetime.fromisoformat(s.replace("Z", "+00:00"))
         except ValueError:
             return None
-    return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+    # Toujours en temps universel : les dates sont gardées et comparées comme du texte ISO,
+    # ce qui n'est juste que si elles portent toutes le même décalage.
+    return (d if d.tzinfo else d.replace(tzinfo=timezone.utc)).astimezone(timezone.utc)
 
 
 def propre(s):
@@ -177,9 +179,10 @@ def importer_json(db, chemin):
     for a in data["articles"]:
         if a["media"] not in ids:
             continue
+        d = lire_date(a.get("date"))
         cur = db.execute("INSERT OR IGNORE INTO articles (cle, media_id, titre, lien, date, recolte, rubrique) VALUES (?,?,?,?,?,?,?)",
                          (base.cle_article(a["media"], a["title"], a["link"]), ids[a["media"]], a["title"], a["link"],
-                          a.get("date"), data["recolte"][:19] + "+00:00", rubrique(a["link"])))
+                          base.iso(d) if d else None, data["recolte"][:19] + "+00:00", rubrique(a["link"])))
         n += cur.rowcount
     db.commit()
     return n
