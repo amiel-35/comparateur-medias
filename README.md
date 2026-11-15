@@ -155,7 +155,10 @@ minute et par adresse ; corps limité à 4 Ko.
 - **Serveur HTTP de la bibliothèque standard.** Correct derrière le proxy de Coolify à petite échelle ; à
   remplacer par un serveur ASGI pour la charge.
 - **Mode `api` non essayé** tant qu'il n'y a pas de clé : seul le mode `cli` a tourné.
-- **Le Point et Les Echos** refusent même un lecteur RSS déclaré (403) : absents de la récolte.
+- **Quatre journaux absents de la récolte** : Le Figaro, Marianne, Le Point et Les Echos refusent le lecteur.
+  Marianne, Le Point et Les Echos répondent 403 à un lecteur RSS déclaré (14/11/2026). Ce site ne contourne pas
+  un refus : ils restent absents, et les pages le disent (« flux illisibles »). Ils ne comptent ni comme présents
+  ni comme silencieux.
 - Un titre resté seul n'est pas reproposé aux sujets ouverts après lui.
 - **Rubriques lues dans l'adresse seulement.** Un article de sport dont l'adresse ne porte pas de rubrique passe.
   Les lots à l'aveugle ne tiennent pas compte des rubriques.
@@ -178,11 +181,11 @@ avec la même variable.
 
 ## Sources et remerciements
 
-- **Classement des médias : FrIdéo v1.0**, French News Lab (<https://frenchnewslab.org/en/medias>), sous licence
-  CC BY 4.0. Les scores de `comparateur/medias.json` en sont relevés ; les bords (gauche, centre gauche,
-  centre, centre droit, droite) sont dérivés ici par des seuils fixes et n'engagent pas ses auteurs.
 - **L'idée** de comparer la couverture par bord et de signaler les angles morts vient de
   [Ground News](https://ground.news/rating-system).
+- **Le classement des médias** est FrIdéo v1.0, du French News Lab (<https://frenchnewslab.org/en/medias>), sous
+  licence CC BY 4.0. Les scores de `comparateur/medias.json` en sont relevés. Les sept bandes, leurs noms et leurs
+  seuils sont ceux de FrIdéo. Ce site ne classe aucun média ; il regroupe seulement les bandes en trois côtés.
 - **Le jugement à l'aveugle** par un panel équilibré s'inspire de la méthode publiée par
   [AllSides](https://www.allsides.com/about/media-bias-rating-methods).
 
