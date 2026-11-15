@@ -9,14 +9,14 @@ sauf le SDK Anthropic (mode `api` seulement).
 | Bloc | Fichiers | Rôle |
 |---|---|---|
 | **Fabrique** | `fabrique.py`, `llm.py`, `aveugle.py`, `publier.py`, `chaine.py` | Récolte les flux RSS, regroupe les titres en sujets (Haiku), analyse les cadrages (Sonnet), fabrique les lots à l'aveugle, écrit le site statique. |
-| **Vitrine** | `site/` → `<données>/public/` | `index.html` + `data/jour.json`, régénérés par la fabrique. Une visite ne touche ni la base ni un modèle. |
+| **Vitrine** | `site/` (morceaux, voir [DOCTRINE.md](DOCTRINE.md)) → `<données>/public/` | `index.html` + `data/jour.json`, régénérés par la fabrique. Une visite ne touche ni la base ni un modèle. |
 | **Guichet des votes** | `serveur.py` | Sert la vitrine et l'API des votes (`/api/…`), contrôle de santé sur `/sante`. |
 
 
 ## En local
 
 ```bash
-python3 -m unittest discover -s tests          # 28 tests, sans réseau ni modèle
+python3 -m unittest discover -s tests          # 31 tests, sans réseau ni modèle
 python3 -m comparateur init                    # base SQLite + 30 médias (scores FrIdéo)
 python3 -m comparateur tout                    # l'édition du jour : récolte, regroupement, analyse, lots, publication
 python3 -m comparateur inviter 3               # trois codes d'invitation
@@ -161,6 +161,10 @@ minute et par adresse ; corps limité à 4 Ko.
 `essais/coloration.py` mesure la stabilité de l'analyse : second tirage, consigne colorée à gauche ou à droite,
 autre modèle, noms des médias masqués, bords échangés. Sur 20 sujets (14/11/2026), aucune de ces variantes ne
 change plus la description qu'un simple second tirage.
+
+`essais/rendu.js` ouvre chaque vue de chaque édition dans un navigateur (375 px et 1280 px, clair et sombre) et
+échoue sur une erreur de console, un défilement horizontal ou un « undefined » à l'écran. Mode d'emploi et
+règles du site : [DOCTRINE.md](DOCTRINE.md).
 
 `essais/editions_essai.py` fabrique quatre éditions factices (dont une au format d'avant les rubriques et le
 suivi) et écrit le site, sans réseau ni modèle, pour voir le rendu en local. Il efface les éditions de la base

@@ -3,7 +3,7 @@
 Les lecteurs ne lisent que ces fichiers : ni la base ni les modèles ne sont sollicités par une visite.
 Écriture atomique (fichier temporaire puis renommage) : un lecteur ne voit jamais un fichier à moitié écrit.
 """
-import json, os, shutil
+import json, os, re, shutil
 
 from . import aveugle, base, config, syntheses
 from .fabrique import hors_ecartees, sujets_du_jour
@@ -18,6 +18,21 @@ def _ecrire(chemin, texte):
     with open(tmp, "w", encoding="utf-8") as f:
         f.write(texte)
     os.replace(tmp, chemin)
+
+
+SITE = os.path.join(config.ICI, "site")
+INCLURE = re.compile(r"/\*INCLURE ([\w./-]+)\*/")
+
+
+def gabarit():
+    """Assemble la page unique du site. gabarit.html est le squelette ; il nomme, dans l'ordre, les morceaux à
+    y coller (/*INCLURE styles/base.css*/, /*INCLURE js/vues/sujet.js*/). Une vue = un fichier : voir DOCTRINE.md.
+    Un morceau nommé mais absent arrête la publication : mieux vaut pas de page qu'une page à moitié faite."""
+    def morceau(m):
+        with open(os.path.join(SITE, m.group(1)), encoding="utf-8") as f:
+            return f.read().rstrip("\n")
+    with open(os.path.join(SITE, "gabarit.html"), encoding="utf-8") as f:
+        return INCLURE.sub(morceau, f.read())
 
 
 def donnees_du_jour(db):
@@ -87,7 +102,7 @@ def ecrire_pages(db):
     pub = config.public()
     os.makedirs(os.path.join(pub, "editions"), exist_ok=True)
     os.makedirs(os.path.join(pub, "data", "editions"), exist_ok=True)
-    gabarit = open(os.path.join(config.ICI, "site", "gabarit.html"), encoding="utf-8").read()
+    modele = gabarit()
     lignes = db.execute("SELECT jour, donnees FROM editions ORDER BY jour").fetchall()
     jours = [r["jour"] for r in lignes]
     charges = [(r["jour"], json.loads(r["donnees"])) for r in lignes]
@@ -112,16 +127,16 @@ def ecrire_pages(db):
         charge["edition"] = {"jour": r["jour"], "precedent": jours[i - 1] if i else None,
                              "suivant": jours[i + 1] if i + 1 < len(jours) else None, "toutes": jours}
         texte = json.dumps(charge, ensure_ascii=False)
-        page = gabarit.replace("/*DONNEES*/null", texte.replace("</", "<\\/"))
+        page = modele.replace("/*DONNEES*/null", texte.replace("</", "<\\/"))
         _ecrire(os.path.join(pub, "editions", r["jour"] + ".html"), page)
         _ecrire(os.path.join(pub, "data", "editions", r["jour"] + ".json"), texte)
         if i + 1 == len(jours):   # la dernière édition est la page d'accueil
             _ecrire(os.path.join(pub, "index.html"), page)
             _ecrire(os.path.join(pub, "data", "jour.json"), texte)
     _ecrire(os.path.join(pub, "data", "editions.json"), json.dumps(jours))
-    for nom in os.listdir(os.path.join(config.ICI, "site")):
-        if nom != "gabarit.html":
-            shutil.copyfile(os.path.join(config.ICI, "site", nom), os.path.join(pub, nom))
+    for nom in os.listdir(SITE):   # les autres pages (aveugle.html) ; les morceaux du gabarit ne sont pas publiés
+        if nom != "gabarit.html" and os.path.isfile(os.path.join(SITE, nom)):
+            shutil.copyfile(os.path.join(SITE, nom), os.path.join(pub, nom))
     return jours
 
 

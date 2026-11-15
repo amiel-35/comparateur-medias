@@ -1,0 +1,21 @@
+/* médias */
+.mlist{list-style:none;margin:0;padding:0;display:grid;gap:8px;grid-template-columns:minmax(0,1fr)}
+@media (min-width:720px){.mlist{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (min-width:1080px){.mlist{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.mlist a{display:flex;gap:10px;align-items:center;justify-content:space-between;background:var(--paper);border:1px solid var(--line);border-left:8px solid var(--c);padding:8px 10px;text-decoration:none;min-height:48px}
+.mlist a:hover{border-color:var(--ink)}
+.mlist .l-gauche{border-left-color:var(--g)}.mlist .l-centre-gauche{border-left-color:var(--cg)}.mlist .l-centre{border-left-color:var(--c)}.mlist .l-centre-droit{border-left-color:var(--cd)}.mlist .l-droite{border-left-color:var(--d)}
+.mlist b{overflow-wrap:anywhere}
+.mlist small{color:var(--mute);font-family:var(--mono);font-size:.72rem;text-align:right;flex:none}
+.score{font-family:var(--serif);font-size:clamp(2.6rem,9vw,4.4rem);font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.kv{display:grid;grid-template-columns:minmax(0,1fr);gap:0;margin:0}
+.kv>div{padding:10px 0;border-bottom:1px solid var(--line)}
+@media (min-width:720px){.kv>div{display:grid;grid-template-columns:13rem minmax(0,1fr);gap:16px}}
+.kv dt{font-family:var(--mono);font-size:.74rem;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);margin-bottom:2px}
+.kv dd{margin:0;overflow-wrap:anywhere}
+.mini{position:relative;height:22px;margin:16px 0 4px;background:linear-gradient(90deg,var(--g),var(--cg) 28%,var(--c) 45%,var(--cd) 66%,var(--d));box-shadow:inset 0 0 0 1px rgba(0,0,0,.3)}
+.mini i{position:absolute;top:-6px;bottom:-6px;width:4px;background:var(--ink);outline:2px solid var(--paper)}
+.tags{display:flex;flex-wrap:wrap;gap:6px;list-style:none;margin:0;padding:0}
+.tags a,.tags span.x{display:inline-block;border:1px solid var(--ink);padding:3px 8px;font-size:.85rem;text-decoration:none;background:var(--paper)}
+.tags span.x{border-style:dashed;border-color:var(--mute);color:var(--mute)}
+.masked{color:var(--mute);font-size:.9rem}
