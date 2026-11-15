@@ -654,3 +654,215 @@ class Application(unittest.TestCase):
         self.assertIn("function vInstaller()", page)
         self.assertIn("v==='installer'", page)
         self.assertIn('href="#/installer"', page)
+
+
+class FauxSMTP:
+    """Remplace la connexion SMTP : garde les messages, refuse le mail de la semaine aux adresses « refus »."""
+    envoyes = []
+
+    def __init__(self, cfg):
+        self.cfg = cfg
+
+    def send_message(self, msg):
+        import smtplib
+        if "refus" in msg["To"] and msg["List-Unsubscribe"]:
+            raise smtplib.SMTPRecipientsRefused({msg["To"]: (550, b"non")})
+        FauxSMTP.envoyes.append(msg)
+
+    def quit(self):
+        pass
+
+
+class MailEteint(unittest.TestCase):
+    def test_sans_reglages_rien(self):
+        for k in ("COMPARATEUR_SMTP_UTILISATEUR", "COMPARATEUR_SMTP_MOT_DE_PASSE"):
+            os.environ.pop(k, None)
+        from comparateur import config, lettre
+        self.assertIsNone(config.mail())
+        os.environ["COMPARATEUR_SMTP_UTILISATEUR"] = "u"   # l'un sans l'autre ne suffit pas
+        try:
+            self.assertIsNone(config.mail())
+        finally:
+            os.environ.pop("COMPARATEUR_SMTP_UTILISATEUR")
+        db = base.connexion()
+        try:
+            publier.pages(db)
+            self.assertIsNone(lettre.envoyer_semaine(db, "2026-11-16"))
+        finally:
+            db.close()
+        with open(os.path.join(publier.config.public(), "data", "jour.json"), encoding="utf-8") as f:
+            self.assertIsNone(json.load(f)["mail"])
+        srv = serveur.creer(port=0, hote="127.0.0.1")
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        try:
+            req = urllib.request.Request("http://127.0.0.1:%d/api/mail/inscription" % srv.server_address[1],
+                                         method="POST", data=b'{"adresse": "a@exemple.fr"}')
+            with self.assertRaises(urllib.error.HTTPError) as e:
+                urllib.request.urlopen(req, timeout=10)
+            self.assertEqual(e.exception.code, 404)
+        finally:
+            srv.shutdown()
+            srv.server_close()
+
+
+class Mail(unittest.TestCase):
+    """La synthèse de la semaine par mail : double confirmation, désinscription, envoi du lundi. Sans vrai SMTP."""
+    SEMAINE = ("2026-03-02", "2026-03-03", "2026-03-04")   # une semaine passée : aucune autre édition dedans
+
+    @classmethod
+    def setUpClass(cls):
+        from comparateur import lettre
+        cls.lettre = lettre
+        os.environ.update(COMPARATEUR_SMTP_UTILISATEUR="essai", COMPARATEUR_SMTP_MOT_DE_PASSE="secret",
+                          COMPARATEUR_SITE_URL="https://cadrages.test")
+        cls._vrai, lettre.ouvrir_smtp = lettre.ouvrir_smtp, FauxSMTP
+        lettre.EN_ARRIERE_PLAN = False
+        cls.srv = serveur.creer(port=0, hote="127.0.0.1")
+        cls.url = "http://127.0.0.1:%d" % cls.srv.server_address[1]
+        threading.Thread(target=cls.srv.serve_forever, daemon=True).start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.lettre.ouvrir_smtp, cls.lettre.EN_ARRIERE_PLAN = cls._vrai, True
+        for k in ("COMPARATEUR_SMTP_UTILISATEUR", "COMPARATEUR_SMTP_MOT_DE_PASSE", "COMPARATEUR_SITE_URL"):
+            os.environ.pop(k, None)
+        cls.srv.shutdown()
+        cls.srv.server_close()
+
+    def setUp(self):
+        FauxSMTP.envoyes.clear()
+        serveur.DEBIT.vus.clear()
+        self.lettre._echecs.clear()
+        self.db = base.connexion()
+        self.db.execute("DELETE FROM abonnes")
+        self.db.commit()
+
+    def tearDown(self):
+        self.db.execute("DELETE FROM abonnes")
+        self.db.execute("DELETE FROM editions WHERE jour IN (?, ?, ?)", self.SEMAINE)
+        self.db.commit()
+        self.db.close()
+
+    def appel(self, methode, chemin, corps=None, brut=None, entetes=None):
+        data = brut if brut is not None else (json.dumps(corps).encode() if corps is not None else None)
+        req = urllib.request.Request(self.url + chemin, method=methode, data=data, headers=entetes or {})
+        try:
+            with urllib.request.urlopen(req, timeout=10) as r:
+                return r.status, r.read()
+        except urllib.error.HTTPError as e:
+            return e.code, e.read()
+
+    def jeton_du_dernier_mail(self):
+        import re
+        texte = FauxSMTP.envoyes[-1].get_body(("plain",)).get_content()
+        return re.search(r"/mail\.html#confirmer=([\w-]+)", texte).group(1)
+
+    def inscrit(self, adresse):
+        self.assertEqual(self.appel("POST", "/api/mail/inscription", {"adresse": adresse})[0], 202)
+        jeton = self.jeton_du_dernier_mail()
+        self.assertEqual(self.appel("POST", "/api/mail/confirmation", {"jeton": jeton})[0], 200)
+        return jeton
+
+    def semaine(self):
+        medias = [{"nom": "Gauche Hebdo", "score": -1.0}, {"nom": "Le Milieu", "score": 0.0},
+                  {"nom": "Centre Info", "score": 0.1}, {"nom": "Droite Matin", "score": 1.2},
+                  {"nom": "Gauche Soir", "score": -0.9}]
+        for jour in self.SEMAINE:
+            charge = {"recolte": jour + "T05:00:00+00:00", "medias": medias, "seuls": [], "sujets": [
+                {"id": "s1", "titre": "Grève <générale>", "divergence": 2, "articles": [
+                    {"media": m, "titre": "t " + m, "lien": f"https://x.test/{jour}/{m}"} for m in ("Gauche Hebdo", "Le Milieu", "Centre Info", "Gauche Soir")]
+                 + [{"media": "Le Milieu", "titre": "bis", "lien": f"https://x.test/{jour}/bis"}]}]}
+            self.db.execute("INSERT OR REPLACE INTO editions (jour, cree, donnees) VALUES (?, ?, ?)", (jour, base.iso(), json.dumps(charge)))
+        self.db.commit()
+
+    def test_inscription_confirmation_desinscription(self):
+        import contextlib, io
+        journal = io.StringIO()
+        with contextlib.redirect_stdout(journal):
+            self.assertEqual(self.appel("POST", "/api/mail/inscription", {"adresse": "  Lea@Exemple.FR "}), (202, b'{"ok": true}'))
+            self.assertEqual(len(FauxSMTP.envoyes), 1)
+            msg = FauxSMTP.envoyes[0]
+            self.assertEqual(msg["To"], "lea@exemple.fr")                 # en minuscules
+            self.assertIn("Cadrages", msg["From"])
+            r = self.db.execute("SELECT * FROM abonnes").fetchone()
+            self.assertEqual((r["adresse"], r["confirme_le"]), ("lea@exemple.fr", None))
+            jeton = self.jeton_du_dernier_mail()
+            self.assertEqual(jeton, r["jeton"])
+            # ouvrir le lien (GET) ne confirme rien ni ne désinscrit : seul le bouton (POST) agit
+            self.assertEqual(self.appel("GET", "/mail.html")[0], 200)
+            self.assertIsNone(self.db.execute("SELECT confirme_le FROM abonnes").fetchone()["confirme_le"])
+            self.assertEqual(self.appel("POST", "/api/mail/confirmation", {"jeton": "inconnu-inconnu"})[0], 404)
+            self.assertEqual(self.appel("POST", "/api/mail/confirmation", {"jeton": jeton})[0], 200)
+            self.assertIsNotNone(self.db.execute("SELECT confirme_le FROM abonnes").fetchone()["confirme_le"])
+            self.appel("GET", "/api/mail/desinscription?jeton=" + jeton)
+            self.assertEqual(self.db.execute("SELECT COUNT(*) AS n FROM abonnes").fetchone()["n"], 1)
+            self.assertEqual(self.appel("POST", "/api/mail/desinscription", {"jeton": jeton})[0], 200)
+            self.assertEqual(self.db.execute("SELECT COUNT(*) AS n FROM abonnes").fetchone()["n"], 0)   # la ligne est supprimée
+            self.assertEqual(self.appel("POST", "/api/mail/desinscription", {"jeton": jeton})[0], 200)
+        self.assertNotIn("exemple.fr", journal.getvalue().lower())          # aucune adresse dans les journaux
+        self.assertNotIn(jeton, journal.getvalue())                          # ni jeton
+
+    def test_reponse_identique_quelle_que_soit_l_adresse(self):
+        self.inscrit("deja@exemple.fr")
+        FauxSMTP.envoyes.clear()
+        nouvelle = self.appel("POST", "/api/mail/inscription", {"adresse": "nouvelle@exemple.fr"})
+        deja = self.appel("POST", "/api/mail/inscription", {"adresse": "deja@exemple.fr"})
+        invalide = self.appel("POST", "/api/mail/inscription", {"adresse": "pas une adresse"})
+        robot = self.appel("POST", "/api/mail/inscription", {"adresse": "robot@exemple.fr", "site": "http://spam"})
+        self.assertEqual(nouvelle, deja)
+        self.assertEqual(nouvelle, invalide)
+        self.assertEqual(nouvelle, robot)
+        self.assertEqual([m["To"] for m in FauxSMTP.envoyes], ["nouvelle@exemple.fr"])   # ni la déjà inscrite, ni le robot
+        self.assertEqual(self.appel("POST", "/api/mail/inscription", {"adresse": "x@exemple.fr"})[0], 429)   # 5 par heure
+
+    def test_inscription_non_confirmee_effacee_apres_7_jours(self):
+        self.appel("POST", "/api/mail/inscription", {"adresse": "lente@exemple.fr"})
+        self.db.execute("UPDATE abonnes SET cree = '2026-01-01T00:00:00+00:00'")
+        self.db.commit()
+        self.assertEqual(self.lettre.purger(self.db), 1)
+
+    def test_envoi_de_la_semaine_sans_double_envoi(self):
+        self.semaine()
+        a, b = self.inscrit("a@exemple.fr"), self.inscrit("refus@exemple.fr")
+        self.inscrit("c@exemple.fr")
+        self.appel("POST", "/api/mail/inscription", {"adresse": "pas-confirme@exemple.fr"})
+        FauxSMTP.envoyes.clear()
+        rendu = self.lettre.envoyer_semaine(self.db, "2026-03-09")   # lundi : la semaine du 2 au 8 mars
+        self.assertEqual(rendu, {"semaine": "2026-S10", "envoyes": 2, "echecs": 1, "editions": 3})
+        self.assertEqual(sorted(m["To"] for m in FauxSMTP.envoyes), ["a@exemple.fr", "c@exemple.fr"])   # l'échec ne bloque pas
+        msg = FauxSMTP.envoyes[0]
+        self.assertEqual(msg["List-Unsubscribe"], f"<https://cadrages.test/api/mail/desinscription?jeton={a}>")
+        self.assertEqual(msg["List-Unsubscribe-Post"], "List-Unsubscribe=One-Click")
+        texte, page = msg.get_body(("plain",)).get_content(), msg.get_body(("html",)).get_content()
+        for corps in (texte, page):
+            self.assertIn("écrit par un modèle", corps)
+            self.assertIn("synthèse partielle", corps)                     # 3 éditions sur 7
+            self.assertIn("https://cadrages.test/editions/2026-03-04.html#/semaine", corps)
+            self.assertIn("/mail.html#desinscrire=" + a, corps)
+            self.assertIn("Droite : 1 silence", corps.replace("<b>", "").replace("</b>", ""))
+        self.assertIn("Grève <générale>", texte)
+        self.assertIn("Grève &lt;générale&gt;", page)                     # échappé dans le HTML
+        self.assertIn("3 éditions gardées sur 7", texte)
+        # le même lundi, et après un redémarrage (l'état est en base) : rien ne repart vers qui l'a reçu
+        FauxSMTP.envoyes.clear()
+        self.lettre._echecs.clear()
+        rendu = self.lettre.envoyer_semaine(self.db, "2026-03-09")
+        self.assertEqual([m["To"] for m in FauxSMTP.envoyes], [])          # « refus » échoue de nouveau, rien n'est accepté
+        self.assertEqual(rendu["envoyes"], 0)
+        self.assertEqual({r["adresse"]: r["dernier_envoi"] for r in self.db.execute("SELECT * FROM abonnes")},
+                         {"a@exemple.fr": "2026-S10", "refus@exemple.fr": None, "c@exemple.fr": "2026-S10", "pas-confirme@exemple.fr": None})
+        # désinscription en un clic (RFC 8058) : le POST du logiciel de messagerie, sans JSON
+        statut, _ = self.appel("POST", "/api/mail/desinscription?jeton=" + a, brut=b"List-Unsubscribe=One-Click",
+                               entetes={"Content-Type": "application/x-www-form-urlencoded"})
+        self.assertEqual(statut, 200)
+        self.assertIsNone(self.db.execute("SELECT 1 FROM abonnes WHERE jeton = ?", (a,)).fetchone())
+        self.assertIsNotNone(self.db.execute("SELECT 1 FROM abonnes WHERE jeton = ?", (b,)).fetchone())
+
+    def test_le_site_montre_le_formulaire_seulement_si_le_mail_est_regle(self):
+        publier.pages(self.db)
+        with open(os.path.join(publier.config.public(), "data", "jour.json"), encoding="utf-8") as f:
+            self.assertEqual(json.load(f)["mail"], {"prestataire": "Brevo"})
+        page = publier.gabarit()
+        self.assertIn("if(!D.mail)return '';", page)
+        self.assertIn("/api/mail/inscription", page)
+        self.assertTrue(os.path.isfile(os.path.join(publier.config.public(), "mail.html")))

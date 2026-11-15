@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#f1ede4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#14130f" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-title" content="Cadrages">
+<meta name="color-scheme" content="light dark">
+<title>La synthèse de la semaine par mail · Cadrages</title>
+<style>
+/* Les couleurs de styles/base.css. Cette page est à part : elle confirme ou supprime une inscription au mail. */
+:root { --bg: #f1ede4; --paper: #fbf9f4; --ink: #16140f; --mute: #5b564b; --ko: #9a2a1a; }
+@media (prefers-color-scheme: dark) { :root { --bg: #14130f; --paper: #1d1b16; --ink: #efe9da; --mute: #aaa392; --ko: #ff9c8a; } }
+* { box-sizing: border-box; } [hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+header { border-bottom: 2px solid var(--ink); }
+header a { display: inline-block; padding: 14px 16px; font: 700 1.1rem Georgia, serif; text-decoration: none; color: inherit; }
+main { max-width: 640px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font: 700 clamp(1.7rem, 6vw, 2.4rem)/1.15 "Iowan Old Style", Palatino, Georgia, serif; margin: 0 0 12px; overflow-wrap: anywhere; }
+p { margin: .6em 0; overflow-wrap: anywhere; }
+.note { color: var(--mute); font-size: .9rem; }
+button { font: inherit; font-weight: 700; color: var(--bg); background: var(--ink); border: 2px solid var(--ink); padding: 10px 16px; min-height: 44px; cursor: pointer; margin: 12px 0; }
+button:disabled { opacity: .5; cursor: default; }
+#message { min-height: 1.5em; font-weight: 600; }
+#message.ko { color: var(--ko); }
+a { color: inherit; }
+:focus-visible { outline: 3px solid #f2c230; outline-offset: 2px; }
+</style>
+</head>
+<body>
+<header><a href="/">Cadrages</a></header>
+<main>
+  <section id="confirmer" hidden>
+    <h1>Un clic confirme l’inscription à la synthèse de la semaine</h1>
+    <p>Le mail part chaque lundi. Il donne les sujets les plus couverts de la semaine et les silences de chaque bord.</p>
+    <button type="button" data-action="confirmation">Confirmer l’inscription</button>
+  </section>
+  <section id="desinscrire" hidden>
+    <h1>Un clic supprime l’adresse de la liste</h1>
+    <p>L’adresse est effacée de la base, pas mise de côté. Plus aucun mail ne partira vers elle.</p>
+    <button type="button" data-action="desinscription">Se désinscrire</button>
+  </section>
+  <section id="sans" hidden>
+    <h1>Ce lien est incomplet</h1>
+    <p>Ouvrez le lien tel qu’il figure dans le mail, en entier.</p>
+  </section>
+  <p id="message" role="status" aria-live="polite"></p>
+  <p class="note">Rien ne se fait à l’ouverture de cette page : seul le bouton agit. Les logiciels de messagerie ouvrent parfois les liens tout seuls. <a href="/#/mentions">Données personnelles</a>.</p>
+</main>
+<script>
+(function () {
+  // Le jeton est dans le fragment (#) : le navigateur ne l'envoie pas au serveur en ouvrant la page.
+  var m = /^#(confirmer|desinscrire)=([\w-]{10,100})$/.exec(location.hash), jeton = m ? m[2] : null;
+  try { if (m) history.replaceState(null, '', location.pathname); } catch (_) {}
+  document.getElementById(m ? m[1] : 'sans').hidden = false;
+  var msg = document.getElementById('message');
+  document.querySelectorAll('button[data-action]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      b.disabled = true; msg.className = ''; msg.textContent = 'Un instant…';
+      fetch('/api/mail/' + b.getAttribute('data-action'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jeton: jeton }) })
+        .then(function (r) {
+          if (r.ok) {
+            msg.textContent = b.getAttribute('data-action') === 'confirmation'
+              ? 'C’est fait. La synthèse de la semaine arrivera lundi.'
+              : 'C’est fait. L’adresse est supprimée.';
+            return;
+          }
+          msg.className = 'ko'; b.disabled = r.status === 404;
+          msg.textContent = r.status === 404 ? 'Ce lien est inconnu ou a expiré. Une inscription non confirmée sous 7 jours est effacée : il suffit de recommencer depuis la page Semaine.'
+            : r.status === 429 ? 'Trop d’essais. Réessayez dans une heure.' : 'Le serveur n’a pas répondu. Réessayez plus tard.';
+          if (r.status !== 404) b.disabled = false;
+        }, function () { msg.className = 'ko'; msg.textContent = 'Pas de réseau. Réessayez plus tard.'; b.disabled = false; });
+    });
+  });
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(function () {});
+})();
+</script>
+</body>
+</html>

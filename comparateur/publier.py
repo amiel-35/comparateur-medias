@@ -139,6 +139,8 @@ def ecrire_pages(db):
         charge["suivi"] = {s["id"]: suivi[s["id"]] for s in charge["sujets"] if len(suivi.get(s["id"], [])) > 1}
         charge["min_medias"] = syntheses.MIN_MEDIAS
         charge["mesure"] = "umami" if config.umami() else None   # lu par la page Mentions et le pied de page
+        # La synthèse de la semaine par mail : null quand le SMTP n'est pas réglé (ni formulaire, ni mention).
+        charge["mail"] = {"prestataire": "Brevo"} if config.mail() else None
         charge["periodes"] = {"semaine": semaines[syntheses.cle_semaine(r["jour"])], "mois": mois[r["jour"][:7]],
                               "semaines": liste_s, "mois_liste": liste_m}
         charge["edition"] = {"jour": r["jour"], "precedent": jours[i - 1] if i else None,

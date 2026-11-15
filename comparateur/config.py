@@ -82,3 +82,21 @@ def umami():
     origine = "/".join(script.split("/")[:3])
     return {"id": ident, "script": script, "origine": origine,
             "domaines": env("COMPARATEUR_UMAMI_DOMAINES", "compare-media.inflexion.me")}
+
+
+def site_url():
+    """Adresse publique du site, sans barre finale : sert aux liens des mails."""
+    return env("COMPARATEUR_SITE_URL", "https://compare-media.inflexion.me").rstrip("/")
+
+
+def mail():
+    """La synthèse de la semaine par mail, envoyée en SMTP (Brevo par défaut). Sans utilisateur ou sans mot de passe
+    SMTP, la fonction est éteinte : pas de formulaire, aucun envoi. Rend None, ou les réglages d'envoi."""
+    utilisateur, mot_de_passe = env("COMPARATEUR_SMTP_UTILISATEUR", ""), env("COMPARATEUR_SMTP_MOT_DE_PASSE", "")
+    if not utilisateur or not mot_de_passe:
+        return None
+    return {"hote": env("COMPARATEUR_SMTP_HOTE", "smtp-relay.brevo.com"),
+            "port": int(env("COMPARATEUR_SMTP_PORT", "587")),   # 587 : STARTTLS ; 465 : TLS direct
+            "utilisateur": utilisateur, "mot_de_passe": mot_de_passe,
+            "expediteur": env("COMPARATEUR_MAIL_EXPEDITEUR", "no-reply@inflexion.me"),
+            "nom": env("COMPARATEUR_MAIL_NOM", "Cadrages"), "site": site_url()}

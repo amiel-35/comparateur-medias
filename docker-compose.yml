@@ -20,6 +20,15 @@ services:
       COMPARATEUR_MIN_PAR_BORD: ${COMPARATEUR_MIN_PAR_BORD:-5}
       # Mesure de fréquentation par Umami, sans cookie : le data-website-id du site dans Umami. Vide : aucune mesure.
       COMPARATEUR_UMAMI_ID: ${COMPARATEUR_UMAMI_ID:-}
+      # La synthèse de la semaine par mail (Brevo, SMTP). Sans utilisateur ou sans mot de passe : fonction éteinte.
+      # Le mot de passe (clé SMTP de Brevo) est un secret : à saisir dans Coolify, jamais dans ce fichier.
+      COMPARATEUR_SMTP_UTILISATEUR: ${COMPARATEUR_SMTP_UTILISATEUR:-}
+      COMPARATEUR_SMTP_MOT_DE_PASSE: ${COMPARATEUR_SMTP_MOT_DE_PASSE:-}
+      COMPARATEUR_SMTP_HOTE: ${COMPARATEUR_SMTP_HOTE:-}
+      COMPARATEUR_SMTP_PORT: ${COMPARATEUR_SMTP_PORT:-}
+      COMPARATEUR_MAIL_EXPEDITEUR: ${COMPARATEUR_MAIL_EXPEDITEUR:-}
+      COMPARATEUR_MAIL_NOM: ${COMPARATEUR_MAIL_NOM:-}
+      COMPARATEUR_SITE_URL: ${COMPARATEUR_SITE_URL:-}
     volumes:
       - comparateur-donnees:/data
     healthcheck:
