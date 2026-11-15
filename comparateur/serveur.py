@@ -18,10 +18,19 @@ from urllib.parse import urlsplit
 from . import aveugle, base, config
 
 CORPS_MAX = 4096
+
+
+def politique():
+    """Politique de sécurité des pages. Seule origine extérieure admise : celle d'Umami, s'il est réglé."""
+    u = config.umami()
+    ext = " " + u["origine"] if u else ""
+    return ("default-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'" + ext + "; img-src 'self' data:; "
+            "connect-src 'self'" + ext + "; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
+
+
 ENTETES = {
     "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer", "X-Frame-Options": "DENY",
-    "Content-Security-Policy": "default-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; "
-                               "base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+    "Content-Security-Policy": politique(),
 }
 
 

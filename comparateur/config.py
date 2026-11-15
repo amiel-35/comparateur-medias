@@ -70,3 +70,15 @@ def rubriques_ecartees():
     en base). Liste séparée par des virgules ; « aucune » pour ne rien écarter."""
     v = env("COMPARATEUR_RUBRIQUES_ECARTEES", "sport,culture").lower()
     return sorted({x.strip() for x in v.split(",") if x.strip() and x.strip() != "aucune"})
+
+
+def umami():
+    """Mesure de fréquentation par Umami (sans cookie), hébergé par l'éditeur. Sans identifiant : aucune mesure.
+    Rend None, ou {id, script, origine, domaines}."""
+    ident = env("COMPARATEUR_UMAMI_ID", "")
+    if not ident:
+        return None
+    script = env("COMPARATEUR_UMAMI_SCRIPT", "https://stats.inflexion.me/script.js")
+    origine = "/".join(script.split("/")[:3])
+    return {"id": ident, "script": script, "origine": origine,
+            "domaines": env("COMPARATEUR_UMAMI_DOMAINES", "compare-media.inflexion.me")}

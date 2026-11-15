@@ -12,6 +12,7 @@ function route(opt){
   else if(v==='semaine'||v==='mois'){html=vPeriode(v);nav='home';}
   else if(v==='silences'){html=vSilences();nav='home';}
   else if(v==='pourquoi'){html=vPourquoi();nav='home';}
+  else if(v==='mentions'){html=vMentions();nav='home';}
   else{html=vHome();nav='home';}
   var y=window.scrollY;
   app.innerHTML=html;
@@ -28,5 +29,5 @@ function applyTheme(){var d=document.documentElement;if(S.theme)d.setAttribute('
 document.getElementById('btnTheme').addEventListener('click',function(){S.theme=effDark()?'light':'dark';save();applyTheme();});
 try{window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',applyTheme);}catch(_){}
 
-document.getElementById('foot').innerHTML='<p><span class="mdl" style="margin:0">écrit par un modèle</span> signale tout texte rédigé par un modèle de langage (sujets, faits, angles, mots). Les scores viennent de FrIdéo v1.0 (French News Lab, CC BY 4.0), les comptages d’une formule fixe. Données du '+esc(new Date(D.recolte).toLocaleDateString('fr-FR',{timeZone:'Europe/Paris'}))+'. Aucune donnée n’est envoyée : seul le choix du thème reste dans votre navigateur.</p>';
+document.getElementById('foot').innerHTML='<p><span class="mdl" style="margin:0">écrit par un modèle</span> signale tout texte rédigé par un modèle de langage (sujets, faits, angles, mots). Les scores viennent de FrIdéo v1.0 (French News Lab, CC BY 4.0), les comptages d’une formule fixe. Données du '+esc(new Date(D.recolte).toLocaleDateString('fr-FR',{timeZone:'Europe/Paris'}))+'. '+(D.mesure==='umami'?'Aucun cookie. La fréquentation est mesurée sans cookie ni donnée personnelle.':'Aucun cookie. Seul le choix du thème reste dans votre navigateur.')+' <a href="#/mentions">Mentions légales et données personnelles</a>.</p>';
 applyTheme();route();

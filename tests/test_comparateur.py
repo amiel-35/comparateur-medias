@@ -534,3 +534,22 @@ class Budget(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Mesure(unittest.TestCase):
+    def tearDown(self):
+        os.environ.pop("COMPARATEUR_UMAMI_ID", None)
+
+    def test_sans_identifiant_aucune_mesure(self):
+        os.environ.pop("COMPARATEUR_UMAMI_ID", None)
+        self.assertEqual(publier.balise_mesure(), "")
+        self.assertNotIn("<!--MESURE-->", publier.gabarit())
+        self.assertNotIn("stats.", serveur.politique())
+
+    def test_umami_dans_la_page_et_la_politique(self):
+        os.environ["COMPARATEUR_UMAMI_ID"] = "abc-123"
+        self.assertIn('data-website-id="abc-123"', publier.gabarit())
+        self.assertIn('data-domains="compare-media.inflexion.me"', publier.balise_mesure())
+        p = serveur.politique()
+        self.assertIn("script-src 'self' 'unsafe-inline' https://stats.inflexion.me;", p)
+        self.assertIn("connect-src 'self' https://stats.inflexion.me;", p)

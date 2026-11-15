@@ -31,6 +31,8 @@ En local la fabrique appelle les modèles par `claude -p` (abonnement Claude Cod
 
 1. Nouvelle ressource → **Docker Compose**, ce dépôt Git, dossier de base à la racine.
 2. **Environment Variables** : `ANTHROPIC_API_KEY` (secret), et au besoin les réglages de `.env.example`.
+   `COMPARATEUR_UMAMI_ID` (le `data-website-id` du site dans Umami, stats.inflexion.me) active la mesure de
+   fréquentation, sans cookie ; la page `#/mentions` et la politique de sécurité suivent d'elles-mêmes.
 3. **Domaine** : Domains → Add domain, service `comparateur`, port interne `8080` (forme `https://mon-domaine:8080` : le
    suffixe dit au proxy quel port du conteneur viser, le public reste en 443 ; Coolify n'affiche plus
    le suffixe ensuite mais le garde pour son proxy). Coolify fournit le HTTPS. Aucun `ports:` dans le compose.

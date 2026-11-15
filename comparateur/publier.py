@@ -31,7 +31,18 @@ def gabarit():
         with open(os.path.join(SITE, m.group(1)), encoding="utf-8") as f:
             return f.read().rstrip("\n")
     with open(os.path.join(SITE, "gabarit.html"), encoding="utf-8") as f:
-        return INCLURE.sub(morceau, f.read())
+        page = INCLURE.sub(morceau, f.read())
+    return page.replace("<!--MESURE-->", balise_mesure())
+
+
+def balise_mesure():
+    """La balise d'Umami, si la mesure est réglée (config.umami) ; sinon rien. Umami ne dépose aucun cookie."""
+    u = config.umami()
+    if not u:
+        return ""
+    a = lambda s: s.replace("&", "&amp;").replace('"', "&quot;")
+    return (f'<script defer src="{a(u["script"])}" data-website-id="{a(u["id"])}" '
+            f'data-domains="{a(u["domaines"])}"></script>')
 
 
 def donnees_du_jour(db):
@@ -127,6 +138,7 @@ def ecrire_pages(db):
         # Le suivi d'un sujet : sa présence dans toutes les éditions gardées, s'il y figure plus d'un jour.
         charge["suivi"] = {s["id"]: suivi[s["id"]] for s in charge["sujets"] if len(suivi.get(s["id"], [])) > 1}
         charge["min_medias"] = syntheses.MIN_MEDIAS
+        charge["mesure"] = "umami" if config.umami() else None   # lu par la page Mentions et le pied de page
         charge["periodes"] = {"semaine": semaines[syntheses.cle_semaine(r["jour"])], "mois": mois[r["jour"][:7]],
                               "semaines": liste_s, "mois_liste": liste_m}
         charge["edition"] = {"jour": r["jour"], "precedent": jours[i - 1] if i else None,

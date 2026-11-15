@@ -18,6 +18,8 @@ services:
       # Rubriques écartées des sujets, lues dans l'adresse de l'article (« aucune » pour ne rien écarter).
       COMPARATEUR_RUBRIQUES_ECARTEES: ${COMPARATEUR_RUBRIQUES_ECARTEES:-sport,culture}
       COMPARATEUR_MIN_PAR_BORD: ${COMPARATEUR_MIN_PAR_BORD:-5}
+      # Mesure de fréquentation par Umami, sans cookie : le data-website-id du site dans Umami. Vide : aucune mesure.
+      COMPARATEUR_UMAMI_ID: ${COMPARATEUR_UMAMI_ID:-}
     volumes:
       - comparateur-donnees:/data
     healthcheck:
