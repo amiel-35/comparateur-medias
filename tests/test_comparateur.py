@@ -866,3 +866,187 @@ class Mail(unittest.TestCase):
         self.assertIn("if(!D.mail)return '';", page)
         self.assertIn("/api/mail/inscription", page)
         self.assertTrue(os.path.isfile(os.path.join(publier.config.public(), "mail.html")))
+
+
+def faux_webdav():
+    """Un serveur WebDAV minimal en mémoire, avec authentification Basic : MKCOL, PUT, GET, PROPFIND, DELETE."""
+    import base64
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    fichiers, attendu = {}, "Basic " + base64.b64encode(b"sub1:bon-secret").decode()
+
+    class Gestion(BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def repondre(self, code, corps=b""):
+            self.send_response(code)
+            self.send_header("Content-Length", str(len(corps)))
+            self.end_headers()
+            self.wfile.write(corps)
+
+        def autorise(self):
+            if self.headers.get("Authorization") != attendu:
+                self.repondre(401)
+                return False
+            return True
+
+        def lire(self):
+            return self.rfile.read(int(self.headers.get("Content-Length", "0") or 0))
+
+        def do_MKCOL(self):
+            if self.autorise():
+                self.lire()
+                self.repondre(405)   # le dossier existe déjà
+
+        def do_PUT(self):
+            if self.autorise():
+                fichiers[self.path.rsplit("/", 1)[-1]] = self.lire()
+                self.repondre(201)
+
+        def do_GET(self):
+            if self.autorise():
+                n = self.path.rsplit("/", 1)[-1]
+                self.repondre(200, fichiers[n]) if n in fichiers else self.repondre(404)
+
+        def do_DELETE(self):
+            if self.autorise():
+                fichiers.pop(self.path.rsplit("/", 1)[-1], None)
+                self.repondre(204)
+
+        def do_PROPFIND(self):
+            if self.autorise():
+                self.lire()
+                corps = '<?xml version="1.0"?><d:multistatus xmlns:d="DAV:"><d:response><d:href>/sauv/</d:href></d:response>' + "".join(
+                    f"<d:response><d:href>/sauv/{n}</d:href></d:response>" for n in fichiers) + "</d:multistatus>"
+                self.repondre(207, corps.encode())
+
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), Gestion)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return srv, fichiers
+
+
+class Sauvegarde(unittest.TestCase):
+    """Une copie cohérente de la base par jour, gardée N jours, envoyée vers une Storage Box en WebDAV."""
+
+    @classmethod
+    def setUpClass(cls):
+        from comparateur import sauvegarde
+        cls.s = sauvegarde
+        cls.srv, cls.distants = faux_webdav()
+        cls.url = "http://127.0.0.1:%d/sauv/" % cls.srv.server_address[1]
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.srv.shutdown()
+        cls.srv.server_close()
+
+    def setUp(self):
+        shutil.rmtree(os.path.join(DOSSIER, "sauvegardes"), ignore_errors=True)
+        self.distants.clear()
+        self.s._dernier_essai.clear()
+        self.db = base.connexion()
+        self.db.execute("INSERT OR REPLACE INTO editions (jour, cree, donnees) VALUES ('2025-01-01', ?, '{}')", (base.iso(),))
+        self.db.commit()
+
+    def tearDown(self):
+        for k in ("COMPARATEUR_SAUVEGARDE_URL", "COMPARATEUR_SAUVEGARDE_UTILISATEUR", "COMPARATEUR_SAUVEGARDE_MOT_DE_PASSE"):
+            os.environ.pop(k, None)
+        self.db.execute("DELETE FROM editions WHERE jour = '2025-01-01'")
+        self.db.commit()
+        self.db.close()
+
+    def distant(self, mot_de_passe="bon-secret"):
+        os.environ.update(COMPARATEUR_SAUVEGARDE_URL=self.url, COMPARATEUR_SAUVEGARDE_UTILISATEUR="sub1",
+                          COMPARATEUR_SAUVEGARDE_MOT_DE_PASSE=mot_de_passe)
+
+    def ouvrir(self, chemin):
+        import gzip, sqlite3
+        brut = os.path.join(DOSSIER, "lu.db")
+        with gzip.open(chemin, "rb") as g, open(brut, "wb") as f:
+            f.write(g.read())
+        return sqlite3.connect(brut)
+
+    def test_copie_coherente_et_verifiee(self):
+        chemin = self.s.copier()
+        self.assertTrue(os.path.basename(chemin).startswith("comparateur-2") and chemin.endswith(".db.gz"))
+        copie = self.ouvrir(chemin)
+        try:
+            self.assertEqual(copie.execute("PRAGMA integrity_check").fetchone()[0], "ok")
+            self.assertEqual(copie.execute("SELECT COUNT(*) FROM editions WHERE jour = '2025-01-01'").fetchone()[0], 1)
+            self.assertIn("abonnes", {r[0] for r in copie.execute("SELECT name FROM sqlite_master")})
+        finally:
+            copie.close()
+        self.assertTrue(self.s.faite())
+        self.assertIsNone(self.s.envoyer_en_attente(force=True))   # pas de Storage Box réglée : rien à envoyer
+
+    def test_les_vieilles_copies_sont_effacees(self):
+        self.s.copier("2026-01-01")
+        self.s.copier()
+        self.assertEqual(self.s.elaguer_local(), 1)
+        self.assertEqual([j for j, _, _ in self.s.locales()], [self.s.aujourdhui()])
+
+    def test_envoi_vers_la_storage_box(self):
+        import contextlib, io
+        self.distant()
+        self.distants["comparateur-2026-01-01.db.gz"] = b"vieux"   # trop vieux : effacé là-bas aussi
+        self.distants["autre-fichier.txt"] = b"x"                  # pas une copie : pas touché
+        journal = io.StringIO()
+        with contextlib.redirect_stdout(journal):
+            chemin = self.s.sauvegarder()
+        n = os.path.basename(chemin)
+        self.assertEqual(sorted(self.distants), ["autre-fichier.txt", n])
+        with open(chemin, "rb") as f:
+            self.assertEqual(self.distants[n], f.read())
+        self.assertTrue(self.s.locales()[-1][2])                   # marquée envoyée
+        self.assertEqual(self.s.envoyer_en_attente(force=True), 0)  # rien ne repart
+        self.assertNotIn("bon-secret", journal.getvalue())
+
+    def test_une_storage_box_en_panne_ne_casse_rien(self):
+        import contextlib, io
+        self.distant("mauvais")
+        journal = io.StringIO()
+        with contextlib.redirect_stdout(journal):
+            self.s.sauvegarder()                                   # pas d'exception
+            self.assertEqual(self.s.envoyer_en_attente(), 0)       # pas de nouvel essai avant une heure
+        self.assertIn("échec", journal.getvalue())
+        self.assertIn("401", journal.getvalue())
+        self.assertNotIn("mauvais", journal.getvalue())
+        self.assertFalse(self.s.locales()[-1][2])
+        self.assertEqual(self.distants, {})
+        self.distant()                                             # la Storage Box revient : la copie part
+        self.assertEqual(self.s.envoyer_en_attente(force=True), 1)
+
+    def test_https_obligatoire_hors_local(self):
+        with self.assertRaises(ValueError):
+            self.s.Distant({"url": "http://u1-sub1.your-storagebox.de/", "utilisateur": "u", "mot_de_passe": "p"})
+        self.s.Distant({"url": "https://u1-sub1.your-storagebox.de/", "utilisateur": "u", "mot_de_passe": "p"})
+
+    def test_restaurer_une_copie_locale_puis_distante(self):
+        self.distant()
+        n = os.path.basename(self.s.sauvegarder())
+        self.db.execute("DELETE FROM editions WHERE jour = '2025-01-01'")
+        self.db.commit()
+        avant = self.s.restaurer(n)
+        self.assertIsNotNone(self.db.execute("SELECT 1 FROM editions WHERE jour = '2025-01-01'").fetchone())
+        self.assertTrue(os.path.isfile(avant) and "avant-restauration" in avant)
+        copie = self.ouvrir(avant)   # la base d'avant la restauration est gardée telle quelle
+        try:
+            self.assertIsNone(copie.execute("SELECT 1 FROM editions WHERE jour = '2025-01-01'").fetchone())
+        finally:
+            copie.close()
+        # le volume est perdu : plus de copie locale, la copie vient de la Storage Box
+        os.remove(os.path.join(self.s.dossier(), n))
+        self.db.execute("DELETE FROM editions WHERE jour = '2025-01-01'")
+        self.db.commit()
+        self.s.restaurer(n)
+        self.assertIsNotNone(self.db.execute("SELECT 1 FROM editions WHERE jour = '2025-01-01'").fetchone())
+        with self.assertRaises(FileNotFoundError):
+            self.s.restaurer("comparateur-1999-01-01.db.gz")
+
+    def test_la_page_mentions_dit_la_duree_de_garde(self):
+        self.db.execute("DELETE FROM editions WHERE jour = '2025-01-01'")   # pas une vraie édition : hors du site
+        self.db.commit()
+        publier.pages(self.db)
+        with open(os.path.join(publier.config.public(), "data", "jour.json"), encoding="utf-8") as f:
+            self.assertEqual(json.load(f)["sauvegardes"], {"jours": 14, "distante": False})
+        self.assertIn("D.sauvegardes||null", publier.gabarit())

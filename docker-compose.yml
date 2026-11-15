@@ -29,6 +29,12 @@ services:
       COMPARATEUR_MAIL_EXPEDITEUR: ${COMPARATEUR_MAIL_EXPEDITEUR:-}
       COMPARATEUR_MAIL_NOM: ${COMPARATEUR_MAIL_NOM:-}
       COMPARATEUR_SITE_URL: ${COMPARATEUR_SITE_URL:-}
+      # Sauvegardes : une copie de la base par jour, gardée N jours sur le volume, et envoyée vers une Storage Box
+      # (WebDAV, HTTPS) si l'adresse, l'utilisateur et le mot de passe (secret, saisi dans Coolify) sont réglés.
+      COMPARATEUR_SAUVEGARDE_JOURS: ${COMPARATEUR_SAUVEGARDE_JOURS:-}
+      COMPARATEUR_SAUVEGARDE_URL: ${COMPARATEUR_SAUVEGARDE_URL:-}
+      COMPARATEUR_SAUVEGARDE_UTILISATEUR: ${COMPARATEUR_SAUVEGARDE_UTILISATEUR:-}
+      COMPARATEUR_SAUVEGARDE_MOT_DE_PASSE: ${COMPARATEUR_SAUVEGARDE_MOT_DE_PASSE:-}
     volumes:
       - comparateur-donnees:/data
     healthcheck:

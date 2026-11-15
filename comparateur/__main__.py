@@ -13,11 +13,14 @@
   jetons               bilan des appels aux modèles (jetons, coût)
   journal              dernières étapes de la fabrique
   servir               lance le site et le guichet des votes
+  sauvegarder          copie la base maintenant (et l'envoie vers la Storage Box si elle est réglée)
+  sauvegardes          liste les copies, sur place et sur la Storage Box
+  restaurer <copie>    remplace la base par une copie (nom ou chemin), après avoir copié la base actuelle
   mail-essai <adresse> envoie à cette seule adresse la synthèse de la dernière semaine (SMTP réglé)
 """
-import secrets, sys
+import os, secrets, sys
 
-from . import aveugle, base, chaine, config, fabrique, lettre, llm, publier, serveur
+from . import aveugle, base, chaine, config, fabrique, lettre, llm, publier, sauvegarde, serveur
 
 
 def main(argv):
@@ -64,6 +67,23 @@ def main(argv):
                     total[k] += b[k]
             print(f"  TOTAL {total['appels']} appels, {total['entree']} jetons en entrée, {total['sortie']} en sortie, "
                   f"{total['cout']:.4f} $ au tarif public")
+        elif cmd == "sauvegarder":
+            print(sauvegarde.sauvegarder())
+        elif cmd == "sauvegardes":
+            for jour, chemin, envoye in sauvegarde.locales():
+                print(f"  {os.path.basename(chemin)}  {os.path.getsize(chemin):>10} octets  {'envoyée' if envoye else ''}")
+            dav = sauvegarde.distant()
+            if dav:
+                print("Storage Box :", ", ".join(dav.lister()) or "aucune copie")
+        elif cmd == "restaurer":
+            if len(argv) < 3:
+                print("usage : python -m comparateur restaurer <comparateur-AAAA-MM-JJ.db.gz | chemin>")
+                return 2
+            db.close()
+            avant = sauvegarde.restaurer(argv[2])
+            print("base restaurée ; la base d'avant est gardée dans", avant)
+            db = base.connexion()
+            print(publier.pages(db), "->", config.public())
         elif cmd == "mail-essai":
             if len(argv) < 3:
                 print("usage : python -m comparateur mail-essai <adresse>")

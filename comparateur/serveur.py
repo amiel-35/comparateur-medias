@@ -19,7 +19,7 @@ import hashlib, json, mimetypes, os, re, secrets, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
-from . import aveugle, base, config, lettre
+from . import aveugle, base, config, lettre, sauvegarde
 
 CORPS_MAX = 4096
 # Le manifest de l'application : type exigé par certains navigateurs, absent des vieilles tables de Python.
@@ -341,6 +341,16 @@ def _planifier(minutes):
             except Exception as e:
                 dire(f"arrêt inattendu : {type(e).__name__} {e}")
                 derniere = time.time()               # pas de boucle serrée sur une panne
+            try:
+                # Chaque jour, une fois l'édition faite (ou en fin de journée si elle n'a pas pu se faire) : une copie
+                # de la base, puis son envoi vers la Storage Box. Un envoi en panne est réessayé d'heure en heure.
+                ici = base.paris()
+                if not sauvegarde.faite() and (edition_faite(ici.strftime("%Y-%m-%d")) or ici.hour >= 23):
+                    sauvegarde.sauvegarder()
+                else:
+                    sauvegarde.envoyer_en_attente()
+            except Exception as e:
+                dire(f"sauvegarde : arrêt inattendu {type(e).__name__}")
             try:
                 # Le lundi, une fois l'édition du jour faite : la synthèse de la semaine finie, par mail.
                 # envoyer_semaine ne renvoie rien à qui l'a déjà reçue (abonnes.dernier_envoi).

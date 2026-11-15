@@ -141,6 +141,8 @@ def ecrire_pages(db):
         charge["mesure"] = "umami" if config.umami() else None   # lu par la page Mentions et le pied de page
         # La synthèse de la semaine par mail : null quand le SMTP n'est pas réglé (ni formulaire, ni mention).
         charge["mail"] = {"prestataire": "Brevo"} if config.mail() else None
+        # Les copies de la base : durée de garde, et si elles partent hors du serveur. Lu par la page Mentions.
+        charge["sauvegardes"] = {"jours": config.sauvegarde_jours(), "distante": config.sauvegarde_distante() is not None}
         charge["periodes"] = {"semaine": semaines[syntheses.cle_semaine(r["jour"])], "mois": mois[r["jour"][:7]],
                               "semaines": liste_s, "mois_liste": liste_m}
         charge["edition"] = {"jour": r["jour"], "precedent": jours[i - 1] if i else None,

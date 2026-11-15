@@ -41,8 +41,10 @@ En local la fabrique appelle les modèles par `claude -p` (abonnement Claude Cod
 3. **Domaine** : Domains → Add domain, service `comparateur`, port interne `8080` (forme `https://mon-domaine:8080` : le
    suffixe dit au proxy quel port du conteneur viser, le public reste en 443 ; Coolify n'affiche plus
    le suffixe ensuite mais le garde pour son proxy). Coolify fournit le HTTPS. Aucun `ports:` dans le compose.
-4. **Stockage** : le volume `comparateur-donnees` (monté sur `/data`) porte la base, le cache des appels et le
-   site généré. C'est lui qu'il faut sauvegarder.
+4. **Stockage** : le volume `comparateur-donnees` (monté sur `/data`) porte la base, le cache des appels, le
+   site généré et les copies de la base (`/data/sauvegardes`). Pour une copie hors du serveur : 
+   `COMPARATEUR_SAUVEGARDE_URL`, `COMPARATEUR_SAUVEGARDE_UTILISATEUR`, `COMPARATEUR_SAUVEGARDE_MOT_DE_PASSE`
+   (secret). Voir « Sauvegardes ».
 5. Déployer. Le conteneur crée la base, réécrit le site depuis les éditions gardées, sert, puis lance la
    fabrique : récolte des flux toutes les `COMPARATEUR_FABRIQUE_MINUTES` minutes (180 par défaut) et une édition
    par jour à `COMPARATEUR_EDITION_HEURE` heures, heure de Paris (6 par défaut).
@@ -103,6 +105,58 @@ formulaire n'est montré, aucune route `/api/mail/` ne répond. Pas de compte, p
   autres (trois essais espacés de 30 minutes). Les journaux comptent, ils ne nomment personne.
 - **Essai** : `python -m comparateur mail-essai <adresse>` envoie la synthèse de la dernière semaine à cette seule
   adresse, sans l'inscrire.
+
+## Sauvegardes
+
+Chaque jour, une fois l'édition faite (à 23 h au plus tard si elle n'a pas pu se faire), la boucle de la fabrique
+copie la base par l'API de sauvegarde de SQLite, la vérifie (`PRAGMA integrity_check`), la compresse et la garde
+dans `/data/sauvegardes/comparateur-AAAA-MM-JJ.db.gz`. Un `cp` de la base en service, en mode WAL, peut donner une
+copie cassée : il ne faut pas s'en servir. Les copies sont gardées `COMPARATEUR_SAUVEGARDE_JOURS` jours (14).
+
+Ces copies sont sur le même disque que la base. Elles protègent d'une erreur ou d'une migration ratée, pas de la
+perte du serveur. Avec `COMPARATEUR_SAUVEGARDE_URL` (le dossier WebDAV d'une Storage Box Hetzner, en `https://`),
+`_UTILISATEUR` et `_MOT_DE_PASSE`, chaque copie part aussi là-bas, et les copies trop vieilles y sont effacées. Un
+envoi en panne est réessayé d'heure en heure.
+
+Réglage de la Storage Box (documentation de Hetzner lue le 15/11/2026), dans Hetzner Console :
+
+1. Créer un sous-compte : il ne voit que son propre dossier. Ne pas le mettre en lecture seule.
+2. Sur ce sous-compte, activer WebDAV et « External Reachability » (« Change settings ») : le conteneur n'est pas
+   dans le réseau de Hetzner. L'activation peut prendre quelques minutes.
+3. Dans Coolify : `COMPARATEUR_SAUVEGARDE_URL=https://uXXXXX-subX.your-storagebox.de/` (l'adresse du sous-compte ;
+   un nom DNS à soi en CNAME ne marche pas en WebDAV), `COMPARATEUR_SAUVEGARDE_UTILISATEUR=uXXXXX-subX`,
+   `COMPARATEUR_SAUVEGARDE_MOT_DE_PASSE` en secret.
+4. Activer les instantanés automatiques de la Storage Box (« Snapshots », « Enable automatic snapshots »). Le
+   conteneur a le droit d'effacer les copies distantes : sans instantanés, qui prendrait la main sur lui pourrait
+   aussi effacer les sauvegardes.
+   Les instantanés gardent aussi les copies effacées : avec 10 instantanés quotidiens, une copie vit jusqu'à 10 jours
+   de plus que `COMPARATEUR_SAUVEGARDE_JOURS`. La page Mentions annonce cette durée-là : garder les deux courtes.
+
+Puis vérifier depuis le terminal du conteneur : `python -m comparateur sauvegarder`, puis `sauvegardes`.
+
+Sauvegardé : toute la base (éditions, abonnés au mail, votes, invitations, articles, journal). Pas sauvegardé : le
+site publié, réécrit depuis les éditions, et le cache des appels au modèle.
+
+Depuis le terminal du conteneur dans Coolify :
+
+```bash
+python -m comparateur sauvegarder
+```
+
+```bash
+python -m comparateur sauvegardes
+```
+
+```bash
+python -m comparateur restaurer comparateur-2026-11-15.db.gz
+```
+
+`restaurer` prend une copie locale, sinon la télécharge depuis la Storage Box, la vérifie, copie d'abord la base en
+service (`comparateur-avant-restauration-….db.gz`, jamais effacée d'office), remplace le contenu de la base, puis
+réécrit le site. Le serveur peut rester en marche.
+
+Si le volume entier est perdu : redéployer, laisser le conteneur créer une base vide, puis `restaurer` le nom de la
+dernière copie présente sur la Storage Box.
 
 ## Sept bords, trois côtés
 
