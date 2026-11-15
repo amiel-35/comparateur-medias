@@ -66,6 +66,17 @@ publie **l'édition du jour**, qui ne bouge plus ensuite.
   changement du gabarit vaut aussi pour les archives.
 - `python -m comparateur tout` refait l'édition du jour ; `python -m comparateur pages` réécrit seulement le site.
 
+## L'application
+
+Le site s'installe comme une application, sans magasin : `manifest.webmanifest`, icônes PNG (192, 512, 512
+« maskable », `apple-touch-icon.png` en 180), et un service worker `sw.js` servi depuis la racine. Le service
+worker passe toujours par le réseau d'abord : quand le réseau répond, c'est sa réponse qui est servie, jamais une
+copie. La dernière copie gardée ne sert que hors ligne. La page `#/installer` explique la marche à suivre sur
+iPhone, Mac, Android, Windows et Firefox, avec en tête la section de l'appareil de la personne. Les chemins de
+menu y ont été relevés dans l'aide d'Apple, de Google et de Microsoft le 15/11/2026 ; ceux de Firefox n'ont pas
+pu l'être (pages de Mozilla illisibles par un robot) et sont écrits avec prudence. Les icônes se refont avec
+`python3 essais/icones.py`.
+
 ## Sept bords, trois côtés
 
 Ce site ne classe aucun média. Le bord d'un média est sa **bande FrIdéo** : sept bandes, avec les noms et les

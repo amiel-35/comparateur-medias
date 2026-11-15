@@ -1,0 +1,9 @@
+/* Installer : une section par appareil, des étapes numérotées. */
+.inst{border-top:2px solid var(--ink);margin:1.6rem 0 0;padding-top:.2rem;max-width:68ch}
+.inst h2{margin:.8rem 0 .4rem}
+.inst h2 .mono{margin-left:.4em;vertical-align:middle}
+.inst h3{margin:1rem 0 .3rem}
+.inst.ici{border-top-width:4px}
+.pas{margin:.3em 0 .8em;padding-left:1.4em}
+.pas li{margin:.35em 0;overflow-wrap:anywhere}
+.inst-ok{border:2px solid var(--ink);background:var(--paper);padding:10px 12px;max-width:68ch;display:flex;flex-wrap:wrap;gap:10px;align-items:center}

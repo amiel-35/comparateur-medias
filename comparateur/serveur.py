@@ -18,14 +18,19 @@ from urllib.parse import urlsplit
 from . import aveugle, base, config
 
 CORPS_MAX = 4096
+# Le manifest de l'application : type exigé par certains navigateurs, absent des vieilles tables de Python.
+mimetypes.add_type("application/manifest+json", ".webmanifest")
 
 
 def politique():
-    """Politique de sécurité des pages. Seule origine extérieure admise : celle d'Umami, s'il est réglé."""
+    """Politique de sécurité des pages. Seule origine extérieure admise : celle d'Umami, s'il est réglé.
+    Le manifest et le service worker (sw.js) viennent du site : default-src 'self' les couvre, et le dire
+    explicitement évite qu'un resserrement de default-src les casse."""
     u = config.umami()
     ext = " " + u["origine"] if u else ""
     return ("default-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'" + ext + "; img-src 'self' data:; "
-            "connect-src 'self'" + ext + "; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
+            "connect-src 'self'" + ext + "; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'self'; "
+            "frame-ancestors 'none'")
 
 
 ENTETES = {
@@ -229,6 +234,8 @@ class Guichet(BaseHTTPRequestHandler):
         rel = chemin.lstrip("/") or "index.html"
         if rel == "favicon.ico":   # demandé d'office par certains navigateurs : l'icône SVG répond
             rel = "favicon.svg"
+        if rel == "apple-touch-icon-precomposed.png":   # demandé d'office par Safari, comme apple-touch-icon.png
+            rel = "apple-touch-icon.png"
         if rel.endswith("/"):
             rel += "index.html"
         cible = os.path.realpath(os.path.join(racine, rel))
@@ -237,8 +244,10 @@ class Guichet(BaseHTTPRequestHandler):
         type_mime = mimetypes.guess_type(cible)[0] or "application/octet-stream"
         if type_mime.startswith("text/") or type_mime in ("application/json", "application/javascript"):
             type_mime += "; charset=utf-8"
+        # Le service worker est revérifié à chaque visite : une nouvelle version prend effet tout de suite.
+        cache = "no-cache" if rel == "sw.js" else "public, max-age=300"
         with open(cible, "rb") as f:
-            self.envoyer(200, f.read(), type_mime, cache="public, max-age=300")
+            self.envoyer(200, f.read(), type_mime, cache=cache)
 
 
 def creer(port=None, hote="0.0.0.0"):
