@@ -15,7 +15,7 @@ function frise(r){
   var by={},mx=1;su.forEach(function(x){by[x.jour]=x;mx=Math.max(mx,x.titres);});
   var jours=(ED.toutes||[]).filter(function(j){return j>=su[0].jour&&j<=su[su.length-1].jour;});
   su.forEach(function(x){if(jours.indexOf(x.jour)<0)jours.push(x.jour);});jours.sort();
-  var h='<h2>Ce sujet dans le temps</h2><p class="note">Ce sujet figure dans '+su.length+' éditions gardées. Chaque jour mène à sa page dans l’édition de ce jour-là. Comptage par formule fixe, sans modèle. La barre montre les titres par bord ; sa longueur, le nombre de titres.</p><ol class="brows frise">';
+  var h='<h2>Ce sujet dans le temps</h2><p class="note">Ce sujet figure dans '+su.length+' éditions gardées. Chaque jour mène à sa page ce jour-là. La barre compte les titres par bord. Sa longueur dit combien. Compté par formule, sans modèle.</p><ol class="brows frise">';
   jours.forEach(function(j){
     var x=by[j],ici=j===ED.jour;
     var lab=ici?'<b aria-current="true">'+esc(jourFrise(j))+'</b> <span class="mono mute">cette édition</span>':x?'<a href="'+edUrl(j)+'#/sujet/'+esc(r.id)+'">'+esc(jourFrise(j))+'</a>':'<span class="mute">'+esc(jourFrise(j))+'</span>';
@@ -33,17 +33,19 @@ function sujetView(r){
   '<p class="mono mute">Sujet '+r.n+' sur '+rounds.length+'</p><h1 tabindex="-1" id="h1">'+esc(r.titre)+(r.kind==='sujet'?mdl():'')+'</h1>';
   if(r.fait)h+='<div class="fait"><span class="mono">Le fait commun'+mdl()+'</span><p>'+esc(r.fait)+'</p></div>';
   /* qui en parle */
-  h+='<h2>Qui en parle</h2><p class="note">Les titres comptés sur cinq bords, par formule fixe, sans modèle.</p>'+brows(r);
+  h+='<h2>Qui en parle</h2><p class="note">Les titres, comptés sur cinq bords. Par formule, sans modèle.</p>'+brows(r);
   if(r.kind==='sujet')h+='<div class="chips">'+(r.sil.length?silChip(r)+'<span class="note">Aucun média de '+(r.sil.length>1?'ces côtés':'ce côté')+' n’a de titre rangé sous ce sujet, repris par '+r.nmed+' médias. <a href="#/silences">Tous les silences de l’édition</a>.</span>':r.large?'<span class="note">Gauche, centre et droite ont chacun au moins un titre sur ce sujet.</span>':'<span class="note">Sujet repris par moins de '+MIN+' médias : les silences n’y sont pas relevés.</span>')+'</div>';
   if(r.div!=null){h+='<p><span class="mono">Écart de cadrage</span> <span class="dots" aria-label="'+r.div+' sur 5">'+'●'.repeat(r.div)+'○'.repeat(5-r.div)+'</span> '+r.div+' sur 5'+mdl()+'</p>';}
   /* face à face */
   h+='<h2>'+(r.kind==='sujet'?'Le même fait, trois formulations':'Les titres, côté par côté')+'</h2>';
-  h+='<p class="note">'+(r.analyse?'Les textes d’angle sont écrits par un modèle pour trois côtés seulement, pas pour cinq bords : ':'Les titres sont rangés ici en trois côtés : ')+'gauche et centre gauche, centre, centre droit et droite. Les comptages ci-dessus se font sur cinq bords, et chaque titre porte le bord de son journal.</p><div class="cols">';
+  h+='<p class="note">'+(r.analyse?'Le modèle écrit un angle par côté, pas par bord : ':'Les titres sont rangés ici en trois côtés : ')+'gauche et centre gauche, centre, centre droit et droite. Les comptages ci-dessus se font sur cinq bords, et chaque titre porte le bord de son journal.</p><div class="cols">';
   ['g','c','d'].forEach(function(x){
     var list=r.arts.filter(function(a){return a.grp===x;}).sort(function(a,b){return a.score-b.score;});
     var names=Object.keys(r.med[x]);
     h+='<section class="col s-'+x+'"><header><span>'+GL3[x]+'</span><span class="mono" style="font-weight:400">'+pl(list.length,'titre','titres')+(names.length?' · '+pl(names.length,'média','médias'):'')+'</span></header><div class="body">';
-    if(r.analyse)h+='<div class="angle"><span class="lab mono mute">Angle'+mdl()+'</span>'+esc(r.analyse[x])+'</div>';
+    /* un sujet trop peu repris n'est pas analysé : pas d'angle, donc pas d'étiquette « écrit par un modèle » */
+    if(r.analyse&&r.div!=null)h+='<div class="angle"><span class="lab mono mute">Angle'+mdl()+'</span>'+esc(r.analyse[x])+'</div>';
+    else if(r.kind==='sujet')h+='<div class="angle"><span class="lab mono mute">Angle</span><span class="mute">Sujet non analysé : trop peu repris.</span></div>';
     if(!list.length)h+='<div class="silence">Aucun titre de ce côté'+'<span>'+(r.kind==='sujet'?'Aucun média de ce côté n’apparaît sous ce sujet dans les flux récoltés.':'Aucun titre de ce côté parmi les titres sans jumeau.')+'</span></div>';
     else{
       var first=list.slice(0,5),rest=list.slice(5);

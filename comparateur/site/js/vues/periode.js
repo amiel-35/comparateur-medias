@@ -13,8 +13,8 @@ function vPeriode(type){
      '<span class="ed-j">'+(type==='mois'?'Synthèse du mois':'Synthèse de la semaine')+'</span>'+
      (ap?'<a class="btn sm" href="'+edUrl(ap.jour)+'#/'+type+'" rel="next">suivant →</a>':'<span class="btn sm off" aria-hidden="true">→</span>')+'</nav>';
   h+='<h1 tabindex="-1" id="h1">'+esc(perTitre(p,type))+'</h1>';
-  h+='<p class="lede" style="font-family:var(--serif);font-size:1.2rem;max-width:58ch">Ce que les éditions de la période disent, mises bout à bout : les sujets les plus couverts, ce que chaque bord a traité, et ce qu’il a laissé de côté.</p>';
-  h+='<p class="note">'+pl(p.jours.length,'édition gardée','éditions gardées')+' sur la période'+(p.jours.length<(type==='mois'?28:7)?' : la synthèse est partielle':'')+'. Tout est compté par une formule fixe, sans modèle de langage. Seuls les titres des sujets sont écrits par un modèle.</p>';
+  h+='<p class="lede" style="font-family:var(--serif);font-size:1.2rem;max-width:58ch">Les éditions de la période, mises bout à bout. Les sujets les plus couverts, ce que chaque bord a traité. Et ce qu’il a laissé de côté.</p>';
+  h+='<p class="note">'+pl(p.jours.length,'édition gardée','éditions gardées')+' sur la période'+(p.jours.length<(type==='mois'?28:7)?' : la synthèse est partielle':'')+'. Tout est compté par formule, sans modèle. Seuls les titres des sujets sont écrits par un modèle.</p>';
   h+='<div class="nums"><div><b>'+p.jours.length+'</b><span>'+(p.jours.length>1?'éditions':'édition')+'</span></div><div><b>'+p.sujets+'</b><span>sujets</span></div><div><b>'+p.titres+'</b><span>titres rangés</span></div><div><b>'+p.larges+'</b><span>sujets repris par '+p.min_medias+' médias ou plus</span></div></div>';
   /* les sujets les plus couverts */
   h+='<h2>Les sujets les plus couverts</h2><ol class="ptop">'+p.top.map(function(x){

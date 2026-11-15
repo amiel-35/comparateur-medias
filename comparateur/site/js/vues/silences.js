@@ -7,7 +7,7 @@ function vSilences(){
      (ED.suivant?'<a class="btn sm" href="'+edUrl(ED.suivant)+'#/silences" rel="next">'+esc(jourCourt(ED.suivant))+' →</a>':'<span class="btn sm off" aria-hidden="true">→</span>')+'</nav>';
   h+='<h1 tabindex="-1" id="h1">Les silences</h1>';
   h+='<p class="lede" style="font-family:var(--serif);font-size:1.2rem;max-width:58ch">Les sujets repris par '+MIN+' médias ou plus sur lesquels tout un côté n’a aucun titre : la gauche, le centre ou la droite. Les plus couverts d’abord.</p>';
-  h+='<p class="note">Tout est compté par une formule fixe, sans modèle de langage. Seuls les titres des sujets sont écrits par un modèle.</p>';
+  h+='<p class="note">Tout est compté par formule, sans modèle. Seuls les titres des sujets sont écrits par un modèle.</p>';
   h+='<div class="nums"><div><b>'+LARGES.length+'</b><span>'+(LARGES.length>1?'sujets repris':'sujet repris')+' par '+MIN+' médias ou plus</span></div><div><b>'+tus.length+'</b><span>avec un côté entier silencieux</span></div></div>';
   h+=legende()+'<div class="cols">';
   COTES.forEach(function(x){
@@ -21,8 +21,8 @@ function vSilences(){
     h+='</div></section>';
   });
   h+='</div>';
-  h+='<h2>Comment lire cette page</h2><ul class="lim" style="max-width:68ch"><li><b>Un silence n’est pas une preuve.</b> Il veut dire : aucun titre de ce bord n’a été rangé sous ce sujet dans les flux récoltés. Un journal a pu en parler ailleurs, ou son titre n’a pas été rattaché au sujet.</li>'+
-  '<li><b>Trois côtés, cinq bords.</b> Les barres comptent les titres sur cinq bords. Le silence, lui, se juge sur trois côtés : sur cinq bords, presque chaque sujet aurait un absent, et le repère ne dirait plus rien.</li>'+
+  h+='<h2>Comment lire cette page</h2><ul class="lim" style="max-width:68ch"><li><b>Un silence n’est pas une preuve.</b> Il dit une chose : aucun titre de ce côté n’est rangé sous ce sujet. Un journal a pu en parler ailleurs. Ou son titre n’a pas été rattaché.</li>'+
+  '<li><b>Trois côtés, cinq bords.</b> Les barres comptent les titres sur cinq bords. Le silence se juge sur trois côtés. Sur cinq bords, presque chaque sujet aurait un absent : le repère ne dirait plus rien.</li>'+
   '<li><b>Les côtés n’ont pas le même nombre de journaux.</b> '+COTES.map(function(x){return GL[x].toLowerCase()+' : '+LUSC[x];}).join(' ; ')+'. Un côté de sept journaux se tait plus souvent qu’un côté de douze.</li>'+
   '<li><b>Un seul jour.</b> Un silence dans cette édition n’est pas un silence habituel. Pour la durée : <a href="#/semaine">la semaine</a>, <a href="#/mois">le mois</a>.</li>'+
   (D.absents&&D.absents.length?'<li><b>Flux illisibles :</b> '+D.absents.map(esc).join(', ')+'. Ces journaux ne comptent ni comme présents ni comme silencieux.</li>':'')+'</ul>';
