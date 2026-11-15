@@ -9,8 +9,7 @@ from . import aveugle, base, config, syntheses
 from .fabrique import hors_ecartees, sujets_du_jour
 
 
-SEUILS = ("bords dérivés du score par nos soins : gauche ≤ -1,0 ; centre-gauche ≤ -0,5 ; centre ; "
-          "centre-droit ≥ +0,5 ; droite ≥ +1,0")
+SEUILS = json.load(open(os.path.join(config.ICI, "medias.json"), encoding="utf-8"))["seuils"]
 
 
 def _ecrire(chemin, texte):
@@ -109,6 +108,12 @@ def ecrire_pages(db):
     # Une édition faite avant que les intervalles de confiance soient connus les reçoit ici, sans rien réécrire d'autre.
     fiche = {m["nom"]: m for m in json.load(open(os.path.join(config.ICI, "medias.json"), encoding="utf-8"))["medias"]}
     for _, charge in charges:
+        # Le bord d'un média est sa bande FrIdéo, relue dans son score : les éditions gardées avant le passage
+        # aux sept bandes sont réétiquetées à l'affichage, rien n'est réécrit en base.
+        for m in charge.get("medias", []):
+            if m.get("score") is not None:
+                m["bord"] = base.bord(m["score"])
+        charge.setdefault("classement", {})["seuils"] = SEUILS
         for m in charge.get("classement", {}).get("medias", []):
             if m.get("ic") is None and m["nom"] in fiche:
                 m.update({k: fiche[m["nom"]].get(k) for k in ("ic", "sources")},

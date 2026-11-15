@@ -4,7 +4,7 @@
 @media (min-width:1080px){.mlist{grid-template-columns:repeat(3,minmax(0,1fr))}}
 .mlist a{display:flex;gap:10px;align-items:center;justify-content:space-between;background:var(--paper);border:1px solid var(--line);border-left:8px solid var(--c);padding:8px 10px;text-decoration:none;min-height:48px}
 .mlist a:hover{border-color:var(--ink)}
-.mlist .l-gauche{border-left-color:var(--g)}.mlist .l-centre-gauche{border-left-color:var(--cg)}.mlist .l-centre{border-left-color:var(--c)}.mlist .l-centre-droit{border-left-color:var(--cd)}.mlist .l-droite{border-left-color:var(--d)}
+.mlist .l-extreme-gauche{border-left-color:var(--eg)}.mlist .l-extreme-droite{border-left-color:var(--ed)}.mlist .l-gauche{border-left-color:var(--g)}.mlist .l-centre-gauche{border-left-color:var(--cg)}.mlist .l-centre{border-left-color:var(--c)}.mlist .l-centre-droit{border-left-color:var(--cd)}.mlist .l-droite{border-left-color:var(--d)}
 .mlist b{overflow-wrap:anywhere}
 .mlist small{color:var(--mute);font-family:var(--mono);font-size:.72rem;text-align:right;flex:none}
 .score{font-family:var(--serif);font-size:clamp(2.6rem,9vw,4.4rem);font-weight:700;line-height:1;font-variant-numeric:tabular-nums}

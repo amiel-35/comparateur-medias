@@ -96,13 +96,19 @@ def migrer(db):
     return True
 
 
+BANDES = ("extreme-gauche", "gauche", "centre-gauche", "centre", "centre-droit", "droite", "extreme-droite")
+SEUILS_FRIDEO = (-1.5, -0.75, -0.25, 0.25, 0.75, 1.5)   # `label_cutoffs` du jeu de données FrIdéo v1.0
+
+
 def bord(score):
-    """Découpage en cinq bords à partir du score (choix du comparateur, pas de FrIdéo)."""
-    return ("gauche" if score <= -1.0 else "centre-gauche" if score <= -0.5 else
-            "droite" if score >= 1.0 else "centre-droit" if score >= 0.5 else "centre")
+    """La bande FrIdéo d'un score : sept bandes, avec les seuils publiés par FrIdéo. Ce n'est pas un choix du
+    comparateur : le classement, ses bandes et leurs noms sont ceux du French News Lab."""
+    return BANDES[sum(1 for seuil in SEUILS_FRIDEO if score >= seuil)]
 
 
-COTE = {"gauche": "g", "centre-gauche": "g", "centre": "c", "centre-droit": "d", "droite": "d"}
+# Les trois côtés servent aux textes d'angle et aux silences : c'est le seul regroupement fait par le comparateur.
+COTE = {"extreme-gauche": "g", "gauche": "g", "centre-gauche": "g", "centre": "c",
+        "centre-droit": "d", "droite": "d", "extreme-droite": "d"}
 
 
 def cle_article(media, titre, lien):

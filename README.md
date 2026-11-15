@@ -64,19 +64,23 @@ publie **l'édition du jour**, qui ne bouge plus ensuite.
   changement du gabarit vaut aussi pour les archives.
 - `python -m comparateur tout` refait l'édition du jour ; `python -m comparateur pages` réécrit seulement le site.
 
-## Cinq bords, trois côtés
+## Sept bords, trois côtés
 
-Le score FrIdéo d'un média donne son bord, sur cinq niveaux : gauche, centre gauche, centre, centre droit, droite
-(`base.bord`). Tous les comptages du site se font sur ces cinq bords : cartes de l'accueil, page d'un sujet,
-silences, semaine, mois. Les textes d'angle écrits par le modèle (`analyse.g/c/d`) n'existent que pour trois
-côtés (gauche et centre gauche, centre, centre droit et droite, `base.COTE`) : la page d'un sujet le dit.
+Ce site ne classe aucun média. Le bord d'un média est sa **bande FrIdéo** : sept bandes, avec les noms et les
+seuils publiés par le French News Lab (extrême gauche, gauche, centre gauche, centre, centre droit, droite,
+extrême droite ; seuils −1,5, −0,75, −0,25, +0,25, +0,75, +1,5). `base.bord(score)` applique ces seuils, et un
+test vérifie que le résultat est la bande publiée par FrIdéo pour chacun des trente médias. Tous les comptages
+du site se font sur ces sept bords : cartes de l'accueil, page d'un sujet, silences, semaine, mois.
+
+Le seul regroupement fait par le site est celui des **trois côtés** (`base.COTE`) : les trois bandes de gauche,
+le centre, les trois bandes de droite. Il sert aux textes d'angle écrits par le modèle (`analyse.g/c/d`) et aux
+silences. Une édition gardée avant le passage aux sept bandes est réétiquetée à l'affichage, d'après le score.
 
 ## Les silences
 
 Un **côté** est silencieux sur un sujet quand il n'a aucun titre, que le sujet est repris par
-`syntheses.MIN_MEDIAS` médias ou plus (4) et que ce côté a au moins un média lu. Trois côtés : gauche (gauche
-et centre gauche), centre, droite (centre droit et droite). Les comptages et les barres restent sur cinq bords,
-mais le silence se juge sur trois côtés : sur cinq bords, 21 sujets sur 23 avaient un absent dans l'édition du
+`syntheses.MIN_MEDIAS` médias ou plus (4) et que ce côté a au moins un média lu. Trois côtés : les trois bandes de gauche, le centre, les trois bandes de droite. Les comptages et les barres restent sur sept bords,
+mais le silence se juge sur trois côtés : sur cinq bords, à l'époque où le site en comptait cinq, 21 sujets sur 23 avaient un absent dans l'édition du
 15/11/2026, contre 7 sur trois côtés. Un repère présent partout ne dit plus rien. Tout est compté par formule,
 sans modèle. La vue `#/silences` liste les silences de l'édition affichée, côté par côté, les sujets les plus
 couverts d'abord ; dans les synthèses, le silence d'un côté est compté pour chacun de ses bords lus.
@@ -85,7 +89,7 @@ couverts d'abord ; dans les synthèses, le silence d'un côté est compté pour 
 
 Un sujet garde son identifiant (`s45`) d'une édition à l'autre. À chaque écriture des pages,
 `publier.ecrire_pages` calcule sa présence dans toutes les éditions gardées (`syntheses.suivi` : jour, titres,
-médias, répartition sur cinq bords, côtés silencieux) et l'injecte dans la page (`suivi`). Quand un sujet figure
+médias, répartition sur sept bords, côtés silencieux) et l'injecte dans la page (`suivi`). Quand un sujet figure
 dans plus d'une édition, sa page montre une frise jour par jour ; chaque jour mène à
 `/editions/<jour>.html#/sujet/<id>`. Rien n'est ajouté aux éditions gardées en base.
 
@@ -105,7 +109,7 @@ ne dit rien de sa rubrique n'est pas écarté.
 
 ## La semaine et le mois
 
-`syntheses.py` met bout à bout les éditions gardées : les sujets les plus couverts, ce que chacun des cinq bords
+`syntheses.py` met bout à bout les éditions gardées : les sujets les plus couverts, ce que chacun des sept bords
 a traité et laissé de côté, la présence de chaque journal. Ce sont des comptages, sans modèle. Un sujet qui dure garde
 le même identifiant d'un jour à l'autre, ce qui permet de le suivre ; deux sujets ouverts séparément sur le
 même fait sont comptés deux fois. Les synthèses sont recalculées à chaque publication et s'ouvrent depuis

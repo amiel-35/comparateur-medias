@@ -1,4 +1,4 @@
-/* Les données de l'édition, préparées une fois : médias, sujets, comptages sur cinq bords, silences, dates. */
+/* Les données de l'édition, préparées une fois : médias, sujets, comptages sur sept bords, silences, dates. */
 /* médias */
 var lus={};D.medias.forEach(function(m){lus[m.nom]=m;});
 var MEDIAS=C.medias.map(function(m){var l=lus[m.nom];return {nom:m.nom,score:m.score,note:m.note||null,lu:!!l,bord:l?l.bord:bordOf(m.score),ic:m.ic||null,sources:m.sources||null,peu:!!m.peu_documente};});
@@ -21,9 +21,9 @@ rounds.forEach(function(r,i){
   BORDS.forEach(function(b){r.par[b]=0;r.medb[b]={};});
   r.arts.forEach(function(a){r.count[a.grp]++;r.med[a.grp][a.media]=1;r.par[a.bord]++;r.medb[a.bord][a.media]=1;});
   r.nmed=Object.keys(Object.assign({},r.med.g,r.med.c,r.med.d)).length;
-  /* bord sans titre : un bord qui a au moins un média lu et aucun titre sous ce sujet (détail, sur cinq bords).
+  /* bord sans titre : un bord qui a au moins un média lu et aucun titre sous ce sujet (détail, sur sept bords).
      Un silence : tout un côté (g, c ou d) sans aucun titre, sur un sujet repris par MIN médias ou plus.
-     Sur cinq bords, presque chaque sujet aurait un absent : le repère ne dirait plus rien. */
+     Sur sept bords, presque chaque sujet aurait un absent : le repère ne dirait plus rien. */
   r.mortes=BORDS.filter(function(b){return LUS[b]>0&&r.par[b]===0;});
   r.large=r.kind==='sujet'&&r.nmed>=MIN;
   r.sil=r.large?COTES.filter(function(x){return LUSC[x]>0&&r.count[x]===0;}):[];

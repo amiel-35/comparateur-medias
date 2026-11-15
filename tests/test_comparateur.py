@@ -78,8 +78,13 @@ class Analyse(unittest.TestCase):
         self.assertEqual((texte, n), ("Parle de « rodéo urbain » et de chaos total.", 1))
 
     def test_bords(self):
-        self.assertEqual([base.bord(x) for x in (-2.4, -0.7, 0.1, 0.6, 1.02)],
-                         ["gauche", "centre-gauche", "centre", "centre-droit", "droite"])
+        # les sept bandes de FrIdéo, avec ses seuils (-1,5 ; -0,75 ; -0,25 ; +0,25 ; +0,75 ; +1,5)
+        self.assertEqual([base.bord(x) for x in (-2.41, -1.0, -0.71, 0.1, 0.36, 1.02, 1.87)],
+                         ["extreme-gauche", "gauche", "centre-gauche", "centre", "centre-droit", "droite", "extreme-droite"])
+        # la bande calculée est celle que FrIdéo publie, pour chacun des trente médias
+        ref = json.load(open(os.path.join(base.config.ICI, "medias.json"), encoding="utf-8"))["medias"]
+        self.assertEqual([m["nom"] for m in ref if base.bord(m["score"]) != m["bande"]], [])
+        self.assertEqual(sorted(set(base.COTE.values())), ["c", "d", "g"])
 
 
 class Chaine(unittest.TestCase):
@@ -266,7 +271,7 @@ class Editions(unittest.TestCase):
         self.assertEqual(un["suivi"], deux["suivi"])               # le même suivi, vu des deux éditions
         self.assertEqual([(x["jour"], x["titres"], x["medias"]) for x in un["suivi"]["s1"]],
                          [("2026-01-01", 4, 4), ("2026-01-02", 2, 2)])
-        self.assertEqual(un["suivi"]["s1"][0]["par"], {"gauche": 1, "centre-gauche": 0, "centre": 2, "centre-droit": 0, "droite": 1})
+        self.assertEqual(un["suivi"]["s1"][0]["par"], {"extreme-gauche": 0, "gauche": 1, "centre-gauche": 0, "centre": 2, "centre-droit": 0, "droite": 1, "extreme-droite": 0})
         self.assertEqual(un["suivi"]["s1"][1]["par"]["centre"], 2)
         self.assertEqual(trois["suivi"], {})
         self.assertEqual(un["min_medias"], syntheses.MIN_MEDIAS)
@@ -468,7 +473,7 @@ class Syntheses(unittest.TestCase):
         greve = s["top"][0]
         self.assertEqual((greve["id"], greve["titre"], greve["jours"], greve["medias"], greve["ecart"]), ("s1", "Grève, suite", 2, 5, 4))
         self.assertEqual(greve["titres"], 5)                      # un article repris le lendemain ne compte qu'une fois
-        self.assertEqual(greve["par"], {"gauche": 1, "centre-gauche": 0, "centre": 2, "centre-droit": 1, "droite": 1})
+        self.assertEqual(greve["par"], {"extreme-gauche": 0, "gauche": 1, "centre-gauche": 0, "centre": 2, "centre-droit": 1, "droite": 1, "extreme-droite": 0})
         self.assertEqual(list(s["bords"]), list(syntheses.BORDS))  # cinq bords, de la gauche à la droite
         self.assertEqual(s["bords"]["gauche"]["silences"], 1)      # la gauche n'a rien sur le budget
         self.assertEqual(s["bords"]["gauche"]["tus"], [{"id": "s2", "titre": "Budget", "dernier": "2026-11-09", "medias": 4}])
@@ -493,9 +498,9 @@ class Syntheses(unittest.TestCase):
         e["sujets"][0]["articles"].append({"media": "Gauche Soir", "titre": "Grève ter", "lien": "https://x.test/s1/ter"})
         b = syntheses.toutes([("2026-11-09", e)])[0]["2026-S46"]["bords"]
         self.assertEqual({k: v["silences"] for k, v in b.items()},
-                         {"gauche": 0, "centre-gauche": 0, "centre": 0, "centre-droit": 1, "droite": 1})
-        self.assertEqual(syntheses.silencieux({"gauche": 2, "centre-gauche": 0, "centre": 2, "centre-droit": 0, "droite": 0},
-                                              {"gauche": 2, "centre-gauche": 0, "centre": 2, "centre-droit": 1, "droite": 1}, 4), ["d"])
+                         {"extreme-gauche": 0, "gauche": 0, "centre-gauche": 0, "centre": 0, "centre-droit": 1, "droite": 1, "extreme-droite": 0})
+        self.assertEqual(syntheses.silencieux({"extreme-gauche": 0, "gauche": 2, "centre-gauche": 0, "centre": 2, "centre-droit": 0, "droite": 0, "extreme-droite": 0},
+                                              {"extreme-gauche": 0, "gauche": 2, "centre-gauche": 0, "centre": 2, "centre-droit": 1, "droite": 1, "extreme-droite": 0}, 4), ["d"])
         # en dessous de MIN_MEDIAS médias, un silence ne dit rien
         petit = self.edition([("s1", "Grève", 2, ["Gauche Hebdo", "Le Milieu", "Centre Info"])])
         b = syntheses.toutes([("2026-11-09", petit)])[0]["2026-S46"]["bords"]
@@ -508,7 +513,7 @@ class Syntheses(unittest.TestCase):
         suivi = syntheses.suivi([("2026-11-09", lundi), ("2026-11-10", mardi)])
         self.assertEqual([x["jour"] for x in suivi["s1"]], ["2026-11-09", "2026-11-10"])
         self.assertEqual(suivi["s1"][0], {"jour": "2026-11-09", "titres": 4, "medias": 4, "silences": [],
-                                          "par": {"gauche": 1, "centre-gauche": 0, "centre": 2, "centre-droit": 0, "droite": 1}})
+                                          "par": {"extreme-gauche": 0, "gauche": 1, "centre-gauche": 0, "centre": 2, "centre-droit": 0, "droite": 1, "extreme-droite": 0}})
         self.assertEqual((suivi["s1"][1]["titres"], suivi["s1"][1]["medias"], suivi["s1"][1]["silences"]), (3, 3, []))
         self.assertEqual(len(suivi["s2"]), 1)
 

@@ -11,8 +11,8 @@ function edNav(){
 function mdl(){return '<span class="mdl" title="Écrit par un modèle de langage">écrit par un modèle</span>';}
 function bchip(b){return '<span class="bchip b-'+b+'">'+BL[b]+'</span>';}
 function bl(b){return BL[b].toLowerCase();}
-function legende(){return '<div class="legend">'+BORDS.map(function(b){return '<span><i class="b-'+b+'"></i>'+BL[b]+'</span>';}).join('')+'<span>Cinq bords, tirés du score FrIdéo par ce site</span></div>';}
-/* la répartition des titres sur cinq bords : une case par bord, hachurée quand le bord n'a aucun titre */
+function legende(){return '<div class="legend">'+BORDS.map(function(b){return '<span><i class="b-'+b+'"></i>'+BL[b]+'</span>';}).join('')+'<span>Les sept bandes du classement FrIdéo</span></div>';}
+/* la répartition des titres sur sept bords : une case par bord, hachurée quand le bord n'a aucun titre */
 function bar5(par){
   return '<span class="pbar" role="img" aria-label="Titres par bord : '+BORDS.map(function(b){return bl(b)+' '+(par[b]||0);}).join(', ')+'">'+BORDS.map(function(b){
     var n=par[b]||0;

@@ -22,7 +22,7 @@ function vPeriode(type){
       bar5(x.par)+'</li>';
   }).join('')+'</ol>'+legende();
   /* par bord */
-  h+='<h2>Par bord</h2><p class="note">Cinq bords, tirés du score FrIdéo par ce site. Un silence : un sujet repris par '+p.min_medias+' médias ou plus, sans aucun titre de tout un côté (gauche et centre gauche, centre, ou centre droit et droite). Il est compté pour chaque bord de ce côté.</p><div class="cols cinq">';
+  h+='<h2>Par bord</h2><p class="note">Les sept bandes du classement FrIdéo. Un silence : un sujet repris par '+p.min_medias+' médias ou plus, sans aucun titre de tout un côté (les bandes de gauche (extrême gauche, gauche, centre gauche), le centre, les bandes de droite (centre droit, droite, extrême droite)). Il est compté pour chaque bord de ce côté.</p><div class="cols cinq">';
   BORDS.forEach(function(c){
     var b=p.bords[c];if(!b)return;
     h+='<section class="col k-'+c+'"><header><span>'+BL[c]+'</span><span class="mono" style="font-weight:400">'+pl(b.medias,'journal lu','journaux lus')+' · '+pl(b.titres,'titre','titres')+'</span></header><div class="body">';

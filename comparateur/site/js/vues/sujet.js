@@ -1,5 +1,5 @@
 /* Page d'un sujet. */
-/* un bord par ligne : qui en parle, sur cinq bords */
+/* un bord par ligne : qui en parle, sur sept bords */
 function brows(r){
   var mx=1;BORDS.forEach(function(b){mx=Math.max(mx,r.par[b]);});
   return '<ul class="brows">'+BORDS.map(function(b){
@@ -33,12 +33,12 @@ function sujetView(r){
   '<p class="mono mute">Sujet '+r.n+' sur '+rounds.length+'</p><h1 tabindex="-1" id="h1">'+esc(r.titre)+(r.kind==='sujet'?mdl():'')+'</h1>';
   if(r.fait)h+='<div class="fait"><span class="mono">Le fait commun'+mdl()+'</span><p>'+esc(r.fait)+'</p></div>';
   /* qui en parle */
-  h+='<h2>Qui en parle</h2><p class="note">Les titres, comptés sur cinq bords. Par formule, sans modèle.</p>'+brows(r);
+  h+='<h2>Qui en parle</h2><p class="note">Les titres, comptés sur les sept bandes de FrIdéo. Par formule, sans modèle.</p>'+brows(r);
   if(r.kind==='sujet')h+='<div class="chips">'+(r.sil.length?silChip(r)+'<span class="note">Aucun média de '+(r.sil.length>1?'ces côtés':'ce côté')+' n’a de titre rangé sous ce sujet, repris par '+r.nmed+' médias. <a href="#/silences">Tous les silences de l’édition</a>.</span>':r.large?'<span class="note">Gauche, centre et droite ont chacun au moins un titre sur ce sujet.</span>':'<span class="note">Sujet repris par moins de '+MIN+' médias : les silences n’y sont pas relevés.</span>')+'</div>';
   if(r.div!=null){h+='<p><span class="mono">Écart de cadrage</span> <span class="dots" aria-label="'+r.div+' sur 5">'+'●'.repeat(r.div)+'○'.repeat(5-r.div)+'</span> '+r.div+' sur 5'+mdl()+'</p>';}
   /* face à face */
   h+='<h2>'+(r.kind==='sujet'?'Le même fait, trois formulations':'Les titres, côté par côté')+'</h2>';
-  h+='<p class="note">'+(r.analyse?'Le modèle écrit un angle par côté, pas par bord : ':'Les titres sont rangés ici en trois côtés : ')+'gauche et centre gauche, centre, centre droit et droite. Les comptages ci-dessus se font sur cinq bords, et chaque titre porte le bord de son journal.</p><div class="cols">';
+  h+='<p class="note">'+(r.analyse?'Le modèle écrit un angle par côté, pas par bord : ':'Les titres sont rangés ici en trois côtés : ')+'les bandes de gauche (extrême gauche, gauche, centre gauche), le centre, les bandes de droite (centre droit, droite, extrême droite). Les comptages ci-dessus se font sur sept bords, et chaque titre porte le bord de son journal.</p><div class="cols">';
   ['g','c','d'].forEach(function(x){
     var list=r.arts.filter(function(a){return a.grp===x;}).sort(function(a,b){return a.score-b.score;});
     var names=Object.keys(r.med[x]);

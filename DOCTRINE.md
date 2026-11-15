@@ -30,7 +30,7 @@ Le squelette nomme chaque morceau par une ligne `/*INCLURE chemin*/`. L'ordre de
 
 1. **Une vue, un fichier.** Une vue a son fichier dans `js/vues/` et, si elle a des styles propres, sa feuille
    dans `styles/`. Modifier une vue ne demande d'ouvrir que ces deux fichiers.
-2. **Ce qui sert deux fois va dans le commun.** Une brique utilisée par deux vues (barre sur cinq bords,
+2. **Ce qui sert deux fois va dans le commun.** Une brique utilisée par deux vues (barre sur sept bords,
    étiquette « écrit par un modèle », légende, navigation des éditions) vit dans `js/commun.js` et
    `styles/commun.css`. Une vue ne la réécrit pas.
 3. **Les morceaux JavaScript sont les fragments d'une même fonction.** Ils partagent leurs variables et ne

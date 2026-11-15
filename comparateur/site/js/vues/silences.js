@@ -22,8 +22,8 @@ function vSilences(){
   });
   h+='</div>';
   h+='<h2>Comment lire cette page</h2><ul class="lim" style="max-width:68ch"><li><b>Un silence n’est pas une preuve.</b> Il dit une chose : aucun titre de ce côté n’est rangé sous ce sujet. Un journal a pu en parler ailleurs. Ou son titre n’a pas été rattaché.</li>'+
-  '<li><b>Trois côtés, cinq bords.</b> Les barres comptent les titres sur cinq bords. Le silence se juge sur trois côtés. Sur cinq bords, presque chaque sujet aurait un absent : le repère ne dirait plus rien.</li>'+
-  '<li><b>Les côtés n’ont pas le même nombre de journaux.</b> '+COTES.map(function(x){return GL[x].toLowerCase()+' : '+LUSC[x];}).join(' ; ')+'. Un côté de sept journaux se tait plus souvent qu’un côté de douze.</li>'+
+  '<li><b>Trois côtés, sept bords.</b> Les barres comptent les titres sur les sept bandes de FrIdéo. Le silence se juge sur trois côtés : les bandes de gauche (extrême gauche, gauche, centre gauche), le centre, les bandes de droite (centre droit, droite, extrême droite). Sur sept bords, presque chaque sujet aurait un absent : le repère ne dirait plus rien.</li>'+
+  '<li><b>Les côtés n’ont pas le même nombre de journaux.</b> '+COTES.map(function(x){return GL[x].toLowerCase()+' : '+LUSC[x];}).join(' ; ')+'. Un côté qui compte moins de journaux se tait plus souvent.</li>'+
   '<li><b>Un seul jour.</b> Un silence dans cette édition n’est pas un silence habituel. Pour la durée : <a href="#/semaine">la semaine</a>, <a href="#/mois">le mois</a>.</li>'+
   (D.absents&&D.absents.length?'<li><b>Flux illisibles :</b> '+D.absents.map(esc).join(', ')+'. Ces journaux ne comptent ni comme présents ni comme silencieux.</li>':'')+'</ul>';
   return h;

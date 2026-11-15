@@ -10,12 +10,15 @@ from . import base
 
 TOP = 15          # sujets montrés
 MIN_MEDIAS = 4    # en dessous, un silence ne dit rien
-BORDS = ("gauche", "centre-gauche", "centre", "centre-droit", "droite")
+BORDS = base.BANDES   # les sept bandes de FrIdéo
 
 
 def bords_des_medias(charge):
     """{nom du média: bord} d'une édition. Une édition très ancienne sans bord le retrouve par le score."""
-    return {m["nom"]: m.get("bord") or base.bord(m.get("score", 0.0)) for m in charge.get("medias", [])}
+    # La bande se relit toujours dans le score : une édition gardée avant le passage aux sept bandes de FrIdéo
+    # porte encore l'ancien découpage, qu'on ne réutilise pas.
+    return {m["nom"]: base.bord(m["score"]) if m.get("score") is not None else m.get("bord")
+            for m in charge.get("medias", [])}
 
 
 def medias_lus(bord):
@@ -24,7 +27,7 @@ def medias_lus(bord):
 
 
 def repartition(medias, bord):
-    """Titres par bord (cinq niveaux). medias : le média de chaque titre."""
+    """Titres par bord (les sept bandes de FrIdéo). medias : le média de chaque titre."""
     par = dict.fromkeys(BORDS, 0)
     for m in medias:
         if bord.get(m) in par:
@@ -34,9 +37,9 @@ def repartition(medias, bord):
 
 def silencieux(par, lus, medias):
     """Côtés silencieux sur un sujet (« g », « c », « d ») : aucun titre de tout un côté, alors que le sujet est
-    repris par MIN_MEDIAS médias ou plus et que ce côté a au moins un média lu. Les comptages se font sur cinq
-    bords, mais sur cinq bords presque chaque sujet aurait un absent : le silence se juge donc sur trois côtés
-    (gauche et centre gauche, centre, centre droit et droite)."""
+    repris par MIN_MEDIAS médias ou plus et que ce côté a au moins un média lu. Les comptages se font sur sept
+    bords, mais sur sept bords presque chaque sujet aurait un absent : le silence se juge donc sur trois côtés
+    (les trois bandes de gauche, le centre, les trois bandes de droite)."""
     if medias < MIN_MEDIAS:
         return []
     return [c for c in "gcd" if sum(lus.get(b, 0) for b in BORDS if base.COTE[b] == c)
@@ -77,7 +80,7 @@ def bornes_mois(jour):
 
 def periode(editions, cle, debut, fin):
     """editions : [(jour, charge)] de la période, dans l'ordre. Rend la synthèse, prête à afficher.
-    Les comptages et les silences se font sur cinq bords."""
+    Les comptages se font sur les sept bandes de FrIdéo, les silences sur trois côtés."""
     bord, sujets = {}, {}
     for jour, d in editions:
         bord.update(bords_des_medias(d))
