@@ -13,7 +13,7 @@ function route(opt){
   else if(v==='silences')html=vSilences();
   else if(v==='pourquoi'){html=vPourquoi();nav='';}
   else if(v==='mentions'){html=vMentions();nav='';}
-  else if(v==='installer'){html=vInstaller();nav='';}
+  else if(v==='installer')html=vInstaller();
   else{html=vHome();nav='home';}
   var y=window.scrollY;
   app.innerHTML=html;
@@ -24,6 +24,9 @@ function route(opt){
   document.title=(app.querySelector('h1')?app.querySelector('h1').textContent.replace(/écrit par un modèle/,'').trim()+' · ':'')+'Cadrages';
 }
 window.addEventListener('hashchange',function(){route();});
+/* « Par mail » dans l'en-tête : vers l'inscription de la page Semaine, seulement si le mail est en service */
+(function(){var m=document.getElementById('btnMail');if(!m||!DONNEES.mail)return;m.hidden=false;
+  m.addEventListener('click',function(){if(location.hash==='#/semaine/mail')route();});})();
 
 /* L'application installable. Le service worker est enregistré s'il existe dans ce navigateur, sans erreur sinon.
    L'invitation à installer (beforeinstallprompt, Chrome, Edge, Android) est gardée pour le bouton de #/installer :
@@ -53,7 +56,7 @@ app.addEventListener('click',function(e){
 
 function effDark(){return S.theme?S.theme==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;}
 function applyTheme(){var d=document.documentElement;if(S.theme)d.setAttribute('data-theme',S.theme);else d.removeAttribute('data-theme');
-  var b=document.getElementById('btnTheme');b.textContent=effDark()?'Thème : sombre':'Thème : clair';}
+  var b=document.getElementById('btnTheme');var t=effDark()?'Thème : sombre':'Thème : clair';b.innerHTML='<span class="th-i" aria-hidden="true">◐</span><span class="th-t">'+t+'</span>';b.title=t;}
 document.getElementById('btnTheme').addEventListener('click',function(){S.theme=effDark()?'light':'dark';save();applyTheme();});
 try{window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',applyTheme);}catch(_){}
 

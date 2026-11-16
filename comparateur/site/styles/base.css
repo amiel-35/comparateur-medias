@@ -50,16 +50,20 @@ nav.aide{display:flex;gap:2px 12px;order:4;width:100%;font-family:var(--mono);fo
 nav.aide a{color:var(--mute);text-decoration:none;border-bottom:2px solid transparent;padding:2px 0}
 nav.aide a:hover{color:var(--ink)}
 .brand{order:1}.tools{order:2}
-.tools{display:flex;gap:8px}
+.tools{display:flex;gap:8px;align-items:center}
+.tools .btn{text-decoration:none;white-space:nowrap;display:inline-flex;align-items:center}
+.tools .btn[hidden]{display:none}
+.th-i{display:none;font-size:1.05rem;line-height:1}
 .btn{border:2px solid var(--ink);background:var(--paper);padding:8px 12px;font-weight:700;font-size:.9rem;border-radius:0;min-height:40px}
 .btn:hover{background:var(--ink);color:var(--bg)}
 .btn.hl{background:var(--hl);color:var(--hl-on);border-color:var(--ink)}
 .btn.hl:hover{background:var(--ink);color:var(--hl)}
 .btn.sm{padding:5px 9px;font-size:.82rem;min-height:32px}
+@media (max-width:559px){ .th-i{display:inline} .th-t{display:none} }
 @media (max-width:379px){ nav.main a{font-size:.86rem;padding:6px 5px} nav.main{margin:0 -5px} }
-@media (min-width:560px){ nav.aide{order:2;width:auto} .tools{order:3} nav.main{order:4} }
+@media (min-width:700px){ nav.aide{order:2;width:auto} .tools{order:3} nav.main{order:4} }
 @media (min-width:760px){ .top{position:sticky;top:0} }
-@media (min-width:1000px){ .top .wrap{flex-wrap:nowrap} .brand{margin-right:12px} nav.main{order:2;width:auto;margin:0 auto 0 0} nav.aide{order:3} .tools{order:4} }
+@media (min-width:1080px){ .top .wrap{flex-wrap:nowrap} .brand{margin-right:12px} nav.main{order:2;width:auto;margin:0 auto 0 0} nav.aide{order:3} .tools{order:4} }
 
 main{padding-bottom:64px;min-height:70vh}
 main:focus,h1:focus{outline:none}
