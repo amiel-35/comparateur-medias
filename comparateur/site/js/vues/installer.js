@@ -39,7 +39,7 @@ function vInstaller(){
       '<h3>Mac et Linux</h3><p>Sur Mac, Firefox n’installe pas les sites comme des applications. Sur Linux, la fonction est éteinte par défaut. Safari, Chrome ou Edge le font, voir plus haut.</p>']
   };
   var ordre=[ici].concat(['ios','mac','android','ordi','firefox'].filter(function(k){return k!==ici;}));
-  var h='<p class="crumb"><a href="#/">Sujets</a> / Installer</p><h1 tabindex="-1" id="h1">Cadrages s’installe comme une application, sans passer par un magasin</h1>';
+  var h='<h1 tabindex="-1" id="h1">Cadrages s’installe comme une application, sans passer par un magasin</h1>';
   h+='<div class="prose"><p>Une fois installé, Cadrages s’ouvre depuis l’écran d’accueil, le Dock ou la barre des tâches, dans sa propre fenêtre. Rien à télécharger, aucun compte. Hors connexion, les dernières pages lues restent lisibles.</p></div>';
   if(installe())h+='<p class="inst-ok">Cadrages tourne déjà en application sur cet appareil. Rien d’autre à faire.</p>';
   else if(INVITE)h+='<p class="inst-ok"><button class="btn hl" id="btnInstaller" type="button">Installer</button> Ce navigateur sait installer Cadrages en un clic.</p>';

@@ -9,15 +9,15 @@ function route(opt){
   else if(v==='demarche')html=vDemarche();
   else if(v==='origine')html=vOrigine();
   else if(v==='editions'){html=vEditions();nav='home';}
-  else if(v==='semaine'||v==='mois'){html=vPeriode(v);nav='home';}
-  else if(v==='silences'){html=vSilences();nav='home';}
-  else if(v==='pourquoi'){html=vPourquoi();nav='home';}
-  else if(v==='mentions'){html=vMentions();nav='home';}
-  else if(v==='installer'){html=vInstaller();nav='home';}
+  else if(v==='semaine'||v==='mois')html=vPeriode(v);
+  else if(v==='silences')html=vSilences();
+  else if(v==='pourquoi'){html=vPourquoi();nav='';}
+  else if(v==='mentions'){html=vMentions();nav='';}
+  else if(v==='installer'){html=vInstaller();nav='';}
   else{html=vHome();nav='home';}
   var y=window.scrollY;
   app.innerHTML=html;
-  document.querySelectorAll('nav.main a').forEach(function(a){if(a.getAttribute('data-nav')===nav)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});
+  document.querySelectorAll('nav.main a,nav.aide a').forEach(function(a){if(a.getAttribute('data-nav')===nav)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});
   if(opt&&opt.keep){window.scrollTo(0,y);if(opt.focus){var f=app.querySelector(opt.focus);if(f)f.focus({preventScroll:true});}}
   else{window.scrollTo(0,0);var h1=document.getElementById('h1')||app.querySelector('h1');if(h1){h1.setAttribute('tabindex','-1');h1.focus({preventScroll:true});}}
   if(v==='semaine'&&parts[1]==='mail'){var em=document.getElementById('mailAdr');if(em){em.scrollIntoView({block:'center'});em.focus({preventScroll:true});}}

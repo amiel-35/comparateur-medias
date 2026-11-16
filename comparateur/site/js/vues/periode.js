@@ -16,10 +16,10 @@ function perTitre(p,type){
 }
 function vPeriode(type){
   var nomV=type==='mois'?'Mois':'Semaine';
-  if(!PER)return '<p class="crumb"><a href="#/">Sujets</a> / '+nomV+'</p><h1 tabindex="-1" id="h1">'+nomV+'</h1><p class="vide">Pas encore de synthèse.</p>';
+  if(!PER)return '<h1 tabindex="-1" id="h1">'+nomV+'</h1><p class="vide">Pas encore de synthèse.</p>';
   var p=type==='mois'?PER.mois:PER.semaine, liste=type==='mois'?PER.mois_liste:PER.semaines;
   var i=liste.map(function(x){return x.cle;}).indexOf(p.cle), av=i>0?liste[i-1]:null, ap=i>=0&&i<liste.length-1?liste[i+1]:null;
-  var h='<p class="crumb"><a href="#/">Sujets</a> / '+nomV+'</p>';
+  var h='';
   h+='<nav class="ed" aria-label="Périodes">'+(av?'<a class="btn sm" href="'+edUrl(av.jour)+'#/'+type+'" rel="prev">← précédent</a>':'<span class="btn sm off" aria-hidden="true">←</span>')+
      '<span class="ed-j">'+(type==='mois'?'Synthèse du mois':'Synthèse de la semaine')+'</span>'+
      (ap?'<a class="btn sm" href="'+edUrl(ap.jour)+'#/'+type+'" rel="next">suivant →</a>':'<span class="btn sm off" aria-hidden="true">→</span>')+'</nav>';

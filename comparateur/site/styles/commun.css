@@ -25,6 +25,7 @@
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .am{color:#14130f}}
 .dots{letter-spacing:2px;font-size:.9rem}
 .crumb{font-size:.85rem;margin:22px 0 10px}
+#app>h1:first-child,#app>nav.ed:first-child{margin-top:22px}
 .cols{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
 @media (min-width:900px){.cols{grid-template-columns:repeat(3,minmax(0,1fr))}}
 .col{background:var(--paper);border:2px solid var(--ink);display:flex;flex-direction:column;min-width:0}

@@ -1,6 +1,6 @@
 /* médias */
 function vMedias(){
-  var h='<p class="crumb"><a href="#/">Sujets</a> / Médias</p><h1 tabindex="-1" id="h1">Les médias</h1>'+
+  var h='<h1 tabindex="-1" id="h1">Les médias</h1>'+
   '<p class="lede" style="font-family:var(--serif);font-size:1.2rem;max-width:56ch">Pour chaque média : sa place dans le classement, ses titres du jour, les sujets qu’il couvre. Et ceux où il manque.</p>';
   BORDS.forEach(function(b){
     var l=MEDIAS.filter(function(m){return m.bord===b;}).sort(function(x,y){return x.score-y.score;});
@@ -13,7 +13,7 @@ function vMedias(){
 }
 function vMedia(nom){
   var m=BY[nom];if(!m)return vMedias();
-  var h='<p class="crumb"><a href="#/">Sujets</a> / <a href="#/medias">Médias</a> / '+esc(m.nom)+'</p><h1 tabindex="-1" id="h1">'+esc(m.nom)+'</h1>';
+  var h='<p class="crumb"><a href="#/medias">Médias</a> / '+esc(m.nom)+'</p><h1 tabindex="-1" id="h1">'+esc(m.nom)+'</h1>';
   h+='<p style="margin:14px 0 0"><span class="score">'+fs(m.score)+'</span> '+bchip(m.bord)+'</p>';
   var pos=(m.score+2.6)/4.8*100;
   h+='<div class="mini" role="img" aria-label="Position sur l’axe du panel"><i style="left:calc('+pos+'% - 2px)"></i></div><p class="note" style="display:flex;justify-content:space-between"><span>← plus à gauche que la moyenne</span><span>plus à droite →</span></p>';

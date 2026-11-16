@@ -29,7 +29,7 @@ function titleLi(r,a){
   return '<li><div class="who"><a class="mname mchip" href="#/media/'+enc(a.media)+'">'+esc(a.media)+'</a>'+bchip(a.bord)+'</div><a class="t" href="'+url(a.lien)+'" target="_blank" rel="noopener noreferrer">'+esc(a.titre)+' ↗</a></li>';
 }
 function sujetView(r){
-  var h='<div><p class="crumb"><a href="#/">Sujets</a> / Sujet '+r.n+'</p>'+
+  var h='<div><p class="crumb"><a href="#/">Les sujets du jour</a> / Sujet '+r.n+'</p>'+
   '<p class="mono mute">Sujet '+r.n+' sur '+rounds.length+'</p><h1 tabindex="-1" id="h1">'+esc(r.titre)+(r.kind==='sujet'?mdl():'')+'</h1>';
   if(r.fait)h+='<div class="fait"><span class="mono">Le fait commun'+mdl()+'</span><p>'+esc(r.fait)+'</p></div>';
   /* qui en parle */

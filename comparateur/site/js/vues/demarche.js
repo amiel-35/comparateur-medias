@@ -2,7 +2,7 @@
 function vDemarche(){
   var tot=0;D.sujets.forEach(function(s){tot+=s.articles.length;});
   var dt=new Date(D.recolte).toLocaleString('fr-FR',{timeZone:'Europe/Paris',day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
-  var h='<p class="crumb"><a href="#/">Sujets</a> / Démarche</p><h1 tabindex="-1" id="h1">Ce que fait le programme, ce que fait le modèle</h1>'+
+  var h='<h1 tabindex="-1" id="h1">Ce que fait le programme, ce que fait le modèle</h1>'+
   '<p class="lede" style="font-family:var(--serif);font-size:1.2rem;max-width:56ch">Quatre étapes entre un flux RSS et cette page. Deux passent par un modèle de langage. Deux non.</p>';
   h+='<h2>Pourquoi des titres</h2><p style="max-width:68ch">Le titre, c’est ce qu’une rédaction choisit de mettre en avant. Plusieurs titres d’un même fait, côte à côte : on voit ce que chaque bord retient, avec quels mots. Et ce qu’il laisse de côté.</p>';
   h+='<div class="nums"><div><b>'+D.total+'</b><span>titres récoltés sur '+D.heures+' h</span></div><div><b>'+D.medias.length+'</b><span>médias lus sur '+MEDIAS.length+'</span></div><div><b>'+D.sujets.length+'</b><span>sujets, '+tot+' titres rangés</span></div><div><b>'+D.seuls.length+'</b><span>titres sans jumeau</span></div></div>';

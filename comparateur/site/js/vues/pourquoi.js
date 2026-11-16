@@ -1,6 +1,6 @@
 /* Pourquoi ce site : l'explication, sortie de l'accueil pour laisser la place aux sujets. */
 function vPourquoi(){
-  return '<p class="crumb"><a href="#/">Sujets</a> / Pourquoi ce site</p><h1 tabindex="-1" id="h1">Pourquoi ce site</h1>'+
+  return '<h1 tabindex="-1" id="h1">Pourquoi ce site</h1>'+
   '<div class="prose"><p>Un même fait n’est pas titré de la même façon partout. Ce site met les titres côte à côte pour le montrer : qui en parle, avec quels mots, et qui n’en parle pas.</p>'+
   '<p>Il ne dit pas qui a raison. Il ne classe pas les journaux : le classement vient de FrIdéo, une étude publiée par le French News Lab. <a href="#/classement">Voir le classement</a>.</p>'+
   '<p>Un journal classé « à gauche » est plus à gauche que les autres journaux du panel. Ça ne veut pas dire qu’il est de gauche.</p></div>'+

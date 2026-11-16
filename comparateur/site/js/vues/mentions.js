@@ -3,7 +3,7 @@
 function vMentions(){
   var UM=D.mesure==='umami';
   var mail='<a href="mailto:amiel@inflexion.me">amiel@inflexion.me</a>';
-  return '<p class="crumb"><a href="#/">Sujets</a> / Mentions légales</p><h1 tabindex="-1" id="h1">Ce site ne dépose aucun cookie</h1>'+
+  return '<h1 tabindex="-1" id="h1">Ce site ne dépose aucun cookie</h1>'+
   '<div class="prose"><p>Ce site est personnel et non commercial. Il n’est pas une activité d’Inflexion.</p></div>'+
   '<h2>Éditeur</h2><ul class="lim" style="max-width:68ch">'+
   '<li><b>Éditeur et directeur de la publication :</b> Amiel Lavon, à titre personnel.</li>'+

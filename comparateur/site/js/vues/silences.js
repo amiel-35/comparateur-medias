@@ -1,7 +1,7 @@
 /* les silences de l'édition : les sujets repris par MIN médias ou plus où tout un côté (g, c, d) n'a aucun titre */
 function vSilences(){
   var tus=LARGES.filter(function(r){return r.sil.length;});
-  var h='<p class="crumb"><a href="#/">Sujets</a> / Silences</p>';
+  var h='';
   h+='<nav class="ed" aria-label="Éditions">'+(ED.precedent?'<a class="btn sm" href="'+edUrl(ED.precedent)+'#/silences" rel="prev">← '+esc(jourCourt(ED.precedent))+'</a>':'<span class="btn sm off" aria-hidden="true">←</span>')+
      '<span class="ed-j">Édition du '+esc(jourLong(ED.jour))+'</span>'+
      (ED.suivant?'<a class="btn sm" href="'+edUrl(ED.suivant)+'#/silences" rel="next">'+esc(jourCourt(ED.suivant))+' →</a>':'<span class="btn sm off" aria-hidden="true">→</span>')+'</nav>';

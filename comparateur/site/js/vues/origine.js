@@ -5,7 +5,7 @@ function vOrigine(){
   function bloc(pour,nom,intro,points,liens){
     return '<article><span class="for">'+pour+'</span><h2>'+nom+'</h2><p>'+intro+'</p><p class="lab mono mute">Ce que ce site leur doit</p><ul class="lim">'+points.map(function(x){return '<li>'+x+'</li>';}).join('')+'</ul><p class="liens">'+liens.map(function(x){return '<a href="'+x[1]+'"'+L+'>'+x[0]+' ↗</a>';}).join(' · ')+'</p></article>';
   }
-  return '<p class="crumb"><a href="#/">Sujets</a> / Origine</p><h1 tabindex="-1" id="h1">D’où vient ce site</h1>'+
+  return '<h1 tabindex="-1" id="h1">D’où vient ce site</h1>'+
   '<p class="lede" style="font-family:var(--serif);font-size:1.2rem;max-width:56ch">D’abord une idée, celle de Ground News. Ensuite un classement et une méthode, ceux du French News Lab. Et une exigence, celle d’AllSides. Ce site n’invente aucune des trois.</p>'+
   '<div class="origin">'+
   bloc('L’idée','Ground News',

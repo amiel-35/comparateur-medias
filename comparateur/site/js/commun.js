@@ -4,7 +4,7 @@ function edNav(){
   h+=ED.precedent?'<a class="btn sm" href="'+edUrl(ED.precedent)+'" rel="prev">← '+esc(jourCourt(ED.precedent))+'</a>':'<span class="btn sm off" aria-hidden="true">←</span>';
   h+='<span class="ed-j">Édition du '+esc(jourLong(ED.jour))+'</span>';
   h+=ED.suivant?'<a class="btn sm" href="'+edUrl(ED.suivant)+'" rel="next">'+esc(jourCourt(ED.suivant))+' →</a>':'<span class="btn sm off" aria-hidden="true">→</span>';
-  h+='</nav><p class="mono mute ed-s">'+(ED.suivant?'Vous lisez une édition passée. <a href="/">Dernière édition</a> · ':'Dernière édition · ')+'<a href="#/editions">toutes les éditions</a> · <a href="#/semaine">la semaine</a> · <a href="#/mois">le mois</a> · <a href="#/silences">les silences</a></p>';
+  h+='</nav><p class="mono mute ed-s">'+(ED.suivant?'Vous lisez une édition passée. <a href="/">Dernière édition</a> · ':'Dernière édition · ')+'<a href="#/editions">toutes les éditions</a></p>';
   return h;
 }
 /* éléments communs */

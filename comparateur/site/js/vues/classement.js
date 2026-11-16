@@ -2,7 +2,7 @@
 function vClass(){
   var min=-3.2,max=2.8,span=max-min;
   function pos(v){return (v-min)/span*100;}
-  var h='<p class="crumb"><a href="#/">Sujets</a> / Classement</p><h1 tabindex="-1" id="h1">Le classement vient de FrIdéo, pas d’un modèle</h1>'+
+  var h='<h1 tabindex="-1" id="h1">Le classement vient de FrIdéo, pas d’un modèle</h1>'+
   '<p class="lede" style="font-family:var(--serif);font-size:1.2rem;max-width:56ch">Les '+MEDIAS.length+' médias du panel, situés les uns par rapport aux autres. Ce classement range les médias par bord. Lui seul.</p>';
   h+='<div class="src"><p><b>Source.</b> FrIdéo v1.0, French News Lab, Amr Sobhy, ICNLSP 2026, licence CC BY 4.0. <a href="https://frenchnewslab.org/fr/publications/frideo-french-news-ideology-scale" target="_blank" rel="noopener noreferrer">frenchnewslab.org ↗</a>. Scores et intervalles du jeu de données officiel publié sur data.gouv.fr.</p>'+
   '<p><b>Réserve.</b> Un journal classé « à gauche » est plus à gauche que les autres journaux du panel. Ça ne veut pas dire qu’il est de gauche. Ce classement peut ne pas correspondre à l’idée que vous vous faites d’un journal. Classer les journaux n’est pas le but de ce site.</p>'+
