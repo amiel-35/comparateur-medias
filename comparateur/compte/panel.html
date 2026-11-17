@@ -1,0 +1,589 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="color-scheme" content="light dark">
+<meta name="apple-mobile-web-app-title" content="Cadrages">
+<title>Le panel · Cadrages</title>
+<style>
+/* La page du panel, servie sur compte.<domaine>/panel. Aucune mesure d'audience, rien d'extérieur. Mêmes couleurs que
+   la page du compte (styles/base.css). */
+:root { --bg: #f1ede4; --paper: #fbf9f4; --ink: #16140f; --mute: #5b564b; --line: #cfc8b6; --ko: #9a2a1a; --focus: #16140f; }
+@media (prefers-color-scheme: dark) { :root { --bg: #14130f; --paper: #1d1b16; --ink: #efe9da; --mute: #aaa392; --line: #403b2f; --ko: #ff9c8a; --focus: #f2c230; } }
+* { box-sizing: border-box; } [hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+header { border-bottom: 2px solid var(--ink); }
+header a { display: inline-block; padding: 14px 16px; font: 700 1.1rem Georgia, serif; text-decoration: none; color: inherit; }
+main { max-width: 640px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font: 700 clamp(1.6rem, 6vw, 2.3rem)/1.15 "Iowan Old Style", Palatino, Georgia, serif; margin: 0 0 12px; overflow-wrap: anywhere; }
+h2 { font: 700 1.25rem/1.2 Georgia, serif; margin: 28px 0 8px; }
+h3 { font: 700 1.1rem/1.25 Georgia, serif; margin: 0 0 4px; overflow-wrap: anywhere; }
+p { margin: .6em 0; overflow-wrap: anywhere; }
+.note { color: var(--mute); font-size: .9rem; }
+.rang { color: var(--mute); font-size: .9rem; margin: 0 0 6px; }
+label { display: block; font-weight: 700; margin: 14px 0 6px; }
+input[type=text] { width: 100%; font: inherit; padding: 10px 12px; min-height: 44px; border: 2px solid var(--ink); border-radius: 0; background: var(--paper); color: inherit; }
+button { font: inherit; font-weight: 700; color: var(--bg); background: var(--ink); border: 2px solid var(--ink); padding: 10px 16px; min-height: 44px; cursor: pointer; margin: 12px 8px 0 0; }
+button.second { color: var(--ink); background: var(--paper); }
+button:disabled { opacity: .5; cursor: default; }
+fieldset { border: 0; margin: 20px 0 0; padding: 0; min-width: 0; }
+legend { font: 700 1.25rem/1.2 Georgia, serif; padding: 0; margin: 0 0 4px; }
+.choix { list-style: none; margin: 8px 0; padding: 0; }
+.choix li { border-bottom: 1px solid var(--line); }
+.choix label { display: flex; gap: 10px; align-items: flex-start; font-weight: 400; margin: 0; padding: 10px 0; cursor: pointer; }
+.choix input { width: 22px; height: 22px; margin: 1px 0 0; flex: none; accent-color: var(--ink); }
+.accord { display: flex; gap: 10px; align-items: flex-start; font-weight: 400; margin: 20px 0 0; cursor: pointer; }
+.accord input { width: 22px; height: 22px; margin: 1px 0 0; flex: none; accent-color: var(--ink); }
+.liste { list-style: none; margin: 8px 0; padding: 0; }
+.liste > li { background: var(--paper); border: 1px solid var(--line); padding: 12px 14px; margin: 0 0 12px; }
+.liste > li p { margin: .35em 0; }
+.liste > li button { margin-top: 8px; }
+.recap { margin: 8px 0; padding-left: 1.2em; } .recap li { margin: .35em 0; overflow-wrap: anywhere; }
+.titres { margin: 12px 0; padding-left: 1.6em; } .titres li { margin: .45em 0; overflow-wrap: anywhere; }
+.notes { display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr); margin: 8px 0 0; }
+@media (min-width: 600px) { .notes { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+.notes button { margin: 0; padding: 10px 8px; }
+.limite { border-top: 1px solid var(--line); margin-top: 36px; padding-top: 12px; }
+#message { min-height: 1.5em; font-weight: 700; margin: 0 0 12px; }
+#message.ko { color: var(--ko); }
+a { color: inherit; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+h1:focus, h2:focus { outline: none; }
+</style>
+</head>
+<body>
+<header><a href="/">Cadrages</a></header>
+<main>
+  <p id="message" role="status" aria-live="polite"></p>
+
+  <section id="hors" hidden>
+    <h1 tabindex="-1">Connectez-vous d’abord à votre compte</h1>
+    <p>Le panel se rejoint depuis votre compte, avec votre adresse mail et un code. Revenez ici ensuite, par la ligne « Le panel ».</p>
+    <p><a href="/">Aller à votre compte</a></p>
+  </section>
+
+  <section id="accueil" hidden>
+    <h1 tabindex="-1">Le panel : vos réponses partent sans votre nom</h1>
+    <p>De temps en temps, quelques questions. Vous répondez si vous voulez. Vos réponses partent sans votre nom : ce site ne peut pas savoir lesquelles sont les vôtres.</p>
+    <form id="f-rejoindre" novalidate>
+      <fieldset>
+        <legend>Où vous situez-vous ?</legend>
+        <ul class="choix" id="bord-accueil"></ul>
+        <p class="note">Ce choix reste sur cet appareil. Il part avec chacune de vos réponses, jamais avec votre nom.</p>
+      </fieldset>
+      <label class="accord"><input type="checkbox" id="accord"> <span>J’accepte que mes réponses et le bord que j’indique servent aux résultats publiés par ce site.</span></label>
+      <label for="invitation">Code d’invitation</label>
+      <input id="invitation" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="64">
+      <p class="note">Le panel est pour l’instant un cercle invité. Il est réservé aux personnes de 15 ans et plus.</p>
+      <button type="submit">Rejoindre le panel</button>
+    </form>
+    <div id="place-recus-accueil"></div>
+  </section>
+
+  <section id="membre" hidden>
+    <h1 tabindex="-1" id="h-membre">Aucun questionnaire ouvert en ce moment</h1>
+    <p id="depuis"></p>
+    <h2>Questionnaires ouverts</h2>
+    <ul class="liste" id="questionnaires"></ul>
+    <p class="note" id="aucun-questionnaire" hidden>Rien pour l’instant. Un mail vous prévient quand un questionnaire s’ouvre.</p>
+    <div id="bloc-vote">
+      <h2>Le vote à l’aveugle</h2>
+      <p>Dix titres d’un même média, sans son nom. Vous dites où vous le placez, de la gauche à la droite.</p>
+      <p class="note">Vos avis partent sous une carte qui change chaque trimestre. Ce site ne sait pas à qui il l’a remise.</p>
+      <button type="button" id="voter">Juger des titres</button>
+    </div>
+    <div id="place-recus-membre"></div>
+    <h2>Quitter le panel</h2>
+    <p class="note">Vous pouvez partir quand vous voulez. Vos réponses déjà envoyées restent, sauf si vous les effacez.</p>
+    <button type="button" class="second" id="vers-quitter">Quitter le panel</button>
+  </section>
+
+  <section id="quitter" hidden>
+    <h1 tabindex="-1">Vos réponses envoyées restent, sauf si vous les effacez</h1>
+    <p>Vous ne recevrez plus de questionnaire. Vos réponses déjà envoyées ne portent pas votre nom : ce site ne peut pas les retrouver. Depuis cet appareil, vous pouvez les effacer.</p>
+    <p class="note" id="quitter-recus"></p>
+    <button type="button" id="quitter-seul">Quitter</button>
+    <button type="button" id="quitter-effacer">Quitter et effacer mes réponses</button>
+    <button type="button" class="second" id="rester">Rester dans le panel</button>
+  </section>
+
+  <section id="bord" hidden>
+    <p class="rang" id="bord-rang"></p>
+    <h1 tabindex="-1" id="h-bord">Où vous situez-vous ?</h1>
+    <ul class="choix" id="bord-choix" role="radiogroup" aria-labelledby="h-bord"></ul>
+    <p class="note">Ce choix reste sur cet appareil. Il part avec chacune de vos réponses, jamais avec votre nom.</p>
+    <button type="button" id="bord-suivant">Suivant</button>
+    <button type="button" class="second" id="bord-retour">Retour au panel</button>
+  </section>
+
+  <section id="question" hidden>
+    <p class="rang" id="q-rang"></p>
+    <h1 tabindex="-1" id="h-question">La question</h1>
+    <ul class="choix" id="q-choix" role="radiogroup" aria-labelledby="h-question"></ul>
+    <button type="button" id="q-suivant">Suivant</button>
+    <button type="button" class="second" id="q-retour">Retour</button>
+  </section>
+
+  <section id="envoi" hidden>
+    <p class="rang" id="envoi-rang"></p>
+    <h1 tabindex="-1">Vos réponses sont prêtes</h1>
+    <ul class="recap" id="recap"></ul>
+    <p>Une fois parties, elles ne portent pas votre nom. Vous pourrez les effacer depuis cet appareil seulement.</p>
+    <button type="button" id="envoyer">Envoyer mes réponses</button>
+    <button type="button" class="second" id="revoir">Revoir mes réponses</button>
+  </section>
+
+  <section id="envoye" hidden>
+    <h1 tabindex="-1">C’est envoyé</h1>
+    <p id="envoye-resultats"></p>
+    <p class="note">Le reçu de cet envoi reste sur cet appareil, dans « Mes réponses envoyées ». Il sert à effacer vos réponses, si vous le voulez.</p>
+    <button type="button" class="second retour-panel">Retour au panel</button>
+  </section>
+
+  <section id="lot" hidden>
+    <p class="rang" id="lot-rang"></p>
+    <h1 tabindex="-1">Dix titres d’un même média, sans son nom</h1>
+    <ol class="titres" id="titres"></ol>
+    <p id="lab-note"><b>Ce média est plutôt…</b></p>
+    <div class="notes" id="notes" role="group" aria-labelledby="lab-note"></div>
+    <button type="button" class="second retour-panel">Arrêter là</button>
+  </section>
+
+  <section id="lots-fini" hidden>
+    <h1 tabindex="-1">Vous avez jugé tous les titres du moment</h1>
+    <p>D’autres viendront. Vos avis sont comptés à la fin du trimestre, par bord, jamais un par un.</p>
+    <button type="button" class="second retour-panel">Retour au panel</button>
+  </section>
+
+  <div id="recus-bloc" hidden>
+    <h2 tabindex="-1">Mes réponses envoyées</h2>
+    <p class="note">Gardées sur cet appareil seulement. Effacer supprime vos réponses du serveur. Cela ne se défait pas.</p>
+    <ul class="liste" id="recus"></ul>
+    <p class="note" id="aucun-recu">Aucune réponse envoyée depuis cet appareil.</p>
+  </div>
+
+  <div class="limite">
+    <p><b id="etiquette">Panel de volontaires. Ce n’est pas un sondage.</b></p>
+    <p class="note">Ce site ne garde aucun lien entre une personne et ses réponses ; il ne peut pas en reconstituer un après coup ; il ne protège pas contre un serveur piraté au moment même où la réponse est envoyée.</p>
+    <p class="note"><a href="/">Votre compte</a> · <a href="#" id="lien-site">Retour à Cadrages</a> · <a href="#" id="lien-mentions">Mentions et données personnelles</a></p>
+  </div>
+</main>
+<script src="/aveugle-rsa.js"></script>
+<script>
+(function () {
+  'use strict';
+  /* Deux interlocuteurs, jamais confondus :
+     - le guichet (/api/compte/…, même origine, cookie de session) sait qui est membre et qui a retiré un bulletin ;
+     - l'urne (etat.urne, autre origine, sans cookie) reçoit le bord et les réponses, sans nom.
+     Le bord ne part qu'à l'urne. Tout texte venu du serveur entre par textContent. */
+  var $ = function (id) { return document.getElementById(id); };
+  var A = window.AveugleRSA;
+  var BORDS = ['Gauche', 'Plutôt à gauche', 'Centre', 'Plutôt à droite', 'Droite'];        // de -2 à +2
+  var NOTES = ['À gauche', 'Plutôt à gauche', 'Au centre', 'Plutôt à droite', 'À droite'];  // de -2 à +2
+  var ECRANS = ['hors', 'accueil', 'membre', 'quitter', 'bord', 'question', 'envoi', 'envoye', 'lot', 'lots-fini'];
+  var MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+  var CLE_BORD = 'cadrages.bord', CLE_BULLETINS = 'cadrages.bulletins', CLE_RECUS = 'cadrages.recus', CLE_CARTE = 'cadrages.carte';
+  var msg = $('message'), etat = null, invitation = '';
+  var cours = null;   // le questionnaire en cours : {q, b (bulletin), bord, reponses, i}
+  var vote = null;    // le vote à l'aveugle en cours : {carte, lots, lot, bord}
+  var apres = null;   // ce que fait l'écran du bord, une fois le bord choisi
+
+  var site = location.protocol + '//' + location.host.replace(/^compte\./, '');
+  $('lien-site').href = site + '/'; $('lien-mentions').href = site + '/#/mentions';
+
+  /* ---- l'appareil : localStorage, avec une copie en mémoire si le navigateur le refuse (navigation privée) */
+  var memoire = {};
+  function lire(cle, defaut) {
+    if (Object.prototype.hasOwnProperty.call(memoire, cle)) return memoire[cle];
+    try { var v = localStorage.getItem(cle); if (v != null) return (memoire[cle] = JSON.parse(v)); } catch (e) {}
+    return defaut;
+  }
+  function ecrire(cle, v) {
+    memoire[cle] = v;
+    try { if (v == null) localStorage.removeItem(cle); else localStorage.setItem(cle, JSON.stringify(v)); return true; } catch (e) { return false; }
+  }
+  function monBord() { var b = lire(CLE_BORD, null); return typeof b === 'number' && b >= -2 && b <= 2 && Math.round(b) === b ? b : null; }
+  function bulletins() { var x = lire(CLE_BULLETINS, null); return x && typeof x === 'object' && !Array.isArray(x) ? x : {}; }
+  function recus() { var x = lire(CLE_RECUS, null); return Array.isArray(x) ? x.filter(function (r) { return r && typeof r.questionnaire === 'string'; }) : []; }
+  function gardes() { return recus().filter(function (r) { return typeof r.bulletin === 'string'; }); }
+  function oublierBulletin(id) { var t = bulletins(); delete t[id]; ecrire(CLE_BULLETINS, t); }
+
+  /* ---- les deux interlocuteurs */
+  function reponse(r) { return r.json().catch(function () { return {}; }).then(function (d) { return { statut: r.status, d: d || {} }; }); }
+  function guichet(methode, chemin, corps) {   // même origine, avec le cookie de session ; jamais le bord
+    return fetch(chemin, { method: methode, credentials: 'same-origin', cache: 'no-store',
+      headers: corps ? { 'Content-Type': 'application/json' } : {}, body: corps ? JSON.stringify(corps) : undefined }).then(reponse);
+  }
+  function urne(chemin, corps) {   // une autre origine, sans cookie ni identité
+    return fetch(etat.urne + chemin, { method: 'POST', credentials: 'omit', cache: 'no-store', referrerPolicy: 'no-referrer',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corps) }).then(reponse);
+  }
+
+  /* ---- l'affichage */
+  function dire(t, ko) { msg.textContent = t || ''; msg.className = ko ? 'ko' : ''; }
+  function montrer(id) {
+    ECRANS.forEach(function (s) { $(s).hidden = s !== id; });
+    var place = $('place-recus-' + id);
+    if (place) { place.appendChild($('recus-bloc')); rendreRecus(); }
+    $('recus-bloc').hidden = !place || (id === 'accueil' && !gardes().length);
+    var h = $(id).querySelector('h1');
+    document.title = h.textContent + ' · Cadrages';
+    window.scrollTo(0, 0); h.focus();
+  }
+  function texte(x) { return x == null ? '' : String(x); }
+  function el(nom, t, classe) { var e = document.createElement(nom); if (t != null) e.textContent = t; if (classe) e.className = classe; return e; }
+  function date(x) { var m = /^(\d{4})-(\d\d)-(\d\d)$/.exec(texte(x)); return m ? m[3] + '/' + m[2] + '/' + m[1] : texte(x); }
+  function dateLongue(x) {
+    var m = /^(\d{4})-(\d\d)-(\d\d)$/.exec(texte(x)); if (!m || !MOIS[+m[2] - 1]) return texte(x);
+    return (+m[3] === 1 ? '1er' : String(+m[3])) + ' ' + MOIS[+m[2] - 1] + ' ' + m[1];
+  }
+  function radios(ul, nom, libelles, choisi) {
+    ul.replaceChildren();
+    libelles.forEach(function (lib, i) {
+      var li = el('li'), l = el('label'), c = el('input');
+      c.type = 'radio'; c.name = nom; c.value = String(i); c.checked = i === choisi;
+      l.append(c, el('span', texte(lib))); li.appendChild(l); ul.appendChild(li);
+    });
+  }
+  function coche(ul) { var c = ul.querySelector('input:checked'); return c ? +c.value : null; }
+  function hors() { dire(''); montrer('hors'); }
+  function sansReseau() { dire('Pas de réseau. Réessayez plus tard.', true); }
+
+  /* un questionnaire tel que le guichet le décrit : rien ne s'affiche ni ne se calcule sans ces champs */
+  function valide(q) {
+    return q && typeof q.id === 'string' && typeof q.titre === 'string' && q.cle && typeof q.cle.n === 'string' && typeof q.cle.e === 'string'
+      && Array.isArray(q.questions) && q.questions.length > 0 && q.questions.every(function (x) {
+        return x && typeof x.id === 'string' && typeof x.texte === 'string' && Array.isArray(x.choix) && x.choix.length > 1; });
+  }
+
+  /* ---- l'état venu du guichet */
+  function charger() {
+    return guichet('GET', '/api/compte/panel').then(function (x) {
+      if (x.statut === 200 && typeof x.d.membre === 'boolean') afficher(x.d);
+      else if (x.statut === 401) hors();
+      else dire('Le serveur n’a pas répondu. Réessayez plus tard.', true);
+    }, sansReseau);
+  }
+  function afficher(d) {
+    etat = d;
+    if (typeof d.etiquette === 'string' && d.etiquette) $('etiquette').textContent = d.etiquette;
+    if (d.membre) { rendreMembre(); montrer('membre'); } else { rendreAccueil(); montrer('accueil'); }
+  }
+
+  /* ---- pas encore membre */
+  function rendreAccueil() {
+    radios($('bord-accueil'), 'bord-accueil', BORDS, monBord() == null ? null : monBord() + 2);
+    if (!$('invitation').value) $('invitation').value = invitation;
+  }
+  $('f-rejoindre').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var b = coche($('bord-accueil')), code = $('invitation').value.trim(), bouton = this.querySelector('button');
+    if (b == null) { dire('Choisissez où vous vous situez. Ce choix reste sur cet appareil.', true); $('bord-accueil').querySelector('input').focus(); return; }
+    if (!$('accord').checked) { dire('Cochez la case d’accord pour rejoindre le panel.', true); $('accord').focus(); return; }
+    if (!code) { dire('Le code d’invitation manque.', true); $('invitation').focus(); return; }
+    bouton.disabled = true; dire('Un instant…');
+    guichet('POST', '/api/compte/panel/rejoindre', { code: code, consentement: true }).then(function (x) {
+      bouton.disabled = false;
+      if (x.statut === 200) {
+        ecrire(CLE_BORD, b - 2);   // le bord reste ici ; le guichet ne l'a pas reçu
+        invitation = ''; try { sessionStorage.removeItem('cadrages.invitation'); } catch (er) {}
+        $('invitation').value = ''; $('accord').checked = false;
+        afficher(x.d); dire('Vous êtes dans le panel. Un mail vous prévient quand un questionnaire s’ouvre.');
+      } else if (x.statut === 401) hors();
+      else if (x.statut === 403) dire('Ce code d’invitation ne marche pas : il est inconnu, ou il a déjà servi.', true);
+      else if (x.statut === 429) dire('Trop d’essais. Réessayez dans une heure.', true);
+      else dire('Le serveur n’a pas répondu. Réessayez plus tard.', true);
+    }, function () { bouton.disabled = false; sansReseau(); });
+  });
+
+  /* ---- membre */
+  function rendreMembre() {
+    $('depuis').textContent = etat.membre_depuis ? 'Vous êtes membre du panel depuis le ' + date(etat.membre_depuis) + '.' : 'Vous êtes membre du panel.';
+    var qs = (Array.isArray(etat.questionnaires) ? etat.questionnaires : []).filter(valide);
+    var ouverts = {}; qs.forEach(function (q) { ouverts[q.id] = true; });
+    // les traces d'effacement ne servent que tant que le questionnaire est ouvert
+    ecrire(CLE_RECUS, recus().filter(function (r) { return typeof r.bulletin === 'string' || ouverts[r.questionnaire]; }));
+    var faits = {}; recus().forEach(function (r) { faits[r.questionnaire] = r; });
+    var ul = $('questionnaires'), aFaire = 0;
+    ul.replaceChildren();
+    qs.forEach(function (q) {
+      var li = el('li');
+      li.appendChild(el('h3', q.titre));
+      if (q.intro) li.appendChild(el('p', texte(q.intro)));
+      var n = q.questions.length;
+      li.appendChild(el('p', (n > 1 ? n + ' questions' : 'Une question') + (q.fermeture ? '. Ouvert jusqu’au ' + dateLongue(q.fermeture) + '.' : '.'), 'note'));
+      var local = bulletins()[q.id];
+      if (faits[q.id]) li.appendChild(el('p', faits[q.id].efface ? 'Vos réponses à ce questionnaire sont effacées.' : 'Vos réponses sont parties depuis cet appareil.'));
+      else if (!local && q.retire) li.appendChild(el('p', 'Vous avez déjà commencé ce questionnaire sur un autre appareil. Finissez-le là-bas.'));
+      else {
+        aFaire++;
+        var b = el('button', local ? 'Reprendre' : 'Commencer');
+        b.type = 'button'; b.setAttribute('aria-label', (local ? 'Reprendre : ' : 'Commencer : ') + q.titre);
+        b.addEventListener('click', function () { commencer(q, b); });
+        li.appendChild(b);
+      }
+      ul.appendChild(li);
+    });
+    $('aucun-questionnaire').hidden = qs.length > 0;
+    $('h-membre').textContent = aFaire === 0 ? 'Aucun questionnaire ne vous attend' : aFaire === 1 ? 'Un questionnaire vous attend' : aFaire + ' questionnaires vous attendent';
+    $('bloc-vote').hidden = !(etat.carte && typeof etat.carte.id === 'string' && etat.carte.cle);
+  }
+  $('vers-quitter').addEventListener('click', function () {
+    var n = gardes().length;
+    $('quitter-recus').textContent = n ? (n > 1 ? n + ' réponses envoyées sont gardées' : 'Une réponse envoyée est gardée') + ' sur cet appareil.' : 'Aucune réponse envoyée n’est gardée sur cet appareil.';
+    dire(''); montrer('quitter');
+  });
+  $('rester').addEventListener('click', function () { dire(''); montrer('membre'); });
+
+  /* ---- le retrait d'un bulletin (ou de la carte du trimestre) : l'appareil tire un message au hasard, le cache,
+     le guichet le signe sans le voir, l'appareil dévoile et vérifie. Le guichet sait qu'un bulletin est retiré,
+     jamais lequel. */
+  function retirer(id, cle) {
+    var nom = new TextEncoder().encode(id), message = new Uint8Array(nom.length + 33);
+    message.set(nom, 0); message[nom.length] = 0; message.set(A.hasard(32), nom.length + 1);
+    var prepare = A.preparer(message), inv;
+    return A.aveugler(cle, prepare).then(function (x) {
+      inv = x.inv;
+      return guichet('POST', '/api/compte/bulletin', { questionnaire: id, aveugle: A.hex(x.aveugle) });
+    }).then(function (x) {
+      if (x.statut !== 200) return { statut: x.statut };
+      if (typeof x.d.signature !== 'string' || !/^(?:[0-9a-f]{2})+$/.test(x.d.signature)) return { statut: 'invalide' };
+      return A.finaliser(cle, prepare, A.deHex(x.d.signature), inv).then(function (s) {
+        return { statut: 200, bulletin: A.hex(prepare), signature: A.hex(s) };
+      }, function () { return { statut: 'invalide' }; });
+    });
+  }
+  function refusRetrait(statut, carte) {
+    if (statut === 401) return hors();
+    dire(statut === 409 ? (carte ? 'Votre carte de ce trimestre a déjà été prise sur un autre appareil. Donnez vos avis depuis celui-là.'
+                                 : 'Vous avez déjà commencé ce questionnaire sur un autre appareil. Finissez-le là-bas.')
+      : statut === 403 ? 'Vous avez rejoint le panel moins de sept jours avant l’ouverture de ce questionnaire. Il est réservé aux membres arrivés avant. Le prochain sera pour vous.'
+      : statut === 410 ? 'Ce questionnaire vient de fermer.'
+      : statut === 429 ? 'Trop de demandes. Réessayez dans une minute.'
+      : statut === 'invalide' ? 'La réponse du serveur n’a pas pu être vérifiée sur cet appareil. Rien n’est parti.'
+      : 'Le serveur n’a pas répondu. Réessayez plus tard.', true);
+  }
+  var AVERTIR = ' Cet appareil ne peut rien garder (navigation privée ?) : allez au bout sans fermer la page.';
+
+  /* ---- répondre */
+  function commencer(q, bouton) {
+    var b = bulletins()[q.id];
+    if (b) return debuter(q, b);
+    bouton.disabled = true; dire('Un instant…');
+    retirer(q.id, q.cle).then(function (x) {
+      bouton.disabled = false;
+      if (x.statut !== 200) { refusRetrait(x.statut, false); if (x.statut === 409 || x.statut === 410) charger(); return; }
+      var t = bulletins(); t[q.id] = { bulletin: x.bulletin, signature: x.signature, titre: q.titre, fermeture: texte(q.fermeture) };
+      var garde = ecrire(CLE_BULLETINS, t);   // gardé avant toute question : un rechargement ne le perd pas
+      debuter(q, t[q.id]);
+      if (!garde) dire(AVERTIR.trim(), true);
+    }, function () { bouton.disabled = false; sansReseau(); });
+  }
+  function debuter(q, b) {
+    cours = { q: q, b: b, bord: null, reponses: {}, i: 0 };
+    apres = function (bord) { cours.bord = bord; montrerQuestion(0); };
+    montrerBord(q.titre + ' · avant les questions');
+  }
+  function montrerBord(rang) {
+    $('bord-rang').textContent = rang;
+    radios($('bord-choix'), 'bord', BORDS, monBord() == null ? null : monBord() + 2);
+    dire(''); montrer('bord');
+  }
+  $('bord-suivant').addEventListener('click', function () {
+    var b = coche($('bord-choix'));
+    if (b == null) { dire('Choisissez où vous vous situez.', true); return; }
+    ecrire(CLE_BORD, b - 2); dire('');
+    apres(b - 2);
+  });
+  $('bord-retour').addEventListener('click', function () { dire(''); charger(); });
+  function montrerQuestion(i) {
+    var q = cours.q, x = q.questions[i];
+    cours.i = i;
+    $('q-rang').textContent = q.titre + ' · question ' + (i + 1) + ' sur ' + q.questions.length;
+    $('h-question').textContent = x.texte;
+    radios($('q-choix'), 'reponse', x.choix, Object.prototype.hasOwnProperty.call(cours.reponses, x.id) ? cours.reponses[x.id] : null);
+    montrer('question');
+  }
+  $('q-suivant').addEventListener('click', function () {
+    var x = cours.q.questions[cours.i], r = coche($('q-choix'));
+    if (r == null) { dire('Choisissez une réponse.', true); return; }
+    cours.reponses[x.id] = r; dire('');
+    if (cours.i + 1 < cours.q.questions.length) montrerQuestion(cours.i + 1); else montrerEnvoi();
+  });
+  $('q-retour').addEventListener('click', function () {
+    dire('');
+    if (cours.i > 0) montrerQuestion(cours.i - 1); else montrerBord(cours.q.titre + ' · avant les questions');
+  });
+  function montrerEnvoi() {
+    var q = cours.q, ul = $('recap');
+    $('envoi-rang').textContent = q.titre;
+    var ligne = function (question, choix) { var li = el('li', question + ' '); li.appendChild(el('b', choix)); ul.appendChild(li); };
+    ul.replaceChildren(); ligne('Votre bord :', BORDS[cours.bord + 2]);
+    q.questions.forEach(function (x) { ligne(x.texte, texte(x.choix[cours.reponses[x.id]])); });
+    montrer('envoi');
+  }
+  $('revoir').addEventListener('click', function () { dire(''); montrerQuestion(0); });
+  function garderRecu(q, b) {
+    var t = recus().filter(function (r) { return r.questionnaire !== q.id; });
+    t.push({ questionnaire: q.id, titre: q.titre, fermeture: texte(q.fermeture), bulletin: b.bulletin });
+    ecrire(CLE_RECUS, t); oublierBulletin(q.id);
+  }
+  $('envoyer').addEventListener('click', function () {
+    var q = cours.q, b = cours.b, bouton = this;
+    bouton.disabled = true; dire('Un instant…');
+    urne('/api/urne/depot', { questionnaire: q.id, bulletin: b.bulletin, signature: b.signature, bord: cours.bord, reponses: cours.reponses })
+      .then(function (x) {
+        bouton.disabled = false;
+        if (x.statut === 201) {
+          garderRecu(q, b); cours = null;
+          $('envoye-resultats').textContent = q.fermeture ? 'Les résultats seront publiés après le ' + dateLongue(q.fermeture) + '.' : 'Les résultats seront publiés à la clôture.';
+          dire(''); montrer('envoye');
+        } else if (x.statut === 409) { garderRecu(q, b); cours = null; charger().then(function () { dire('Ces réponses étaient déjà parties.'); }); }
+        else if (x.statut === 410) { oublierBulletin(q.id); cours = null; charger().then(function () { dire('Ce questionnaire est clos. Vos réponses ne sont pas parties.', true); }); }
+        else if (x.statut === 429) dire('Trop d’envois depuis cette connexion. Réessayez dans une minute.', true);
+        else dire('L’envoi a été refusé. Vos réponses sont encore sur cet appareil.', true);
+      }, function () { bouton.disabled = false; dire('L’envoi n’a pas abouti. Vos réponses sont encore sur cet appareil : réessayez dans un moment.', true); });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('.retour-panel'), function (b) {
+    b.addEventListener('click', function () { dire(''); charger(); });
+  });
+
+  /* ---- mes réponses envoyées : le reçu (le bulletin) seul permet d'effacer une ligne de l'urne */
+  function effacer(r) {
+    return urne('/api/urne/effacement', { questionnaire: r.questionnaire, bulletin: r.bulletin }).then(function (x) {
+      if (x.statut !== 200 && x.statut !== 404) return null;
+      ecrire(CLE_RECUS, recus().map(function (y) { return y.questionnaire === r.questionnaire ? { questionnaire: y.questionnaire, efface: true } : y; }));
+      return x.statut === 200 && x.d.efface === true;
+    }, function () { return null; });
+  }
+  function rendreRecus() {
+    var ul = $('recus'), t = gardes();
+    ul.replaceChildren();
+    t.forEach(function (r) {
+      var li = el('li');
+      li.appendChild(el('h3', texte(r.titre) || r.questionnaire));
+      li.appendChild(el('p', r.fermeture ? 'Envoyées depuis cet appareil. Résultats après le ' + dateLongue(r.fermeture) + '.' : 'Envoyées depuis cet appareil.', 'note'));
+      var b = el('button', 'Effacer', 'second');
+      b.type = 'button'; b.setAttribute('aria-label', 'Effacer mes réponses : ' + (texte(r.titre) || r.questionnaire));
+      b.addEventListener('click', function () {
+        var ok = el('button', 'Effacer pour de bon'), p = el('p', 'Vos réponses seront supprimées du serveur. Cela ne se défait pas.');
+        ok.type = 'button';
+        ok.addEventListener('click', function () {
+          ok.disabled = true; dire('Un instant…');
+          effacer(r).then(function (fait) {
+            if (fait === null) { ok.disabled = false; dire('L’effacement n’a pas abouti. Réessayez plus tard.', true); return; }
+            rendreRecus(); if (etat && etat.membre) rendreMembre();
+            var bloc = $('recus-bloc'), h2 = bloc.querySelector('h2');
+            if ($('membre').hidden && !gardes().length) bloc.hidden = true;
+            dire(fait ? 'C’est effacé. Ces réponses ne sont plus sur le serveur.' : 'Rien à effacer : ces réponses n’y étaient plus.');
+            if (bloc.hidden) document.querySelector('section:not([hidden]) h1').focus(); else h2.focus();
+          });
+        });
+        b.replaceWith(p, ok); ok.focus();
+      });
+      li.appendChild(b); ul.appendChild(li);
+    });
+    $('aucun-recu').hidden = t.length > 0;
+  }
+
+  /* ---- quitter */
+  function quitter(aussiEffacer) {
+    var boutons = [$('quitter-seul'), $('quitter-effacer'), $('rester')], rates = 0;
+    boutons.forEach(function (b) { b.disabled = true; });
+    dire('Un instant…');
+    var suite = Promise.resolve();
+    if (aussiEffacer) gardes().forEach(function (r) { suite = suite.then(function () { return effacer(r).then(function (f) { if (f === null) rates++; }); }); });
+    suite.then(function () { return guichet('POST', '/api/compte/panel/quitter', {}); }).then(function (x) {
+      boutons.forEach(function (b) { b.disabled = false; });
+      if (x.statut === 401) return hors();
+      if (x.statut !== 200) return dire('Le serveur n’a pas répondu. Réessayez plus tard.', true);
+      ecrire(CLE_BULLETINS, null); ecrire(CLE_CARTE, null);
+      afficher(x.d);
+      dire('Vous avez quitté le panel. Vous ne recevrez plus de questionnaire.' + (aussiEffacer ? (rates
+        ? ' ' + rates + (rates > 1 ? ' réponses n’ont' : ' réponse n’a') + ' pas pu être effacée' + (rates > 1 ? 's' : '') + ' : réessayez plus tard, depuis « Mes réponses envoyées ».'
+        : ' Vos réponses envoyées depuis cet appareil sont effacées.') : ''), rates > 0);
+    }, function () { boutons.forEach(function (b) { b.disabled = false; }); sansReseau(); });
+  }
+  $('quitter-seul').addEventListener('click', function () { quitter(false); });
+  $('quitter-effacer').addEventListener('click', function () { quitter(true); });
+
+  /* ---- le vote à l'aveugle : une carte par trimestre, retirée comme un bulletin, gardée sur l'appareil */
+  function carte() {
+    var e = etat.carte, c = lire(CLE_CARTE, null);
+    if (c && c.id === e.id && typeof c.carte === 'string' && typeof c.signature === 'string') return Promise.resolve(c);
+    if (e.retiree) { refusRetrait(409, true); return Promise.resolve(null); }
+    return retirer(e.id, e.cle).then(function (x) {
+      if (x.statut !== 200) { refusRetrait(x.statut, true); return null; }
+      c = { id: e.id, trimestre: texte(e.trimestre), carte: x.bulletin, signature: x.signature };
+      if (!ecrire(CLE_CARTE, c)) dire(AVERTIR.trim(), true);
+      return c;
+    });
+  }
+  function lotValide(l) { return l && typeof l.id === 'number' && Math.round(l.id) === l.id && l.id > 0 && Array.isArray(l.titres) && l.titres.length > 0; }
+  $('voter').addEventListener('click', function () {
+    var bouton = this;
+    bouton.disabled = true; dire('Un instant…');
+    guichet('GET', '/api/compte/lots').then(function (x) {
+      if (x.statut === 401) return hors();
+      var lots = x.statut === 200 && Array.isArray(x.d.lots) ? x.d.lots.filter(lotValide) : [];
+      if (!lots.length) return dire('Aucun titre à juger en ce moment. Revenez dans quelques jours.');
+      return carte().then(function (c) {
+        if (!c) return;
+        return urne('/api/urne/lots-juges', { trimestre: c.trimestre, carte: c.carte }).then(function (y) {
+          if (y.statut !== 200 || !Array.isArray(y.d.lots)) return dire('Le serveur n’a pas répondu. Réessayez plus tard.', true);
+          vote = { carte: c, lots: lots.filter(function (l) { return y.d.lots.indexOf(l.id) < 0; }), lot: null, bord: null };
+          apres = function (bord) { vote.bord = bord; lotSuivant(); };
+          montrerBord('Le vote à l’aveugle · avant les titres');
+        });
+      });
+    }).catch(sansReseau).then(function () { bouton.disabled = false; });
+  });
+  function lotSuivant() {
+    if (!vote.lots.length) return montrer('lots-fini');
+    var l = vote.lots[Math.floor(Math.random() * vote.lots.length)];
+    vote.lot = l;
+    $('lot-rang').textContent = 'Le vote à l’aveugle · ' + (vote.lots.length > 1 ? vote.lots.length + ' séries restent à juger' : 'dernière série');
+    $('titres').replaceChildren.apply($('titres'), l.titres.map(function (t) { return el('li', texte(t && typeof t === 'object' ? t.titre : t)); }));
+    var notes = $('notes'); notes.replaceChildren();
+    NOTES.forEach(function (lib, i) {
+      var b = el('button', lib, 'second');
+      b.type = 'button';
+      b.addEventListener('click', function () { donnerAvis(i - 2); });
+      notes.appendChild(b);
+    });
+    montrer('lot');
+  }
+  function donnerAvis(note) {
+    var c = vote.carte, l = vote.lot, boutons = $('notes').querySelectorAll('button');
+    Array.prototype.forEach.call(boutons, function (b) { b.disabled = true; });
+    dire('Un instant…');
+    urne('/api/urne/avis', { trimestre: c.trimestre, carte: c.carte, signature: c.signature, lot: l.id, note: note, bord: vote.bord }).then(function (x) {
+      Array.prototype.forEach.call(boutons, function (b) { b.disabled = false; });
+      if (x.statut === 201 || x.statut === 409) {
+        vote.lots = vote.lots.filter(function (y) { return y.id !== l.id; });
+        lotSuivant(); dire(x.statut === 201 ? 'Avis envoyé.' : 'Cette série était déjà jugée.');
+      } else if (x.statut === 410) { dire('Le trimestre est clos. Une nouvelle carte viendra avec le suivant.', true); }
+      else dire('L’avis a été refusé. Réessayez plus tard.', true);
+    }, function () { Array.prototype.forEach.call(boutons, function (b) { b.disabled = false; }); dire('L’envoi n’a pas abouti. Réessayez dans un moment.', true); });
+  }
+
+  /* ---- le code d'invitation porté par l'adresse (#code=…) : gardé le temps de l'onglet, puis l'adresse est nettoyée */
+  function lireCode() {
+    var m = /(?:^#|&)code=([^&]+)/.exec(location.hash);
+    if (!m) return false;
+    try { invitation = decodeURIComponent(m[1]).trim().slice(0, 64); } catch (e) { invitation = ''; }
+    try { sessionStorage.setItem('cadrages.invitation', invitation); } catch (e) {}
+    history.replaceState(null, '', location.pathname + location.search);
+    return true;
+  }
+  if (!lireCode()) { try { invitation = sessionStorage.getItem('cadrages.invitation') || ''; } catch (e) {} }
+  window.addEventListener('hashchange', function () { if (lireCode() && invitation) $('invitation').value = invitation; });
+  if (!A || !window.crypto || !crypto.subtle || typeof BigInt !== 'function' || typeof TextEncoder !== 'function') {
+    dire('Ce navigateur est trop ancien pour le panel. Mettez-le à jour, ou essayez un autre.', true);
+  } else charger();
+})();
+</script>
+</body>
+</html>
