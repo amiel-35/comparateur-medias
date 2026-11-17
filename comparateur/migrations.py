@@ -1,16 +1,20 @@
 """Les migrations qui vident le tiroir public (comparateur.db) de ce qu'il ne doit plus porter. C'est le seul module
-qui ouvre à la fois ce fichier et un autre tiroir, et seulement en ligne de commande, une fois. Aucun ATTACH : deux
-connexions, des lignes lues d'un côté et écrites de l'autre.
+qui ouvre à la fois ce fichier et un autre tiroir. Aucun ATTACH : deux connexions, des lignes lues d'un côté et
+écrites de l'autre.
 
 Phase 2, la table abonnes vers le tiroir identité (identites.db) :
 
-  python -m comparateur verser-abonnes    copie ; se relance sans doublon ; ne touche pas à abonnes
-  python -m comparateur oublier-abonnes   vide abonnes, seulement si chaque ligne est retrouvée dans identites.db
+  python -m comparateur verser-abonnes    déplace chaque abonné ; le guichet la lance seul à son démarrage
+
+C'est un déplacement, ligne par ligne : un abonné est écrit dans identites.db (et validé), puis retiré d'abonnes.
+Un arrêt entre les deux se rattrape au passage suivant, sans doublon. Personne n'est donc versé deux fois : un abonné
+qui se désinscrit après le passage ne revient pas au démarrage suivant.
 
 Un abonné confirmé devient un compte et un abonnement « lettre » actif ; un abonné en attente, un abonnement en
 attente. Le jeton d'abonnes devient le jeton de sortie : les liens de désinscription déjà envoyés marchent encore,
 et la confirmation d'une inscription en cours aussi. La semaine du dernier envoi est gardée : personne ne reçoit
-deux fois la même lettre. Les dates sont arrondies au jour, comme partout dans le tiroir identité.
+deux fois la même lettre. Une adresse invalide (qui ne recevait déjà rien) est retirée sans être versée. Les dates
+sont arrondies au jour, comme partout dans le tiroir identité.
 
 Phase 3, le vieux vote à l'aveugle (votants, avis_aveugle, avis_note, invitations) vers une urne :
 
@@ -35,38 +39,50 @@ from . import base, comptes, config, urne
 def _lignes(public):
     if not public.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'abonnes'").fetchone():
         return []
-    return public.execute("SELECT adresse, jeton, cree, confirme_le, dernier_envoi FROM abonnes ORDER BY id").fetchall()
+    return public.execute("SELECT id, adresse, jeton, cree, confirme_le, dernier_envoi FROM abonnes ORDER BY id").fetchall()
 
 
 def verser_abonnes(public=None, ident=None):
-    """Rend {lues, comptes, abonnements, deja, invalides}. Se relance sans rien doubler."""
+    """Rend {lues, comptes, abonnements, deja, invalides, retirees}."""
     propres = public is None, ident is None
     public = public or base.connexion()
     ident = ident or comptes.connexion()
     try:
-        bilan = {"lues": 0, "comptes": 0, "abonnements": 0, "deja": 0, "invalides": 0}
+        bilan = {"lues": 0, "comptes": 0, "abonnements": 0, "deja": 0, "invalides": 0, "retirees": 0}
         for r in _lignes(public):
             bilan["lues"] += 1
             adresse = comptes.normaliser(r["adresse"])
-            if not adresse:
-                bilan["invalides"] += 1
-                continue
-            existe = ident.execute("SELECT id FROM comptes WHERE adresse = ?", (adresse,)).fetchone()
-            if existe:
-                compte = existe["id"]
+            if adresse:
+                existe = ident.execute("SELECT id FROM comptes WHERE adresse = ?", (adresse,)).fetchone()
+                if existe:
+                    compte = existe["id"]
+                else:
+                    compte = ident.execute("INSERT INTO comptes (adresse, cree_jour) VALUES (?, ?)",
+                                           (adresse, (r["cree"] or comptes.jour())[:10])).lastrowid
+                    bilan["comptes"] += 1
+                deja = ident.execute("SELECT id, etat FROM abonnements WHERE compte = ? AND type = 'lettre' AND cible = ''",
+                                     (compte,)).fetchone()
+                if deja:
+                    # Une inscription refaite depuis le site, encore en attente, alors que l'abonné était confirmé : il
+                    # reste confirmé, et l'ancien lien de désinscription, celui de ses mails, garde son effet.
+                    if deja["etat"] == "attente" and r["confirme_le"]:
+                        ident.execute("UPDATE abonnements SET etat = 'actif', sortie = ?, dernier_envoi = ? WHERE id = ?",
+                                      (r["jeton"], r["dernier_envoi"], deja["id"]))
+                    bilan["deja"] += 1
+                else:
+                    ident.execute("""INSERT INTO abonnements (compte, type, cible, etat, cree_jour, dernier_envoi, sortie)
+                                     VALUES (?, 'lettre', '', ?, ?, ?, ?)""",
+                                  (compte, "actif" if r["confirme_le"] else "attente", (r["cree"] or comptes.jour())[:10],
+                                   r["dernier_envoi"], r["jeton"]))
+                    bilan["abonnements"] += 1
+                ident.commit()   # écrit d'abord dans le tiroir identité...
             else:
-                compte = ident.execute("INSERT INTO comptes (adresse, cree_jour) VALUES (?, ?)",
-                                       (adresse, (r["cree"] or comptes.jour())[:10])).lastrowid
-                bilan["comptes"] += 1
-            if ident.execute("SELECT 1 FROM abonnements WHERE compte = ? AND type = 'lettre' AND cible = ''", (compte,)).fetchone():
-                bilan["deja"] += 1
-                continue
-            ident.execute("""INSERT INTO abonnements (compte, type, cible, etat, cree_jour, dernier_envoi, sortie)
-                             VALUES (?, 'lettre', '', ?, ?, ?, ?)""",
-                          (compte, "actif" if r["confirme_le"] else "attente", (r["cree"] or comptes.jour())[:10],
-                           r["dernier_envoi"], r["jeton"]))
-            bilan["abonnements"] += 1
-        ident.commit()
+                bilan["invalides"] += 1
+            public.execute("DELETE FROM abonnes WHERE id = ?", (r["id"],))   # ... puis retiré du tiroir public
+            public.commit()
+            bilan["retirees"] += 1
+        if bilan["retirees"]:
+            public.execute("VACUUM")   # les pages libérées ne gardent pas les adresses
         return bilan
     finally:
         if propres[0]:
@@ -74,31 +90,6 @@ def verser_abonnes(public=None, ident=None):
         if propres[1]:
             ident.close()
 
-
-def oublier_abonnes(public=None, ident=None):
-    """Vide abonnes si chaque ligne a son abonnement dans identites.db (même adresse, même jeton, même état).
-    Sinon ne touche à rien. Rend {retrouvees, manquantes, effacees}."""
-    propres = public is None, ident is None
-    public = public or base.connexion()
-    ident = ident or comptes.connexion()
-    try:
-        manquantes, lignes = 0, _lignes(public)
-        for r in lignes:
-            ok = ident.execute("""SELECT 1 FROM abonnements a JOIN comptes c ON c.id = a.compte
-                                  WHERE c.adresse = ? AND a.type = 'lettre' AND a.sortie = ? AND a.etat = ?""",
-                               (comptes.normaliser(r["adresse"]), r["jeton"], "actif" if r["confirme_le"] else "attente")).fetchone()
-            manquantes += 0 if ok else 1
-        if manquantes:
-            return {"retrouvees": len(lignes) - manquantes, "manquantes": manquantes, "effacees": 0}
-        n = public.execute("DELETE FROM abonnes").rowcount if lignes else 0
-        public.commit()
-        public.execute("VACUUM")   # les pages libérées ne gardent pas les adresses effacées
-        return {"retrouvees": len(lignes), "manquantes": 0, "effacees": n}
-    finally:
-        if propres[0]:
-            public.close()
-        if propres[1]:
-            ident.close()
 
 
 # ---- phase 3 : le vieux vote à l'aveugle

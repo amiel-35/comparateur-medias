@@ -10,7 +10,7 @@ sauf le SDK Anthropic (mode `api` seulement).
 |---|---|---|
 | **Fabrique** | `fabrique.py`, `llm.py`, `aveugle.py`, `publier.py`, `chaine.py` | Récolte les flux RSS, regroupe les titres en sujets (Haiku), analyse les cadrages (Sonnet), fabrique les lots à l'aveugle, écrit le site statique. |
 | **Vitrine** | `site/` (morceaux, voir [DOCTRINE.md](DOCTRINE.md)) → `<données>/public/` | `index.html` + `data/jour.json`, régénérés par la fabrique. Une visite ne touche ni la base ni un modèle. |
-| **Guichet des votes** | `serveur.py` | Sert la vitrine et l'API des votes (`/api/…`), contrôle de santé sur `/sante`. |
+| **Guichet** | `serveur.py`, `comptes.py`, `urne.py`, `ceremonie.py` | Sert la vitrine, le compte (`compte.`) et l'urne du panel (`urne.`), envoie les mails, contrôle de santé sur `/sante`. |
 
 
 ## En local
@@ -19,7 +19,7 @@ sauf le SDK Anthropic (mode `api` seulement).
 python3 -m unittest discover -s tests          # sans réseau ni modèle
 python3 -m comparateur init                    # base SQLite + 30 médias (scores FrIdéo)
 python3 -m comparateur tout                    # l'édition du jour : récolte, regroupement, analyse, lots, publication
-python3 -m comparateur inviter 3               # trois codes d'invitation
+python3 -m comparateur panel-inviter 3         # trois codes d'invitation au panel (mail réglé)
 python3 -m comparateur servir                  # http://localhost:8080
 python3 -m comparateur jetons                  # appels aux modèles, jetons, coût
 ```
@@ -55,9 +55,10 @@ Vérifié dans la documentation de Coolify le 14/11/2026 : domaine et port saisi
 référence, Base Directory et emplacement du compose réglables. Coolify peut renommer le volume : vérifier son nom
 dans Persistent Storage avant toute migration de données.
 
-Créer des invitations : terminal du conteneur dans Coolify, `python -m comparateur inviter 5`. Le lien à
-envoyer est `https://<domaine>/aveugle.html#code=<code>` : dans le fragment, le code n'arrive ni au serveur ni au
-journal du proxy. L'ancienne forme `?code=` marche encore.
+Inviter au panel : terminal du conteneur `guichet` dans Coolify, `python -m comparateur panel-inviter 5`. Le lien
+à envoyer est `https://compte.<domaine>/panel#code=<code>` : dans le fragment, le code n'arrive ni au serveur ni au
+journal du proxy. L'ancienne commande `inviter` et l'ancien lien `aveugle.html#code=` ne servent plus : la page
+`aveugle.html` renvoie au panel.
 
 ## Les éditions
 
@@ -147,9 +148,10 @@ Allumés par les deux réglages SMTP du guichet, éteints sans eux : ni formulai
   laisse le compte vide efface l'adresse.
 - **Les envois** : la fabrique écrit `public/lettre/<semaine>.json` et `public/alertes/<jour>.json` (sujets du jour et
   rubriques lues dans l'adresse des articles) ; le guichet envoie la lettre le lundi et l'alerte chaque matin, un mail
-  par compte, une fois (`abonnements.dernier_envoi`).
-- **La migration d'`abonnes`** : `python -m comparateur verser-abonnes` puis `oublier-abonnes` (voir le document de
-  déploiement). Écrite et testée sur des données d'essai, jamais lancée sur une vraie base.
+  par compte et par jour (`abonnements.dernier_envoi`). La lettre ne part que le lundi.
+- **La migration d'`abonnes`** : le guichet déplace, à son démarrage, chaque abonné de la table `abonnes` vers
+  `identites.db`, puis le retire d'`abonnes` (`python -m comparateur verser-abonnes` fait la même chose à la main).
+  Écrite et testée sur des données d'essai, jamais lancée sur une vraie base : à essayer sur une copie d'abord.
 - **« Mes sujets » et les flux** : suivre un sujet le garde dans le navigateur (`localStorage`, clé
   `cadrages.sujets`) ; l'accueil compare la liste à l'édition. Chaque sujet a un flux Atom,
   `/flux/sujets/<id>.xml`, le même pour tous. Pas de suivi par mail (décision 3).
@@ -239,15 +241,56 @@ La vue `#/situer` télécharge `/index.json` une fois, puis cherche sur l'appare
 l'article est dans l'index, le sujet, la répartition sur sept bords, les côtés silencieux et le lien vers la page
 du sujet. Un test refuse tout autre appel réseau dans la vue. Le contrat : `docs/cadrage-long-terme.md`, 6.3.
 
-## L'API des votes
+## Le panel
+
+Le vote à l'aveugle et les questionnaires passent par le panel, sur `compte.<domaine>/panel`
+(`comparateur/compte/panel.html`). Le détail du déploiement : [docs/deploiement-phase-3.md](docs/deploiement-phase-3.md).
+
+- **Deux interlocuteurs.** Le guichet (`compte.`, avec le cookie) sait qui est membre et qui a retiré un bulletin ou
+  sa carte du trimestre. L'urne (`urne.`, sans cookie : une requête qui en porte un est refusée) reçoit les réponses
+  et les avis, avec le bord déclaré, jamais avec un nom. Le bord reste sur l'appareil et ne part qu'à l'urne.
+- **La signature aveugle** (RFC 9474, `signature.py` et `compte/aveugle-rsa.js`) : le guichet signe un bulletin
+  sans le voir. Il ne peut pas rapprocher un retrait d'un dépôt, même en lisant tout.
+- **Les questionnaires** : `python -m comparateur questionnaire ouvrir <fichier.json>`, `fermer <id>`,
+  `resultats <id>`. Une urne par questionnaire (`urnes/<id>.db`), sans date ni rang. À la clôture, la clé est
+  détruite, la liste des retraits effacée, l'urne scellée, et seuls des comptages par bord sont publiés
+  (`public/panel/resultats/<id>.json`, vue `#/panel` du site), rien sous cinq réponses dans un bord.
+- **Le vote à l'aveugle** : une carte de votant par trimestre, signée à l'aveugle. Les lots des sept derniers jours
+  sont publiés sans leur média (`public/aveugle/lots.json`, servi au panel par `/api/compte/lots`). Les avis vont à
+  l'urne du trimestre (`urnes/aveugle-<trimestre>.db`). Le trimestre fini, le guichet publie les sommes par lot et
+  par bord (`public/panel/aveugle/<trimestre>.json`).
+- **La lecture à l'aveugle** (`aveugle.resultats`) est calculée sur ces sommes : moyenne par bord déclaré (gauche,
+  centre, droite), puis moyenne des bords ; un bord nombreux ne pèse pas plus qu'un autre. `publiable` seulement si
+  chaque bord atteint `COMPARATEUR_MIN_PAR_BORD` avis. C'est une seconde mesure, versionnée, « Perçu à l'aveugle par
+  le panel » : elle s'affiche à côté du classement FrIdéo (page Classement, fiche d'un média), jamais fondue en lui.
+  Elle ne change ni un score ni une bande.
+
+**Un pseudonyme, pas un anonymat.** Dans un trimestre, les avis d'une même carte restent liés entre eux, sous
+l'empreinte de la carte : c'est un pseudonyme, qui ne dure qu'un trimestre. Le guichet sait à qui il a remis une
+carte, jamais quels avis elle a donnés. La limite, telle que les pages la disent : ce site ne garde aucun lien entre
+une personne et ses réponses ; il ne peut pas en reconstituer un après coup ; il ne protège pas contre un serveur
+piraté au moment même où la réponse est envoyée.
+
+**La migration du vieux vote** (`migrations.py`). Avant la phase 3, les avis vivaient dans `comparateur.db`
+(`votants`, `avis_aveugle`, `avis_note`, `invitations`), sous un jeton par votant que l'éditeur pouvait rapprocher
+d'une invitation. Deux commandes, à lancer dans le conteneur `guichet` (le seul qui voie à la fois `/data` et
+`/urnes`), sur une copie de la base d'abord :
+
+```bash
+python -m comparateur verser-votes      # avis vers urnes/aveugle-historique.db ; sommes dans public/panel/aveugle/historique.json
+python -m comparateur oublier-votes     # vide les quatre tables, seulement si chaque avis est retrouvé dans l'urne
+```
+
+`verser-votes` copie sans rien ôter et se relance sans doublon. Chaque avis devient une ligne de l'urne historique,
+close, sous une empreinte du pseudonyme d'alors, sans date. Les accords sur la note affichée (`avis_note`) ne sont
+publiés qu'en comptes par média. `oublier-votes` refuse tant qu'un avis manque, puis vide les tables et compacte la
+base, journal compris. Écrites et testées sur des données d'essai (`tests/test_panel.py`, `MigrationDuVote`),
+jamais lancées sur une vraie base.
+
+## L'API
 
 | Route | Corps | Réponse |
 |---|---|---|
-| `POST /api/inscription` | `{code, bord}` (bord déclaré du votant, de −2 à +2) | `201 {jeton}` ; le code est à usage unique |
-| `GET /api/lot` | en-tête `Authorization: Bearer <jeton>` | `{lot: {id, titres[10]} \| null, restants}` |
-| `POST /api/avis-aveugle` | `{lot, note}` (de −2 à +2) | `201` ; `409` si le lot est déjà jugé |
-| `POST /api/avis-note` | `{media, accord}` | `201` ; simple alerte, ne change aucune note |
-| `GET /api/resultats` | | note à l'aveugle par média, effectifs par bord, statut `indicatif` ou `publiable` |
 | `GET /sante` | | `{ok, derniere_publication}` |
 | `POST /api/mail/inscription` | `{adresse}` | `202 {ok}`, toujours ; seulement si le mail est réglé |
 | `POST /api/mail/confirmation` | `{jeton}` | `200` ; `404` si le lien est inconnu ou expiré |
@@ -256,24 +299,24 @@ du sujet. Un test refuse tout autre appel réseau dans la vue. Le contrat : `doc
 | `POST /api/compte/connexion` | `{adresse, code}` | `200` et le cookie ; `403` si le code est faux ou expiré |
 | `GET /api/compte` | cookie | `{sait, registre}` ; `401` sans session |
 | `POST /api/compte/abonnement` | `{type, cible, actif}` | `{sait, registre}` ; `400` si le registre refuse |
+| `GET /api/compte/panel` | cookie | membre ou non, questionnaires ouverts, carte du trimestre ; jamais le bord |
+| `POST /api/compte/panel/rejoindre` | `{code, consentement: true}` | état du panel ; `403` si le code est inconnu ou servi |
+| `POST /api/compte/panel/quitter` | | état du panel |
+| `POST /api/compte/bulletin` | `{questionnaire, aveugle}` | `{signature}` ; `409` déjà retiré, `403` arrivé trop tard, `410` clos |
+| `GET /api/compte/lots` | cookie | `{lots: [{id, titres}]}`, sans le média |
 | `POST /api/compte/deconnexion`, `/suppression` | | `200`, le cookie effacé |
+| `POST /api/urne/depot` (sur `urne.`, sans cookie) | `{questionnaire, bulletin, signature, bord, reponses}` | `201` ; `409` déjà déposé, `410` clos |
+| `POST /api/urne/effacement` | `{questionnaire, bulletin}` | `{efface}` |
+| `POST /api/urne/avis` | `{trimestre, carte, signature, lot, note, bord}` | `201` ; `409` lot déjà jugé avec cette carte |
+| `POST /api/urne/lots-juges` | `{trimestre, carte}` | `{lots}` |
 
-**Un pseudonyme, pas un anonymat.** La base garde l'empreinte du jeton, le bord déclaré et les avis, sans nom ni
-adresse ; les dates sont arrondies au jour. Le jeton relie entre eux les avis d'un même votant : c'est un
-pseudonyme. Et l'éditeur sait à qui il a remis chaque code, tandis que `invitations.utilisee_le` et `votants.cree`
-portent le même jour : avec une ou deux inscriptions par jour, le rapprochement se fait à la main. Les pages le
-disent. Le journal du serveur n'écrit pas l'adresse du visiteur. La phase 3 de `docs/cadrage-long-terme.md`
-remplace ce vote par la carte de votant.
-
-**Comptage.** Moyenne par bord déclaré (gauche, centre, droite), puis moyenne des bords : un bord nombreux ne
-pèse pas plus qu'un autre. `publiable` seulement si chaque bord atteint `COMPARATEUR_MIN_PAR_BORD` votants.
-
-**Abus.** Un vote par lot et par jeton ; 10 essais d'inscription par heure et par adresse ; 300 requêtes d'API par
-minute et par adresse (les fichiers publics ne sont pas limités) ; corps limité à 4 Ko.
+**Abus.** 300 requêtes d'API par minute et par adresse (les fichiers publics ne sont pas limités) ; corps limité à
+4 Ko ; un bulletin par questionnaire et par compte, une carte par trimestre, un avis par lot et par carte.
 
 ## Garde-fous de la fabrique
 
-- Un modèle ne note jamais un média : les notes viennent de `medias.json` (FrIdéo, CC BY 4.0) et, plus tard, des votes.
+- Un modèle ne note jamais un média : les notes viennent de `medias.json` (FrIdéo, CC BY 4.0). La lecture à l'aveugle
+  du panel est comptée par du code, et s'affiche à côté, sans rien changer au classement.
 - Les scores et leurs intervalles de confiance viennent du jeu de données officiel FrIdéo (data.gouv.fr). Une
   nouvelle version du classement s'ajoute en base sans effacer l'ancienne.
 - À l'aveugle, la typographie maison est effacée (guillemets, apostrophes, tirets, milliers) : le French News Lab

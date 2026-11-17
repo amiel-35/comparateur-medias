@@ -14,7 +14,8 @@ COPY comparateur /app/comparateur
 WORKDIR /app
 
 # Utilisateur sans privilège ; /data est le volume persistant (base, cache, site généré).
-RUN useradd --system --uid 10001 --home /app comparateur && mkdir -p /data && chown comparateur /data
+RUN useradd --system --uid 10001 --home /app comparateur && mkdir -p /data /identites /urnes \
+    && chown comparateur /data /identites /urnes
 USER comparateur
 VOLUME /data
 

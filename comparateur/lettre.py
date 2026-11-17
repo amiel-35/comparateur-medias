@@ -228,8 +228,9 @@ def message_alerte(cfg, adresse, lignes, a):
              'La rubrique d’un sujet est lue dans l’adresse de ses articles, par un programme.<br>' +
              "<br>".join(f'<a href="{e(l)}" style="color:#5b564b">Ne plus recevoir {e(q)}</a>' for q, l in sorties) + '</p>')
     m = _message(cfg, adresse, f"{M} : " + titre[0].lower() + titre[1:], "\n".join(t), _page("".join(h)))
-    premiere = next((r for r in lignes if r["type"] == "alerte-edition"), lignes[0])
-    m["List-Unsubscribe"] = f"<{cfg['site']}/api/mail/desinscription?jeton={premiere['sortie']}>"
+    # « se désabonner » dans la messagerie arrête ce mail en entier : tous les abonnements qui l'ont fait partir
+    jetons = "&".join("jeton=" + r["sortie"] for r in lignes)
+    m["List-Unsubscribe"] = f"<{cfg['site']}/api/mail/desinscription?{jetons}>"
     m["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
     return m
 
@@ -287,7 +288,8 @@ def message_code(cfg, adresse, code):
                  f'margin:12px 0">{html.escape(code)}</p><p style="font-size:14px">Tapez-le sur la page qui vous l’a demandé. '
                  'Il vaut dix minutes et ne sert qu’une fois. Si vous n’avez rien demandé, ignorez ce mail : sans le code, '
                  'personne ne peut entrer.</p>')
-    return _message(cfg, adresse, f"{M} : votre code, {code}", texte, page)
+    # le code n'est pas dans l'objet : il s'afficherait sur l'écran verrouillé et dans les journaux d'envoi
+    return _message(cfg, adresse, f"{M} : votre code de connexion", texte, page)
 
 
 def _envoyer_un(fabriquer, nom):
@@ -400,8 +402,11 @@ def envoyer_semaine(ident, jour=None):
     Rend {semaine, envoyes, echecs[, editions]}, ou None."""
     if not config.mail():
         return None
+    jour = jour or base.paris().strftime("%Y-%m-%d")
+    if date.fromisoformat(jour).weekday() != 0:   # la lettre part le lundi, et seulement le lundi
+        return {"semaine": None, "envoyes": 0, "echecs": 0, "lundi": False}
     comptes.purger(ident)
-    cle, _, _ = semaine_finie(jour or base.paris().strftime("%Y-%m-%d"))
+    cle, _, _ = semaine_finie(jour)
     lignes = comptes.destinataires(ident, ["lettre"], cle)
     if not lignes:
         return {"semaine": cle, "envoyes": 0, "echecs": 0}
@@ -419,7 +424,9 @@ def envoyer_alertes(ident, jour=None):
     if not config.mail():
         return None
     jour = jour or base.paris().strftime("%Y-%m-%d")
-    lignes = comptes.destinataires(ident, ["alerte-edition", "rubrique"], jour)
+    types = ["alerte-edition", "rubrique"]
+    servis = comptes.deja_servis(ident, types, jour)   # un mail par compte et par jour, pas plus
+    lignes = [r for r in comptes.destinataires(ident, types, jour) if r["compte"] not in servis]
     if not lignes:
         return {"jour": jour, "envoyes": 0, "echecs": 0}
     a = alerte(jour)

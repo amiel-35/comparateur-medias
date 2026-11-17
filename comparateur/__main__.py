@@ -15,8 +15,7 @@
   servir               le guichet et la fabrique dans un seul processus (poste de développement)
   guichet              le guichet seul : site, compte, urne, mails (service « guichet » du compose)
   fabrique             la fabrique seule : récolte et édition, sans port (service « fabrique » du compose)
-  verser-abonnes       copie la table abonnes de comparateur.db dans identites.db (migration de la phase 2)
-  oublier-abonnes      vide la table abonnes de comparateur.db, une fois chaque ligne retrouvée dans identites.db
+  verser-abonnes       déplace la table abonnes de comparateur.db dans identites.db (le guichet le fait au démarrage)
   verser-votes         copie les avis du vieux vote à l'aveugle dans urnes/aveugle-historique.db et publie leurs
                        sommes (public/panel/aveugle/historique.json) ; migration de la phase 3
   oublier-votes        vide votants, avis_aveugle, avis_note et invitations de comparateur.db, une fois chaque avis
@@ -48,9 +47,9 @@ def main(argv):
               f"{config.edition_heure()} h (Paris)", flush=True)
         chaine.boucle(config.fabrique_minutes() or 180)
         return 0
-    if cmd in ("verser-abonnes", "oublier-abonnes"):
+    if cmd == "verser-abonnes":
         from . import migrations
-        print(migrations.verser_abonnes() if cmd == "verser-abonnes" else migrations.oublier_abonnes())
+        print(migrations.verser_abonnes())
         return 0
     if cmd in ("verser-votes", "oublier-votes"):
         from . import migrations

@@ -32,6 +32,7 @@ button:disabled { opacity: .5; cursor: default; }
 .choix label { display: flex; gap: 10px; align-items: flex-start; font-weight: 400; margin: 0; }
 .choix input { width: 22px; height: 22px; margin: 2px 0 0; flex: none; accent-color: var(--ink); }
 .choix b { display: block; }
+.choix .plus { display: inline-block; margin: 6px 0 0 32px; padding: 6px 0; }
 .choix .sous { list-style: none; margin: 6px 0 0 32px; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 16px; }
 .deux { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
 @media (min-width: 600px) { .deux { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -46,7 +47,7 @@ h1:focus { outline: none; }
 </style>
 </head>
 <body>
-<header><a href="/">Cadrages</a></header>
+<header><a href="__SITE_URL__/">Cadrages</a></header>
 <main>
   <section id="adresse" hidden>
     <h1 tabindex="-1">Une adresse mail suffit, sans mot de passe</h1>
@@ -60,7 +61,7 @@ h1:focus { outline: none; }
   </section>
 
   <section id="code-ecran" hidden>
-    <h1 tabindex="-1">Un code vient de partir à cette adresse</h1>
+    <h1 tabindex="-1">Si l’adresse est juste, un code vient de partir</h1>
     <p>Tapez-le ici. <span class="note" id="rappel-adresse"></span></p>
     <form id="f-code">
       <label for="code">Le code à six chiffres</label>
@@ -82,12 +83,13 @@ h1:focus { outline: none; }
       <div><p><b>Gardé sur cet appareil seulement</b></p><ul>
         <li>Votre choix de thème, clair ou sombre.</li>
         <li>« Mes sujets », si vous en suivez sur le site.</li>
+        <li>Pour le panel : votre bord, et le reçu de chaque réponse envoyée.</li>
         <li>La connexion à ce compte, dans un seul cookie, réservé à cette page.</li></ul>
         <p class="note">Ces réglages ne sont pas sur les serveurs de ce site. Ils ne suivent pas d’un appareil à l’autre.</p></div>
     </div>
     <button type="button" class="second" id="deconnexion">Se déconnecter</button>
     <button type="button" class="second" id="supprimer">Supprimer mon compte</button>
-    <p id="confirmer-suppression" hidden>L’adresse et tout ce qui la suit sont effacés de la base. Rien n’est gardé de côté.
+    <p id="confirmer-suppression" hidden>L’adresse, ses abonnements et ses connexions sont effacés de la base, avec un code de connexion en cours. Rien n’est gardé de côté.
       <button type="button" id="supprimer-oui">Supprimer pour de bon</button></p>
   </section>
 
@@ -99,8 +101,8 @@ h1:focus { outline: none; }
   'use strict';
   var $ = function (id) { return document.getElementById(id); };
   var msg = $('message'), adresse = '', etat = null;
-  /* le site public : compte.<domaine> sans « compte. » */
-  var site = location.protocol + '//' + location.host.replace(/^compte\./, '');
+  /* le site public : son adresse est écrite dans la page par le guichet */
+  var site = '__SITE_URL__';
   $('lien-site').href = site + '/'; $('lien-mentions').href = site + '/#/mentions';
   function dire(t, ko) { msg.textContent = t || ''; msg.className = ko ? 'ko' : ''; }
   function montrer(id) {
@@ -144,11 +146,14 @@ h1:focus { outline: none; }
       var e = document.createElement('li');
       if (!t.cibles) {
         var l = document.createElement('label'), c = document.createElement('input');
-        c.type = 'checkbox'; c.checked = !!actifs[t.type + '|']; c.disabled = !t.ouvert;
+        /* le panel ne se coche pas ici : la case montre l'adhésion, la page du panel la change */
+        var panel = t.type === 'panel';
+        c.type = 'checkbox'; c.checked = !!actifs[t.type + '|']; c.disabled = !t.ouvert || panel;
         c.addEventListener('change', function () { changer(t.type, '', c); });
         var d = document.createElement('span'); d.innerHTML = '<b></b><span class="note"></span>';
-        d.firstChild.textContent = t.nom + (t.ouvert ? '' : ' (bientôt)'); d.lastChild.textContent = t.phrase;
+        d.firstChild.textContent = t.nom + (t.ouvert || panel ? '' : ' (bientôt)'); d.lastChild.textContent = t.phrase;
         l.append(c, d); e.appendChild(l);
+        if (panel) { var plus = document.createElement('a'); plus.href = '/panel'; plus.className = 'plus'; plus.textContent = 'En savoir plus'; e.appendChild(plus); }
       } else {
         var titre = document.createElement('div'); titre.innerHTML = '<b></b><span class="note"></span>';
         titre.firstChild.textContent = t.nom + 's'; titre.lastChild.textContent = t.phrase;
@@ -199,7 +204,7 @@ h1:focus { outline: none; }
   $('supprimer').addEventListener('click', function () { $('confirmer-suppression').hidden = false; $('supprimer-oui').focus(); });
   $('supprimer-oui').addEventListener('click', function () {
     appel('POST', '/api/compte/suppression', {}).then(function (x) {
-      if (x.statut === 200) { $('confirmer-suppression').hidden = true; dire('C’est fait. L’adresse est effacée.'); montrer('adresse'); }
+      if (x.statut === 200) { $('confirmer-suppression').hidden = true; dire('C’est fait. Le compte est effacé.'); montrer('adresse'); }
       else dire('La suppression n’a pas abouti. Réessayez plus tard.', true);
     });
   });

@@ -196,6 +196,15 @@ class Guichet(unittest.TestCase):
         self.assertEqual(self.appel("GET", "/index.html")[0], 404)                    # le site n'est pas servi ici
         self.assertEqual(self.appel("GET", "/api/compte/registre", hote="cadrages.test")[0], 404)   # le compte, sur son hôte seul
         self.assertEqual(self.appel("GET", "/", hote="urne.cadrages.test")[0], 404)   # l'urne se tait jusqu'au panel
+        self.assertEqual(self.appel("GET", "/sante", hote="urne.cadrages.test")[0], 404)
+        self.assertEqual(self.appel("GET", "/sante", hote="compte.cadrages.test")[0], 404)
+        self.assertEqual(self.appel("GET", "/sante", hote="cadrages.test")[0], 200)
+        os.environ.pop("COMPARATEUR_SMTP_MOT_DE_PASSE")
+        try:   # règle 14 : éteint sans mail, aucun écran, aucune route du compte
+            self.assertEqual(self.appel("GET", "/")[0], 404)
+            self.assertEqual(self.appel("POST", "/api/compte/code", {"adresse": "a@exemple.fr"})[0], 404)
+        finally:
+            os.environ["COMPARATEUR_SMTP_MOT_DE_PASSE"] = REGLAGES["COMPARATEUR_SMTP_MOT_DE_PASSE"]
         self.assertEqual(self.appel("GET", "/", hote="cadrages.test")[0], 200)
         self.assertEqual(self.appel("GET", "/", hote="10.0.0.1:8080")[0], 200)        # un hôte inconnu est le site
         statut, _, corps = self.appel("GET", "/api/compte/registre")
@@ -238,6 +247,29 @@ class Guichet(unittest.TestCase):
             self.appel("POST", "/api/compte/connexion", {"adresse": "b@exemple.fr", "code": faux})
         self.assertEqual(self.appel("POST", "/api/compte/connexion", {"adresse": "b@exemple.fr", "code": code})[0], 403)
 
+    def test_essais_simultanes_bornes(self):
+        """Cinq essais par code, même lancés ensemble : chaque essai est compté avant la comparaison."""
+        from concurrent.futures import ThreadPoolExecutor
+        a, code = comptes.demander_code(self.ident, "course@exemple.fr")
+        faux = [f"{(int(code) + k) % 10 ** 6:06d}" for k in range(1, 41)]
+        compares = []
+        vrai = comptes.hmac.compare_digest
+        comptes.hmac.compare_digest = lambda x, y: (compares.append(1), vrai(x, y))[1]
+        try:
+            def essai(c):
+                db = comptes.connexion()
+                try:
+                    return comptes.verifier_code(db, a, c)
+                finally:
+                    db.close()
+            with ThreadPoolExecutor(20) as pool:
+                rendus = list(pool.map(essai, faux))
+        finally:
+            comptes.hmac.compare_digest = vrai
+        self.assertEqual(rendus, [None] * len(faux))
+        self.assertLessEqual(len(compares), comptes.CODE_ESSAIS)
+        self.assertIsNone(comptes.verifier_code(self.ident, a, code))      # le code est perdu après cinq essais
+
     def test_meme_reponse_et_limites(self):
         r1 = self.appel("POST", "/api/compte/code", {"adresse": "nouvelle@exemple.fr"})[2]
         r2 = self.appel("POST", "/api/compte/code", {"adresse": "pas une adresse"})[2]
@@ -259,6 +291,10 @@ class Guichet(unittest.TestCase):
                                     entetes={"Sec-Fetch-Site": "cross-site"})[0], 403)
         self.assertEqual(self.appel("POST", "/api/compte/abonnement", corps, cookie=cookie,
                                     entetes={"Content-Type": "text/plain"})[0], 415)
+        self.assertEqual(self.appel("POST", "/api/compte/abonnement", corps, cookie=cookie,
+                                    entetes={"Origin": "https://cadrages.test"})[0], 403)          # le site public non plus
+        self.assertEqual(self.appel("POST", "/api/compte/abonnement", corps, cookie=cookie,
+                                    entetes={"Sec-Fetch-Site": "same-site"})[0], 403)
         self.assertEqual(self.appel("POST", "/api/compte/abonnement", corps, cookie=cookie,
                                     entetes={"Origin": "https://compte.cadrages.test"})[0], 200)
 
@@ -300,36 +336,36 @@ class Guichet(unittest.TestCase):
 
 
 class Migration(unittest.TestCase):
-    def test_abonnes_verses_sans_perte_puis_oublies(self):
+    def test_abonnes_deplaces_sans_perte_ni_retour(self):
         public = sqlite3.connect(":memory:")
         public.row_factory = sqlite3.Row
         public.execute("""CREATE TABLE abonnes (id INTEGER PRIMARY KEY, adresse TEXT NOT NULL UNIQUE, jeton TEXT NOT NULL UNIQUE,
                           cree TEXT NOT NULL, confirme_le TEXT, dernier_envoi TEXT)""")
         lignes = [("a@exemple.fr", "jeton-a-0123456789", "2026-11-15T08:12:00+00:00", "2026-11-15T08:20:00+00:00", "2026-S46"),
                   ("b@exemple.fr", "jeton-b-0123456789", "2026-11-16T09:00:00+00:00", None, None),
-                  ("pas une adresse", "jeton-c-0123456789", "2026-11-16T09:00:00+00:00", None, None)]
+                  ("pas une adresse", "jeton-c-0123456789", "2026-11-16T09:00:00+00:00", None, None),
+                  ("d@exemple.fr", "jeton-d-0123456789", "2026-11-10T09:00:00+00:00", "2026-11-10T09:05:00+00:00", None)]
         public.executemany("INSERT INTO abonnes (adresse, jeton, cree, confirme_le, dernier_envoi) VALUES (?,?,?,?,?)", lignes)
         public.commit()
         ident = comptes.connexion()
         try:
             ident.execute("DELETE FROM comptes")
             ident.commit()
+            # d s'est réinscrit depuis le site avant le passage : sa ligne en attente redevient confirmée, avec son ancien lien
+            comptes.inscrire_lettre(ident, "d@exemple.fr")
             self.assertEqual(migrations.verser_abonnes(public, ident),
-                             {"lues": 3, "comptes": 2, "abonnements": 2, "deja": 0, "invalides": 1})
-            self.assertEqual(migrations.verser_abonnes(public, ident)["abonnements"], 0)    # se relance sans doubler
+                             {"lues": 4, "comptes": 2, "abonnements": 2, "deja": 1, "invalides": 1, "retirees": 4})
+            self.assertEqual(public.execute("SELECT COUNT(*) FROM abonnes").fetchone()[0], 0)   # plus rien dans le tiroir public
             r = {x["adresse"]: x for x in ident.execute(
                 "SELECT c.adresse, c.cree_jour, a.etat, a.sortie, a.dernier_envoi FROM abonnements a JOIN comptes c ON c.id = a.compte")}
             self.assertEqual(dict(r["a@exemple.fr"]), {"adresse": "a@exemple.fr", "cree_jour": "2026-11-15", "etat": "actif",
                                                        "sortie": "jeton-a-0123456789", "dernier_envoi": "2026-S46"})
             self.assertEqual(r["b@exemple.fr"]["etat"], "attente")
-            # une ligne invalide reste : oublier refuse tant que tout n'est pas retrouvé
-            self.assertEqual(migrations.oublier_abonnes(public, ident)["effacees"], 0)
-            public.execute("DELETE FROM abonnes WHERE adresse = 'pas une adresse'")
-            public.commit()
-            self.assertEqual(migrations.oublier_abonnes(public, ident), {"retrouvees": 2, "manquantes": 0, "effacees": 2})
-            self.assertEqual(public.execute("SELECT COUNT(*) FROM abonnes").fetchone()[0], 0)
-            # le lien de désinscription d'avant la migration marche encore
+            self.assertEqual((r["d@exemple.fr"]["etat"], r["d@exemple.fr"]["sortie"]), ("actif", "jeton-d-0123456789"))
+            # le lien de désinscription d'avant la migration marche encore, et la personne ne revient pas
             self.assertTrue(comptes.sortir(ident, "jeton-a-0123456789"))
+            self.assertIsNone(ident.execute("SELECT 1 FROM comptes WHERE adresse = 'a@exemple.fr'").fetchone())
+            self.assertEqual(migrations.verser_abonnes(public, ident)["lues"], 0)
             self.assertIsNone(ident.execute("SELECT 1 FROM comptes WHERE adresse = 'a@exemple.fr'").fetchone())
         finally:
             ident.execute("DELETE FROM comptes")
@@ -381,8 +417,18 @@ class Alertes(unittest.TestCase):
         self.assertEqual(texte.count("/mail.html#desinscrire="), 2)      # une sortie par abonnement
         self.assertIn("Un sujet politique", par["deux@exemple.fr"].get_body(("plain",)).get_content())
         self.assertNotIn("Un sujet international", par["deux@exemple.fr"].get_body(("plain",)).get_content())
+        self.assertEqual(par["un@exemple.fr"]["List-Unsubscribe"].count("jeton="), 2)   # « se désabonner » arrête tout le mail
         FauxSMTP.envoyes.clear()
         self.assertEqual(lettre.envoyer_alertes(self.ident, self.JOUR)["envoyes"], 0)   # pas deux fois
+        comptes.abonner(self.ident, c1, "rubrique", "politique")                       # ajoutée après l'envoi du jour
+        self.assertEqual(lettre.envoyer_alertes(self.ident, self.JOUR)["envoyes"], 0)   # elle attend le lendemain
+
+    def test_la_lettre_part_le_lundi_seulement(self):
+        c = comptes.compte_de(self.ident, "lundi@exemple.fr", creer=True)
+        comptes.abonner(self.ident, c, "lettre")
+        r = lettre.envoyer_semaine(self.ident, "2026-03-18")                           # un mercredi : rien
+        self.assertEqual((r["envoyes"], r["lundi"]), (0, False))
+        self.assertEqual(FauxSMTP.envoyes, [])
 
     def test_flux_atom_par_sujet(self):
         chemin = os.path.join(config.public(), "flux", "sujets", "s1.xml")
