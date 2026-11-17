@@ -1,4 +1,4 @@
-# Comparateur de cadrages médiatiques
+# Cadrages, comparateur de cadrages médiatiques
 
 Comment les médias français titrent-ils un même sujet, de la gauche à la droite ? Ce dépôt récolte les titres
 de 30 médias, les regroupe en sujets, décrit le traitement de chaque bord et signale les angles morts.
@@ -16,7 +16,7 @@ sauf le SDK Anthropic (mode `api` seulement).
 ## En local
 
 ```bash
-python3 -m unittest discover -s tests          # 31 tests, sans réseau ni modèle
+python3 -m unittest discover -s tests          # sans réseau ni modèle
 python3 -m comparateur init                    # base SQLite + 30 médias (scores FrIdéo)
 python3 -m comparateur tout                    # l'édition du jour : récolte, regroupement, analyse, lots, publication
 python3 -m comparateur inviter 3               # trois codes d'invitation
@@ -34,10 +34,10 @@ En local la fabrique appelle les modèles par `claude -p` (abonnement Claude Cod
    `COMPARATEUR_UMAMI_ID` (le `data-website-id` du site dans Umami, stats.inflexion.me) active la mesure de
    fréquentation, sans cookie ; la page `#/mentions` et la politique de sécurité suivent d'elles-mêmes.
    `COMPARATEUR_SMTP_UTILISATEUR` et `COMPARATEUR_SMTP_MOT_DE_PASSE` (secret : la clé SMTP de Brevo) allument la
-   synthèse de la semaine par mail ; sans eux, ni formulaire ni envoi. Réglages facultatifs : `COMPARATEUR_SMTP_HOTE`
+   synthèse de la semaine par mail ; sans eux, ni formulaire ni envoi. Le nom de l'expéditeur est toujours
+   « Cadrages » (`config.MARQUE`) : `COMPARATEUR_MAIL_NOM` n'est plus lu. Réglages facultatifs : `COMPARATEUR_SMTP_HOTE`
    (`smtp-relay.brevo.com`), `COMPARATEUR_SMTP_PORT` (587, STARTTLS), `COMPARATEUR_MAIL_EXPEDITEUR`
-   (`no-reply@inflexion.me`, adresse à valider dans Brevo), `COMPARATEUR_MAIL_NOM` (« Cadrages »),
-   `COMPARATEUR_SITE_URL` (`https://compare-media.inflexion.me`, pour les liens des mails).
+   (`no-reply@inflexion.me`, adresse à valider dans Brevo), `COMPARATEUR_SITE_URL` (`https://compare-media.inflexion.me`, pour les liens des mails).
 3. **Domaine** : Domains → Add domain, service `comparateur`, port interne `8080` (forme `https://mon-domaine:8080` : le
    suffixe dit au proxy quel port du conteneur viser, le public reste en 443 ; Coolify n'affiche plus
    le suffixe ensuite mais le garde pour son proxy). Coolify fournit le HTTPS. Aucun `ports:` dans le compose.
@@ -70,6 +70,14 @@ publie **l'édition du jour**, qui ne bouge plus ensuite.
 - Les pages sont réécrites depuis les éditions gardées à chaque publication et à chaque démarrage : un
   changement du gabarit vaut aussi pour les archives.
 - `python -m comparateur tout` refait l'édition du jour ; `python -m comparateur pages` réécrit seulement le site.
+- Un export n'est jamais une copie de `comparateur.db` (règle 10 de [DOCTRINE.md](DOCTRINE.md)) : la base porte
+  aussi les adresses des abonnés et les votants.
+
+## La méthode, versionnée
+
+La page Démarche (`#/demarche`) est le document de référence de la méthode. Elle porte une ligne de version
+(`comparateur/methode.py` : version 1.0, en vigueur depuis le 17/11/2026) et l'historique des changements de
+règle, relevé dans l'historique du dépôt. Une version change quand une règle de comptage change.
 
 ## L'application
 
@@ -169,8 +177,12 @@ l'accueil (« la semaine », « le mois »).
 | `POST /api/mail/confirmation` | `{jeton}` | `200` ; `404` si le lien est inconnu ou expiré |
 | `POST /api/mail/desinscription` | `{jeton}`, ou `?jeton=` en un clic (RFC 8058) | `200`, toujours |
 
-**Anonymat.** La base ne garde que l'empreinte du jeton et le bord déclaré : ni nom, ni adresse, ni lien entre
-une invitation et un votant ; les dates sont arrondies au jour. Le journal du serveur n'écrit pas l'adresse du visiteur.
+**Un pseudonyme, pas un anonymat.** La base garde l'empreinte du jeton, le bord déclaré et les avis, sans nom ni
+adresse ; les dates sont arrondies au jour. Le jeton relie entre eux les avis d'un même votant : c'est un
+pseudonyme. Et l'éditeur sait à qui il a remis chaque code, tandis que `invitations.utilisee_le` et `votants.cree`
+portent le même jour : avec une ou deux inscriptions par jour, le rapprochement se fait à la main. Les pages le
+disent. Le journal du serveur n'écrit pas l'adresse du visiteur. La phase 3 de `docs/cadrage-long-terme.md`
+remplace ce vote par la carte de votant.
 
 **Comptage.** Moyenne par bord déclaré (gauche, centre, droite), puis moyenne des bords : un bord nombreux ne
 pèse pas plus qu'un autre. `publiable` seulement si chaque bord atteint `COMPARATEUR_MIN_PAR_BORD` votants.
@@ -214,7 +226,11 @@ autre modèle, noms des médias masqués, bords échangés. Sur 20 sujets (14/11
 change plus la description qu'un simple second tirage.
 
 `essais/rendu.js` ouvre chaque vue de chaque édition dans un navigateur (375 px et 1280 px, clair et sombre) et
-échoue sur une erreur de console, un défilement horizontal ou un « undefined » à l'écran. Mode d'emploi et
+échoue sur une erreur de console, un défilement horizontal ou un « undefined » à l'écran.
+
+`essais/accessibilite.js` est la mesure d'accessibilité : titres, contrastes, noms des liens, boutons et champs,
+contour de focus, sur chaque vue et sur les pages à part. Écrite à la main, sans bibliothèque d'audit. Un test
+(`Assise`) tient les contrastes des couleurs du site, sans navigateur. Mode d'emploi et
 règles du site : [DOCTRINE.md](DOCTRINE.md).
 
 `essais/editions_essai.py` fabrique quatre éditions factices (dont une au format d'avant les rubriques et le

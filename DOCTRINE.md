@@ -53,7 +53,16 @@ Le squelette nomme chaque morceau par une ligne `/*INCLURE chemin*/`. L'ordre de
    « à gauche » est « plus à gauche que les autres journaux du panel », pas « de gauche ».
 9. **Le dessin.** Fond crème, cadres noirs épais, serif, pas de carte arrondie ni d'ombre. Thèmes clair et
    sombre. Lisible à 375 px sans défilement horizontal. Les couleurs passent par les variables de
-   `styles/base.css`, jamais par une valeur écrite dans une vue.
+   `styles/base.css`, jamais par une valeur écrite dans une vue. Tout texte garde un contraste de 4,5:1 au moins
+   sur son fond, et tout élément atteint au clavier montre un contour de focus.
+10. **Un export n'est jamais une copie de `comparateur.db`.** La base ne porte pas que des données publiques :
+   les adresses des abonnés, les votants, le journal de la fabrique y sont aussi. Un export, un index, un jeu de
+   données se construit champ par champ à partir de ce qui est déjà publié (les éditions), jamais en copiant le
+   fichier ou une table. Une sauvegarde est une copie, et c'est pour cela qu'elle n'est jamais publiée. Seul
+   `base.py` ouvre la base. *Test : `Assise.test_un_export_n_est_jamais_une_copie_de_la_base`.*
+11. **La méthode a une version.** Changer une règle de comptage (bords, silences, fenêtre, rubriques) change la
+   version de `comparateur/methode.py` et ajoute une ligne à son historique. La page Démarche l'affiche : c'est
+   le document de référence.
 
 ## Ajouter une vue
 
@@ -82,6 +91,17 @@ COMPARATEUR_DONNEES=/tmp/essai PORT=8765 python3 -m comparateur servir
 ```bash
 node essais/rendu.js http://127.0.0.1:8765 /tmp/empreintes.txt
 ```
+
+```bash
+node essais/accessibilite.js http://127.0.0.1:8765
+```
+
+`essais/accessibilite.js` est la mesure d'accessibilité, écrite à la main : sur chaque vue, un seul `h1` et aucun
+niveau de titre sauté, un nom lisible pour chaque lien, bouton, champ et figure, le contraste de chaque texte
+contre son fond réel (WCAG 2.2, 4,5:1), un contour visible sur tout ce qu'atteint la touche Tab. Elle passe aussi
+sur `aveugle.html` et `mail.html`. Lancer le serveur d'essai avec `COMPARATEUR_DERRIERE_PROXY=1` : chaque page y
+porte alors une adresse différente, et la limite de débit ne gêne pas. Le 17/11/2026, elle ne trouvait de défaut
+que sur `aveugle.html` (focus invisible, contraste du message d'erreur, deux étiquettes sans champ), corrigés.
 
 `essais/rendu.js` ouvre chaque vue de chaque édition à 375 px et 1280 px, en clair et en sombre. Il échoue sur
 une erreur de console, un défilement horizontal ou un « undefined » à l'écran, et écrit l'empreinte de chaque

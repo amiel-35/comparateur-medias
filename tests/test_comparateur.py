@@ -866,3 +866,143 @@ class Mail(unittest.TestCase):
         self.assertIn("if(!D.mail)return '';", page)
         self.assertIn("/api/mail/inscription", page)
         self.assertTrue(os.path.isfile(os.path.join(publier.config.public(), "mail.html")))
+
+
+class Assise(unittest.TestCase):
+    """Phase 0 : la méthode datée, l'accessibilité mesurée, les mots justes, un seul nom, aucun export par copie."""
+    SITE = os.path.join(base.config.ICI, "site")
+
+    def lire(self, *chemin):
+        with open(os.path.join(self.SITE, *chemin), encoding="utf-8") as f:
+            return f.read()
+
+    def test_la_methode_est_datee_et_versionnee(self):
+        from comparateur import methode
+        import datetime as dt, re
+        self.assertRegex(methode.VERSION, r"^\d+\.\d+$")
+        dt.date.fromisoformat(methode.DATE)
+        self.assertEqual(methode.HISTORIQUE[0][:2], (methode.VERSION, methode.DATE))   # la plus récente en tête
+        jours = [j for _, j, _ in methode.HISTORIQUE]
+        self.assertEqual(jours, sorted(jours, reverse=True))
+        db = base.connexion()
+        try:
+            publier.pages(db)
+        finally:
+            db.close()
+        with open(os.path.join(publier.config.public(), "data", "jour.json"), encoding="utf-8") as f:
+            self.assertEqual(json.load(f)["methode"]["version"], methode.VERSION)
+        vue = self.lire("js", "vues", "demarche.js")
+        self.assertIn("var MT=D.methode||null", vue)          # facultatif : une page d'avant la numérotation s'affiche
+        self.assertIn("document de référence", vue)
+        self.assertNotRegex(vue, "—")
+
+    @staticmethod
+    def contraste(a, b):
+        def lum(h):
+            h = h.lstrip("#")
+            h = "".join(x * 2 for x in h) if len(h) == 3 else h
+            c = [int(h[i:i + 2], 16) / 255 for i in (0, 2, 4)]
+            c = [x / 12.92 if x <= 0.03928 else ((x + 0.055) / 1.055) ** 2.4 for x in c]
+            return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+        x, y = sorted((lum(a), lum(b)), reverse=True)
+        return (x + 0.05) / (y + 0.05)
+
+    def jetons(self, css, selecteur):
+        import re
+        bloc = css[css.index(selecteur):]
+        bloc = bloc[bloc.index("{") + 1:]
+        if selecteur.startswith("@media"):
+            bloc = bloc[bloc.index("{") + 1:]
+        bloc = bloc[:bloc.index("}")]
+        return dict(re.findall(r"--([\w-]+)\s*:\s*(#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?)\b", bloc))
+
+    def test_contrastes_des_couleurs_du_site(self):
+        # WCAG 2.2, niveau AA : 4,5:1 pour le texte. Chaque couple texte/fond écrit dans les feuilles, clair et sombre.
+        css = self.lire("styles", "base.css")
+        clair, sombre = self.jetons(css, ":root{"), self.jetons(css, ':root[data-theme="dark"]{')
+        self.assertEqual(sombre, {**sombre, **self.jetons(css, "@media (prefers-color-scheme:dark){")})
+        couples = [("ink", "bg"), ("ink", "paper"), ("mute", "bg"), ("mute", "paper"), ("ko", "bg"), ("ko", "paper"),
+                   ("hl-on", "hl"), ("bg", "ink")] + [("on-" + b, b) for b in ("eg", "g", "cg", "c", "cd", "d", "ed")]
+        for nom, t in (("clair", clair), ("sombre", sombre)):
+            for texte, fond in couples:
+                self.assertGreaterEqual(self.contraste(t[texte], t[fond]), 4.5, f"{nom} : --{texte} sur --{fond}")
+        for page, couples in (("aveugle.html", [("encre", "fond"), ("encre", "carte"), ("doux", "fond"), ("doux", "carte"), ("ko", "fond")]),
+                              ("mail.html", [("ink", "bg"), ("mute", "bg"), ("ko", "bg"), ("bg", "ink")])):
+            p = self.lire(page)
+            for nom, t in (("clair", self.jetons(p, ":root {")), ("sombre", self.jetons(p, "@media (prefers-color-scheme: dark)"))):
+                for texte, fond in couples:
+                    self.assertGreaterEqual(self.contraste(t[texte], t[fond]), 4.5, f"{page}, {nom} : --{texte} sur --{fond}")
+
+    def test_titres_focus_et_libelles(self):
+        import re
+        vues = os.path.join(self.SITE, "js", "vues")
+        for nom in sorted(os.listdir(vues)):
+            self.assertTrue('<h1 tabindex="-1" id="h1">' in self.lire("js", "vues", nom), nom)   # un h1, que le routage focalise
+        gabarit = self.lire("gabarit.html")
+        self.assertIn('<html lang="fr">', gabarit)
+        self.assertEqual(re.findall(r"<nav\b(?![^>]*aria-label)", gabarit), [])           # chaque menu est nommé
+        self.assertEqual(re.findall(r"<button\b(?![^>]*\btype=)", gabarit), [])
+        self.assertIn(":focus-visible{outline:3px solid var(--hl)", self.lire("styles", "base.css"))
+        for page in ("aveugle.html", "mail.html"):
+            p = self.lire(page)
+            self.assertIn('<html lang="fr">', p)
+            self.assertRegex(p, r":focus-visible\s*\{\s*outline:\s*3px solid")
+            self.assertEqual(re.findall(r"<button\b(?![^>]*\btype=)", p), [], page)
+            self.assertEqual(re.findall(r"<label>", p), [], page)                          # chaque étiquette vise un champ
+            for champ in re.findall(r'<input[^>]*\bid="([\w-]+)"', p):
+                self.assertIn(f'<label for="{champ}">', p, page)
+        self.assertTrue(os.path.isfile(os.path.join(base.config.ICI, "..", "essais", "accessibilite.js")))
+
+    def test_le_vote_a_l_aveugle_est_dit_pseudonyme(self):
+        # Le premier cadrage : un jeton stable est un pseudonyme, pas un anonymat ; et l'éditeur sait à qui il a remis
+        # chaque code. Les pages ne disent plus « anonyme » ni « aucun lien ».
+        for texte in (self.lire("aveugle.html"), self.lire("js", "vues", "mentions.js")):
+            self.assertIn("pseudonyme", texte)
+            self.assertNotIn("anonyme", texte.replace("pseudonyme", ""))
+            self.assertNotIn("aucun lien", texte.lower())
+        with open(os.path.join(base.config.ICI, "..", "README.md"), encoding="utf-8") as f:
+            readme = f.read()
+        self.assertFalse("aucun lien entre une invitation" in readme.lower())
+        self.assertTrue("pseudonyme" in readme)
+
+    def test_un_seul_nom_dans_le_manifeste_les_pages_et_les_mails(self):
+        from comparateur import config, lettre
+        marque = config.MARQUE
+        m = json.loads(self.lire("manifest.webmanifest"))
+        self.assertEqual((m["name"], m["short_name"]), (marque, marque))
+        for page in ("gabarit.html", "aveugle.html", "mail.html"):
+            p = self.lire(page)
+            self.assertIn(f'<meta name="apple-mobile-web-app-title" content="{marque}">', p)
+            self.assertRegex(p, r"<title>[^<]*%s[^<]*</title>" % marque)
+        os.environ.update(COMPARATEUR_SMTP_UTILISATEUR="u", COMPARATEUR_SMTP_MOT_DE_PASSE="p", COMPARATEUR_MAIL_NOM="Autre nom")
+        try:
+            cfg = config.mail()
+            msg = lettre.message_confirmation(cfg, "a@exemple.fr", "jeton-jeton")
+        finally:
+            for k in ("COMPARATEUR_SMTP_UTILISATEUR", "COMPARATEUR_SMTP_MOT_DE_PASSE", "COMPARATEUR_MAIL_NOM"):
+                os.environ.pop(k, None)
+        self.assertTrue(msg["From"].startswith(marque + " <"))     # le réglage d'avant ne change plus le nom
+        self.assertTrue(msg["Subject"].startswith(marque + " : "))
+        self.assertIn(marque, msg.get_body(("plain",)).get_content())
+
+    def test_un_export_n_est_jamais_une_copie_de_la_base(self):
+        # DOCTRINE, règle 10. Rien de ce qui est publié n'est un fichier SQLite, et seul base.py ouvre la base.
+        db = base.connexion()
+        try:
+            publier.pages(db)
+        finally:
+            db.close()
+        for dossier, _, fichiers in os.walk(publier.config.public()):
+            for nom in fichiers:
+                self.assertFalse(nom.endswith((".db", ".sqlite", ".db-wal", ".db-shm")), nom)
+                with open(os.path.join(dossier, nom), "rb") as f:
+                    self.assertNotEqual(f.read(16), b"SQLite format 3\x00", nom)
+        paquet = base.config.ICI
+        for nom in os.listdir(paquet):
+            if nom.endswith(".py") and nom != "base.py":
+                with open(os.path.join(paquet, nom), encoding="utf-8") as f:
+                    source = f.read()
+                self.assertFalse("sqlite3.connect" in source, nom)                 # seul base.py ouvre la base
+                self.assertFalse("shutil" in source and "config.base()" in source, nom)   # personne ne la copie
+        with open(os.path.join(paquet, "..", "DOCTRINE.md"), encoding="utf-8") as f:
+            self.assertTrue("Un export n'est jamais une copie de `comparateur.db`" in f.read())

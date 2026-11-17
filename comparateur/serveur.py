@@ -1,7 +1,7 @@
 """Le serveur : le site statique et le guichet des votes. Bibliothèque standard seulement.
 
   GET  /sante                      état du service (pour le contrôle de santé de Coolify)
-  POST /api/inscription            {code, bord}  -> {jeton}     un code d'invitation ouvre un jeton anonyme
+  POST /api/inscription            {code, bord}  -> {jeton}     un code d'invitation ouvre un jeton (un pseudonyme)
   GET  /api/lot                    -> {lot: {id, titres} | null, restants}   (Authorization: Bearer <jeton>)
   POST /api/avis-aveugle           {lot, note}   note de -2 (gauche) à +2 (droite)
   POST /api/avis-note              {media, accord}
@@ -11,8 +11,9 @@
   POST /api/mail/desinscription    {jeton}, ou ?jeton= avec List-Unsubscribe=One-Click (RFC 8058) : supprime l'abonné
   tout le reste                    fichiers de <données>/public/
 
-Anonymat : la base ne garde que l'empreinte du jeton et le bord déclaré. Aucun lien entre une
-invitation et un votant, aucun nom, aucune adresse (ni courriel ni IP). Les abonnés au mail de la semaine
+Pseudonyme, pas anonymat : la base garde l'empreinte du jeton, le bord déclaré et les avis, sans nom ni adresse (ni
+courriel ni IP). Le jeton relie entre eux les avis d'un même votant. L'éditeur sait à qui il a remis chaque code, et
+invitations.utilisee_le et votants.cree portent le même jour : avec peu d'inscrits, le rapprochement se fait à la main. Les abonnés au mail de la semaine
 sont à part (table abonnes, voir lettre.py) : leur adresse n'est écrite dans aucun journal.
 """
 import hashlib, json, mimetypes, os, re, secrets, threading, time
@@ -44,17 +45,26 @@ ENTETES = {
 
 
 class Debit:
-    """Limite de débit en mémoire : au plus `maxi` appels par fenêtre de `secondes`, par clé."""
+    """Limite de débit en mémoire : au plus `maxi` appels par fenêtre de `secondes`, par clé.
+
+    Une clé (une adresse IP, l'empreinte d'une adresse mail) est oubliée au plus tard une fenêtre après son dernier
+    appel : la purge passe toutes les minutes. Rien n'est écrit ailleurs qu'en mémoire."""
 
     def __init__(self):
-        self.vus, self.verrou = {}, threading.Lock()
+        self.vus, self.fenetres, self.verrou, self.purge = {}, {}, threading.Lock(), 0.0
+
+    def purger(self, t):
+        self.vus = {k: v for k, v in self.vus.items() if v and t - v[-1] < self.fenetres.get(k, 3600)}
+        self.fenetres = {k: f for k, f in self.fenetres.items() if k in self.vus}
+        self.purge = t
 
     def autorise(self, cle, maxi, secondes):
         t = time.time()
         with self.verrou:
-            if len(self.vus) > 20000:  # purge grossière : jamais de croissance sans borne
-                self.vus = {k: v for k, v in self.vus.items() if v and t - v[-1] < 3600}
+            if t - self.purge >= 60 or len(self.vus) > 20000:   # jamais de croissance sans borne
+                self.purger(t)
             passes = [x for x in self.vus.get(cle, []) if t - x < secondes]
+            self.fenetres[cle] = max(secondes, self.fenetres.get(cle, 0))
             if len(passes) >= maxi:
                 self.vus[cle] = passes
                 return False

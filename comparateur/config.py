@@ -3,6 +3,9 @@ import os
 
 ICI = os.path.dirname(os.path.abspath(__file__))
 
+# Le nom du site : celui du manifeste, des pages et des mails. Un seul nom, écrit une fois (un test le vérifie).
+MARQUE = "Cadrages"
+
 
 def env(nom, defaut):
     v = os.environ.get(nom)
@@ -99,4 +102,4 @@ def mail():
             "port": int(env("COMPARATEUR_SMTP_PORT", "587")),   # 587 : STARTTLS ; 465 : TLS direct
             "utilisateur": utilisateur, "mot_de_passe": mot_de_passe,
             "expediteur": env("COMPARATEUR_MAIL_EXPEDITEUR", "no-reply@inflexion.me"),
-            "nom": env("COMPARATEUR_MAIL_NOM", "Cadrages"), "site": site_url()}
+            "nom": MARQUE, "site": site_url()}
