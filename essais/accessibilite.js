@@ -2,17 +2,25 @@
 // 1280 px, en clair et en sombre. Elle contrôle ce qu'un lecteur d'écran, un clavier ou une vue faible rencontrent :
 //
 //   titres     un seul h1 par vue, aucun niveau sauté (h1 puis h3 sans h2)
-//   contrastes chaque texte contre son fond réel, calculé comme le WCAG 2.2 (4,5:1 ; 3:1 pour un grand texte)
+//   contrastes chaque texte contre son fond réel, calculé comme le WCAG 2.2 (4,5:1 ; 3:1 pour un grand texte) ;
+//              la bordure des champs de saisie contre son fond (3:1)
 //   libellés   chaque lien, bouton, champ, image et figure (role="img") a un nom lisible par un lecteur d'écran
-//   focus      chaque élément atteint au clavier montre un contour visible quand il a le focus
-//   langue     la page déclare le français ; le titre de l'onglet suit la vue
+//   focus      tout ce qu'atteint la touche Tab, jusqu'au bout de la page, montre un contour d'au moins 2 px dont
+//              la couleur fait 3:1 avec le fond qui l'entoure ; dans les deux thèmes
+//   langue     la page déclare le français ; le titre de l'onglet reprend le h1 de la vue
 //
-// Les pages à part (aveugle.html, mail.html) sont contrôlées aussi. Le script échoue au premier défaut et les liste.
+// Les pages à part (aveugle.html, mail.html) sont contrôlées aussi, avec leurs états qui n'apparaissent qu'après un
+// geste : un lot à juger et la fin des lots (réponses du serveur simulées), le message d'erreur, le résultat d'un
+// clic sur mail.html. Le script liste tous les défauts, puis échoue s'il y en a.
 //
 //   COMPARATEUR_DONNEES=/tmp/essai python3 essais/editions_essai.py
+//   COMPARATEUR_DONNEES=/tmp/essai COMPARATEUR_SMTP_UTILISATEUR=essai COMPARATEUR_SMTP_MOT_DE_PASSE=essai \
+//     python3 -m comparateur pages        (les réglages SMTP factices font paraître l'encart du mail ; rien ne part)
 //   COMPARATEUR_DONNEES=/tmp/essai PORT=8765 python3 -m comparateur servir &
-//   node essais/accessibilite.js http://127.0.0.1:8765        (avec COMPARATEUR_DERRIERE_PROXY=1 sur le serveur ;
-//                                                           sans lui : PAUSE=250 node essais/accessibilite.js …)
+//   node essais/accessibilite.js http://127.0.0.1:8765
+//
+// Limites : ni le survol, ni les contenus ::before, ni les couleurs qu'un navigateur rendrait dans un format que
+// le script ne lit pas (signalées comme défaut, pas sautées).
 //
 // Demande Playwright et Chromium, comme essais/rendu.js (outil de développement, pas une dépendance du site).
 const { chromium } = require('playwright');
@@ -32,6 +40,11 @@ function controler() {
   // la langue et le titre
   if (document.documentElement.lang !== 'fr') dire('langue absente ou autre que fr', document.documentElement);
   if (!document.title.trim()) dire('titre de page vide', null);
+  const h1v = [...document.querySelectorAll('h1')].find(visible);
+  if (h1v && location.pathname.indexOf('/editions/') === 0) {   // le routage met le h1 en tête du titre de l'onglet
+    const attendu = h1v.textContent.replace(/écrit par un modèle/, '').trim();
+    if (!document.title.startsWith(attendu)) dire(`titre de l’onglet (« ${document.title} ») sans le h1`, null);
+  }
 
   // les titres
   const titres = [...document.querySelectorAll('h1,h2,h3,h4,h5,h6')].filter(visible);
@@ -60,7 +73,14 @@ function controler() {
   }
 
   // les contrastes : couleur du texte contre le premier fond opaque en remontant (mélangé s'il est translucide)
-  const rgb = c => { const m = c.match(/rgba?\(([^)]+)\)/); if (!m) return null; const p = m[1].split(/[ ,/]+/).filter(Boolean).map(Number); return [p[0], p[1], p[2], p.length > 3 ? p[3] : 1]; };
+  const rgb = c => {
+    let m = c.match(/^rgba?\(([^)]+)\)$/);
+    if (m) { const p = m[1].split(/[ ,/]+/).filter(Boolean).map(Number); return [p[0], p[1], p[2], p.length > 3 ? p[3] : 1]; }
+    m = c.match(/^color\(srgb ([^)]+)\)$/);
+    if (m) { const p = m[1].split(/[ /]+/).filter(Boolean).map(Number); return [p[0] * 255, p[1] * 255, p[2] * 255, p.length > 3 ? p[3] : 1]; }
+    illisibles.add(c); return null;
+  };
+  const illisibles = new Set();
   const lum = c => { const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); };
   const melange = (haut, bas) => [0, 1, 2].map(i => haut[i] * haut[3] + bas[i] * (1 - haut[3])).concat(1);
   function fond(el) {
@@ -92,26 +112,56 @@ function controler() {
     const seuil = taille >= 24 || (gras && taille >= 18.66) ? 3 : 4.5;
     if (ratio < seuil && !el.closest('[aria-disabled="true"],button:disabled')) dire(`contraste ${ratio.toFixed(2)}:1 sous ${seuil}:1 (« ${n.textContent.trim().slice(0, 30)} »)`, el);
   }
+  // la bordure des champs de saisie : 3:1 contre le fond (WCAG 1.4.11)
+  for (const el of document.querySelectorAll('input:not([type=hidden]),select,textarea')) {
+    if (!visible(el)) continue;
+    const s = getComputedStyle(el), b = rgb(s.borderTopColor), f = fond(el.parentElement);
+    if (!b || !f || parseFloat(s.borderTopWidth) === 0) continue;
+    const [x, y] = [lum(melange(b, f)), lum(f)].sort((p, q) => q - p), r = (x + 0.05) / (y + 0.05);
+    if (r < 3) dire(`bordure de champ à ${r.toFixed(2)}:1 sous 3:1`, el);
+  }
+  for (const c of illisibles) dire('couleur que la mesure ne sait pas lire : ' + c, null);
+  window.__fond = fond; window.__rgb = rgb; window.__lum = lum; window.__melange = melange;
   return defauts;
 }
 
-// Le focus : chaque élément atteint par la touche Tab doit montrer un contour (outline) ou un changement de bordure.
+// Le focus : chaque élément atteint par la touche Tab, jusqu'à ce que le focus revienne au début, doit montrer un
+// contour (outline) d'au moins 2 px, d'une couleur qui fait 3:1 avec le fond autour de l'élément.
 async function focus(page) {
-  const defauts = [];
+  const defauts = [], vus = new Set();
   await page.evaluate(() => { document.activeElement && document.activeElement.blur(); window.scrollTo(0, 0); });
-  for (let i = 0; i < 40; i++) {
+  for (let i = 0; i < 600; i++) {
     await page.keyboard.press('Tab');
     const r = await page.evaluate(() => {
       const el = document.activeElement;
       if (!el || el === document.body) return null;
-      const s = getComputedStyle(el);
-      const contour = s.outlineStyle !== 'none' && parseFloat(s.outlineWidth) >= 2;
-      return { contour, html: el.outerHTML.replace(/\s+/g, ' ').slice(0, 120) };
+      const s = getComputedStyle(el), html = el.outerHTML.replace(/\s+/g, ' ').slice(0, 120);
+      if (s.outlineStyle === 'none' || parseFloat(s.outlineWidth) < 2) return { html, ratio: 0 };
+      const c = window.__rgb(s.outlineColor), f = window.__fond(el.parentElement || el);
+      if (!c || !f) return { html, ratio: null };
+      const [a, b] = [window.__lum(window.__melange(c, f)), window.__lum(f)].sort((x, y) => y - x);
+      return { html, ratio: (a + 0.05) / (b + 0.05) };
     });
-    if (!r) break;
-    if (!r.contour) defauts.push('focus sans contour visible : ' + r.html);
+    if (!r || vus.has(r.html)) break;   // revenu au début : la page est parcourue
+    vus.add(r.html);
+    if (r.ratio === 0) defauts.push('focus sans contour visible : ' + r.html);
+    else if (r.ratio === null) defauts.push('focus : couleur du contour illisible : ' + r.html);
+    else if (r.ratio < 3) defauts.push(`focus à ${r.ratio.toFixed(2)}:1 sous 3:1 : ${r.html}`);
   }
   return defauts;
+}
+
+// Les états des pages à part qui n'apparaissent qu'après un geste. Les réponses du serveur sont simulées.
+async function etats(page, chemin) {
+  if (chemin === '/aveugle.html#lot') {
+    await page.route('**/api/lot', r => r.fulfill({ json: { lot: { id: 1, titres: Array.from({ length: 10 }, (_, i) => `Un titre d’essai numéro ${i + 1}, assez long pour une ligne`) }, restants: 3 } }));
+    await page.addInitScript(() => { try { localStorage.setItem('comparateur.jeton', 'essai'); } catch (e) {} });
+  } else if (chemin === '/aveugle.html#fini') {
+    await page.route('**/api/lot', r => r.fulfill({ json: { lot: null, restants: 0 } }));
+    await page.addInitScript(() => { try { localStorage.setItem('comparateur.jeton', 'essai'); } catch (e) {} });
+  } else if (chemin.startsWith('/mail.html#confirmer') || chemin.startsWith('/mail.html#desinscrire')) {
+    await page.route('**/api/mail/**', r => r.fulfill({ status: chemin.endsWith('404') ? 404 : 200, json: {} }));
+  }
 }
 
 (async () => {
@@ -129,17 +179,21 @@ async function focus(page) {
           '#/classement', '#/medias', '#/media/' + encodeURIComponent(d.medias[0].nom), '#/editions'].concat(d.sujets.map(s => '#/sujet/' + s.id));
         for (const v of vues) pages.push(`/editions/${j}.html${v}`);
       }
-      pages.push('/aveugle.html', '/mail.html#confirmer=essai-essai-essai', '/mail.html#desinscrire=essai-essai-essai', '/mail.html');
+      pages.push('/aveugle.html', '/aveugle.html#lot', '/aveugle.html#fini', '/mail.html#confirmer=essai-essai-essai',
+        '/mail.html#desinscrire=essai-essai-essai', '/mail.html#desinscrire=essai-essai-clic', '/mail.html#confirmer=essai-essai-404', '/mail.html');
       for (const p of pages) {
-        // Le guichet limite à 300 requêtes par minute et par adresse. Avec COMPARATEUR_DERRIERE_PROXY=1 sur le serveur
-        // d'essai, chaque page porte une adresse différente ; sans lui, une pause suffit, en plus long.
-        await page.setExtraHTTPHeaders({ 'X-Forwarded-For': `10.9.${n % 250}.${(n / 250 | 0) % 250}` });
-        await page.goto('about:blank'); await page.waitForTimeout(process.env.PAUSE ? +process.env.PAUSE : 30);
-        await page.goto(B + p);
-        await page.waitForTimeout(50);
+        await page.unrouteAll();
+        await etats(page, p);
+        await page.goto('about:blank'); await page.waitForTimeout(30);
+        await page.goto(B + p.replace(/#(lot|fini)$/, ''));
+        await page.waitForTimeout(80);
+        if (p.startsWith('/mail.html#') && !p.endsWith('essai')) {   // le résultat d'un clic sur le bouton
+          await page.click('section:not([hidden]) button').catch(() => {});
+          await page.waitForTimeout(80);
+        }
         // Les messages d'erreur des pages à part n'apparaissent qu'après un geste : on en écrit un, pour en voir le contraste.
         await page.evaluate(() => { const m = document.getElementById('message'); if (m && !m.textContent.trim()) { m.textContent = 'Message d’erreur d’essai'; m.className = 'ko'; } });
-        const defauts = (await page.evaluate(controler)).concat(theme === 'light' ? await focus(page) : []);
+        const defauts = (await page.evaluate(controler)).concat(await focus(page));
         n++;
         for (const x of defauts) {   // un même défaut, sur plusieurs pages, n'est listé qu'une fois
           const cle = x.replace(/\d+(\.\d+)?:1/, 'n:1');

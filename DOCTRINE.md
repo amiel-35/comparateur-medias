@@ -97,11 +97,15 @@ node essais/accessibilite.js http://127.0.0.1:8765
 ```
 
 `essais/accessibilite.js` est la mesure d'accessibilité, écrite à la main : sur chaque vue, un seul `h1` et aucun
-niveau de titre sauté, un nom lisible pour chaque lien, bouton, champ et figure, le contraste de chaque texte
-contre son fond réel (WCAG 2.2, 4,5:1), un contour visible sur tout ce qu'atteint la touche Tab. Elle passe aussi
-sur `aveugle.html` et `mail.html`. Lancer le serveur d'essai avec `COMPARATEUR_DERRIERE_PROXY=1` : chaque page y
-porte alors une adresse différente, et la limite de débit ne gêne pas. Le 17/11/2026, elle ne trouvait de défaut
-que sur `aveugle.html` (focus invisible, contraste du message d'erreur, deux étiquettes sans champ), corrigés.
+niveau de titre sauté, un titre d'onglet qui reprend le `h1`, un nom lisible pour chaque lien, bouton, champ et
+figure, le contraste de chaque texte contre son fond réel (WCAG 2.2, 4,5:1), celui de la bordure des champs (3:1),
+et un contour de focus d'au moins 2 px et 3:1 sur tout ce qu'atteint la touche Tab, dans les deux thèmes. Elle
+passe aussi sur `aveugle.html` et `mail.html`, avec leurs états d'après un geste (réponses du serveur simulées).
+Pour voir l'encart du mail de la page Semaine, écrire les pages d'essai avec des réglages SMTP factices
+(`COMPARATEUR_SMTP_UTILISATEUR=essai COMPARATEUR_SMTP_MOT_DE_PASSE=essai python3 -m comparateur pages`) : rien ne
+part. Elle ne voit ni le survol ni les contenus `::before`. Le 17/11/2026, elle a trouvé : sur `aveugle.html`, un
+focus sans contour, le message d'erreur à 4,2:1, deux étiquettes sans champ, des bordures de champ à 1,3:1 ; sur
+tout le site, un contour de focus jaune à 1,4:1 sur le fond clair. Tout est corrigé (jeton `--focus`).
 
 `essais/rendu.js` ouvre chaque vue de chaque édition à 375 px et 1280 px, en clair et en sombre. Il échoue sur
 une erreur de console, un défilement horizontal ou un « undefined » à l'écran, et écrit l'empreinte de chaque

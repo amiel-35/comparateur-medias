@@ -11,8 +11,8 @@
 <meta name="apple-mobile-web-app-title" content="Cadrages">
 <title>Jugement à l'aveugle · Cadrages</title>
 <style>
-:root { --fond: #f6f4ef; --carte: #fffdf9; --trait: #e2ddd2; --encre: #1f1d1a; --doux: #6b665d; --g: #c8456a; --c: #b9a25a; --d: #3d6fb4; --ko: #9a2a1a; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --fond: #17161a; --carte: #201f24; --trait: #35333b; --encre: #eeebe4; --doux: #a29d93; --g: #e0718f; --c: #cdb873; --d: #6f9ad6; --ko: #ff9c8a; } }
+:root { --fond: #f6f4ef; --carte: #fffdf9; --trait: #e2ddd2; --encre: #1f1d1a; --doux: #6b665d; --g: #c8456a; --c: #b9a25a; --d: #3d6fb4; --ko: #9a2a1a; --focus: #1f1d1a; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --fond: #17161a; --carte: #201f24; --trait: #35333b; --encre: #eeebe4; --doux: #a29d93; --g: #e0718f; --c: #cdb873; --d: #6f9ad6; --ko: #ff9c8a; --focus: #f2c230; } }
 * { box-sizing: border-box; } [hidden] { display: none !important; }
 body { margin: 0; background: var(--fond); color: var(--encre); font: 16px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif; }
 main { max-width: 680px; margin: 0 auto; padding: 24px 16px 64px; }
@@ -20,9 +20,9 @@ h1 { font: 700 28px/1.15 Georgia, serif; margin: 0 0 6px; }
 p.note { color: var(--doux); margin: 0 0 16px; }
 .carte { background: var(--carte); border: 1px solid var(--trait); border-radius: 14px; padding: 18px; margin: 0 0 14px; }
 label { display: block; font-weight: 600; margin: 12px 0 6px; }
-input[type=text] { width: 100%; font: inherit; padding: 10px 12px; border: 1px solid var(--trait); border-radius: 10px; background: var(--fond); color: inherit; }
+input[type=text] { width: 100%; font: inherit; padding: 10px 12px; border: 1px solid var(--doux); border-radius: 10px; background: var(--fond); color: inherit; }
 .echelle { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
-.echelle button { font: inherit; font-size: 14px; padding: 12px 4px; border: 1px solid var(--trait); border-radius: 10px; background: var(--fond); color: inherit; cursor: pointer; }
+.echelle button { font: inherit; font-size: 14px; padding: 12px 4px; border: 1px solid var(--doux); border-radius: 10px; background: var(--fond); color: inherit; cursor: pointer; }
 .echelle button[aria-pressed="true"], .echelle button:hover { border-color: var(--encre); }
 .echelle button:nth-child(1) { border-bottom: 4px solid var(--g); } .echelle button:nth-child(2) { border-bottom: 4px solid color-mix(in srgb, var(--g) 55%, var(--c)); }
 .echelle button:nth-child(3) { border-bottom: 4px solid var(--c); } .echelle button:nth-child(4) { border-bottom: 4px solid color-mix(in srgb, var(--d) 55%, var(--c)); }
@@ -30,7 +30,7 @@ input[type=text] { width: 100%; font: inherit; padding: 10px 12px; border: 1px s
 button.action { font: inherit; font-weight: 600; margin-top: 16px; padding: 11px 18px; border: 0; border-radius: 10px; background: var(--encre); color: var(--fond); cursor: pointer; }
 ol { margin: 0; padding-left: 22px; } ol li { padding: 6px 0; overflow-wrap: anywhere; }
 #message { color: var(--ko); min-height: 1.5em; }
-:focus-visible { outline: 3px solid #f2c230; outline-offset: 2px; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .lab { display: block; font-weight: 600; margin: 12px 0 6px; }
 a { color: inherit; }
 </style>
@@ -120,7 +120,9 @@ $('entrer').addEventListener('click', async () => {
   } catch (e) { $('message').textContent = e.message; }
 });
 echelle($('mon-bord'), (v) => { monBord = v; });
-const code = new URLSearchParams(location.search).get('code');
+// Le code arrive dans le fragment (#code=…) : le navigateur ne l'envoie pas au serveur, aucun journal ne le voit.
+// L'ancienne forme (?code=…) marche encore, pour les liens déjà envoyés.
+const code = (/^#code=([\w-]{4,64})$/.exec(location.hash) || [])[1] || new URLSearchParams(location.search).get('code');
 if (code) { $('code').value = code; history.replaceState(null, '', location.pathname); }  // le code ne reste pas dans l'adresse
 if (jeton) suivant(); else montrer('inscription');
 // l'application installable : sans effet si le navigateur ne connaît pas les service workers

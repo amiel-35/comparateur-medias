@@ -3,7 +3,8 @@ import os
 
 ICI = os.path.dirname(os.path.abspath(__file__))
 
-# Le nom du site : celui du manifeste, des pages et des mails. Un seul nom, écrit une fois (un test le vérifie).
+# Le nom du site. Les mails le lisent ici ; le manifeste et les pages l'écrivent en dur, et un test vérifie que
+# c'est le même partout.
 MARQUE = "Cadrages"
 
 

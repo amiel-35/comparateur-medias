@@ -53,7 +53,8 @@ def main(argv):
             for _ in range(int(argv[2]) if len(argv) > 2 else 1):
                 code = secrets.token_urlsafe(9)
                 db.execute("INSERT INTO invitations (code, cree) VALUES (?, ?)", (code, base.iso()))
-                print(code)
+                # le code dans le fragment : ni le serveur ni le journal du proxy ne le voient
+                print(f"{code}  {config.site_url()}/aveugle.html#code={code}")
             db.commit()
         elif cmd == "jetons":
             total = {"appels": 0, "entree": 0, "sortie": 0, "cout": 0.0}
