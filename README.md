@@ -73,6 +73,25 @@ publie **l'édition du jour**, qui ne bouge plus ensuite.
 - Un export n'est jamais une copie de `comparateur.db` (règle 10 de [DOCTRINE.md](DOCTRINE.md)) : la base porte
   aussi les adresses des abonnés et les votants.
 
+## L'export de chaque édition
+
+Chaque édition gardée est aussi publiée en JSON, la même pour tout le monde (aucun paramètre, aucune heure de
+génération : mêmes octets d'un passage à l'autre).
+
+- `/export/editions.json` : la liste des jours.
+- `/export/editions/<jour>.json` : l'édition du jour (version 1 du format).
+- `/export/schema.json` : le schéma JSON (2020-12) de ces fichiers, écrit à la main dans
+  `comparateur/export_schema.json`.
+
+Un export contient : les versions de la méthode et du classement, les licences (code AGPL-3.0 ; classement FrIdéo,
+French News Lab, CC BY 4.0 ; les titres appartiennent à leurs journaux), la liste des champs écrits par un modèle,
+les médias lus (nom, statut, score, bande), les absents, les non classés, les sujets (titre, fait, divergence,
+angles, mots, titres, comptage par bande, côtés silencieux) et les titres restés seuls. Il ne contient ni
+résultats de votes, ni rien qui touche un abonné ou un votant. Une édition d'avant les statuts ou la version 1.0
+s'exporte aussi : un champ manquant reçoit une valeur par défaut. `comparateur/export.py` le construit champ par
+champ à partir de l'édition gardée, jamais depuis la base, et `comparateur/schema.py` (un validateur de la
+bibliothèque standard) le vérifie contre le schéma avant de l'écrire.
+
 ## La méthode, versionnée
 
 La page Démarche (`#/demarche`) est le document de référence de la méthode. Elle porte une ligne de version
