@@ -19,3 +19,4 @@
 .tags a,.tags span.x{display:inline-block;border:1px solid var(--ink);padding:3px 8px;font-size:.85rem;text-decoration:none;background:var(--paper)}
 .tags span.x{border-style:dashed;border-color:var(--mute);color:var(--mute)}
 .masked{color:var(--mute);font-size:.9rem}
+.mlist .l-nc{border-left-style:dashed;border-left-color:var(--mute)}

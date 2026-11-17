@@ -115,7 +115,7 @@ def periode(editions, cle, debut, fin):
     top = lignes[:TOP]
     medias = []
     for nom in sorted(bord, key=lambda n: n.lower()):
-        medias.append({"nom": nom, "bord": bord[nom], "cote": base.COTE.get(bord[nom], "c"),
+        medias.append({"nom": nom, "bord": bord[nom], "cote": base.COTE.get(bord[nom]),   # None : non classé
                        "titres": sum(1 for s in lignes for m in sujets[s["id"]]["titres"].values() if m == nom),
                        "sujets": sum(1 for s in larges if nom in s["noms"]),
                        "top": sum(1 for s in top if nom in s["noms"])})

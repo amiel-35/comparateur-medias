@@ -55,6 +55,13 @@ function sujetView(r){
     h+='</div></section>';
   });
   h+='</div>';
+  /* les titres des médias non classés : comptés dans la couverture du sujet, rangés sous aucun côté */
+  if(r.nc&&r.nc.length){
+    var ncm={};r.nc.forEach(function(a){ncm[a.media]=1;});
+    h+='<section class="col nc-col"><header><span>Non classés</span><span class="mono" style="font-weight:400">'+pl(r.nc.length,'titre','titres')+' · '+pl(Object.keys(ncm).length,'média','médias')+'</span></header><div class="body">'+
+      '<p class="note">FrIdéo ne classe pas ces médias. Leurs titres comptent dans la couverture du sujet, dans aucun bord ni aucun silence.</p>'+
+      '<ul class="tlist">'+r.nc.map(function(a){return titleLi(r,a);}).join('')+'</ul></div></section>';
+  }
   if(r.mots&&r.mots.length){
     h+='<h2>Les mots qui diffèrent'+mdl()+'</h2><ul class="mots">'+r.mots.map(function(m){return '<li><q>'+esc(m.terme)+'</q><br><span class="mute">'+esc(m.qui)+'</span></li>';}).join('')+'</ul>';
   }else if(r.kind==='sujet'){h+='<h2>Les mots qui diffèrent</h2><p class="note">Le modèle n’a repéré aucun mot qui diffère nettement sur ce sujet.</p>';}

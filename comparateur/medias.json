@@ -1,4 +1,5 @@
 {
+ "version": "FrIdéo v1.0",
  "source": "FrIdéo v1.0, French News Lab (Amr Sobhy, ICNLSP 2026), CC BY 4.0, https://frenchnewslab.org/fr/publications/frideo-french-news-ideology-scale ; jeu de données officiel de data.gouv.fr (frideo_scores.csv, version du 10/08/2026), lu le 14/11/2026",
  "note_donnees": "score arrondi à deux décimales, comme publié ; ic = intervalle de confiance analytique à 95 % ; sources = familles d'indices directs (9 au plus) ; peu_documente = 4 familles ou moins ; bande = l'étiquette publiée par FrIdéo pour ce média (sept bandes)",
  "seuils": "les sept bandes et leurs seuils sont ceux de FrIdéo : extrême gauche < -1,5 ; gauche < -0,75 ; centre gauche < -0,25 ; centre ; centre droit ≥ +0,25 ; droite ≥ +0,75 ; extrême droite ≥ +1,5",

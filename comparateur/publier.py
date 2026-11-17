@@ -9,7 +9,9 @@ from . import aveugle, base, config, methode, syntheses
 from .fabrique import hors_ecartees, sujets_du_jour
 
 
-SEUILS = json.load(open(os.path.join(config.ICI, "medias.json"), encoding="utf-8"))["seuils"]
+_REF = json.load(open(os.path.join(config.ICI, "medias.json"), encoding="utf-8"))
+SEUILS = _REF["seuils"]
+VERSION_CLASSEMENT = _REF["version"]   # « FrIdéo v1.0 » : inscrite dans chaque édition gardée
 
 
 def _ecrire(chemin, texte):
@@ -48,7 +50,9 @@ def balise_mesure():
 def donnees_du_jour(db):
     notes = base.scores(db)
     fiche = {m["nom"]: m for m in json.load(open(os.path.join(config.ICI, "medias.json"), encoding="utf-8"))["medias"]}
-    medias = [{"nom": r["nom"], "score": notes.get(r["id"], 0.0), "bord": base.bord(notes.get(r["id"], 0.0)),
+    # Un média sans note FrIdéo est non classé : ni score, ni bord. Il n'est jamais rangé au centre par défaut.
+    medias = [{"nom": r["nom"], "score": notes.get(r["id"]),
+               "bord": base.bord(notes[r["id"]]) if r["id"] in notes else None, "statut": base.statut(notes.get(r["id"])),
                "proprietaire": r["proprietaire"], "id": r["id"], "ic": fiche.get(r["nom"], {}).get("ic"),
                "sources": fiche.get(r["nom"], {}).get("sources"),
                "peu_documente": bool(fiche.get(r["nom"], {}).get("peu_documente"))}
@@ -82,13 +86,15 @@ def donnees_du_jour(db):
     source = db.execute("SELECT source FROM notes_media WHERE methode = 'etude tierce' ORDER BY cree DESC, id DESC LIMIT 1").fetchone()
     return {"recolte": base.iso(), "heures": config.heures(), "total": total, "mode": "auto",
             "ecartes": {"rubriques": config.rubriques_ecartees(), "titres": ecartes},
-            "medias": sorted(({k: m[k] for k in ("nom", "score", "bord", "proprietaire")} for m in medias if m["id"] in presents),
-                             key=lambda m: m["score"]),
+            "medias": sorted(({k: m[k] for k in ("nom", "score", "bord", "statut", "proprietaire")} for m in medias if m["id"] in presents),
+                             key=lambda m: (m["score"] is None, m["score"] or 0, m["nom"])),
             "absents": [m["nom"] for m in medias if m["id"] not in presents],
             "source_classement": source["source"] if source else "",
             "classement": {"source": source["source"] if source else "", "seuils": SEUILS,
-                           "medias": sorted(({k: m[k] for k in ("nom", "score", "ic", "sources", "peu_documente")} for m in medias),
-                                             key=lambda m: m["score"])},
+                           "medias": sorted(({k: m[k] for k in ("nom", "score", "ic", "sources", "peu_documente")}
+                                             for m in medias if m["statut"] == "classe"), key=lambda m: m["score"])},
+            # Les médias lus hors de FrIdéo : comptés dans la couverture d'un sujet, dans aucun bord ni aucun silence.
+            "non_classes": sorted(m["nom"] for m in medias if m["statut"] == "non-classe"),
             "sujets": sujets, "seuls": seuls,
             "aveugle": aveugle.resultats(db)}
 
@@ -99,9 +105,12 @@ def enregistrer_edition(db, jour=None):
     charge = donnees_du_jour(db)
     charge["rythme"] = {"recolte_minutes": config.fabrique_minutes(), "edition_heure": config.edition_heure()}
     jour = jour or base.paris().strftime("%Y-%m-%d")
-    db.execute("""INSERT INTO editions (jour, cree, donnees) VALUES (?, ?, ?)
-                  ON CONFLICT(jour) DO UPDATE SET cree = excluded.cree, donnees = excluded.donnees""",
-               (jour, base.iso(), json.dumps(charge, ensure_ascii=False)))
+    # Les versions qui produisent l'édition sont gardées avec elle : un changement de méthode ou de classement ne
+    # réécrit rien, et chaque édition dit sous quelles règles elle a été faite.
+    db.execute("""INSERT INTO editions (jour, cree, donnees, methode, classement) VALUES (?, ?, ?, ?, ?)
+                  ON CONFLICT(jour) DO UPDATE SET cree = excluded.cree, donnees = excluded.donnees,
+                    methode = excluded.methode, classement = excluded.classement""",
+               (jour, base.iso(), json.dumps(charge, ensure_ascii=False), methode.VERSION, VERSION_CLASSEMENT))
     db.commit()
     return jour, charge
 
@@ -113,7 +122,7 @@ def ecrire_pages(db):
     os.makedirs(os.path.join(pub, "editions"), exist_ok=True)
     os.makedirs(os.path.join(pub, "data", "editions"), exist_ok=True)
     modele = gabarit()
-    lignes = db.execute("SELECT jour, donnees FROM editions ORDER BY jour").fetchall()
+    lignes = db.execute("SELECT jour, donnees, methode, classement FROM editions ORDER BY jour").fetchall()
     jours = [r["jour"] for r in lignes]
     charges = [(r["jour"], json.loads(r["donnees"])) for r in lignes]
     # Une édition faite avant que les intervalles de confiance soient connus les reçoit ici, sans rien réécrire d'autre.
@@ -124,6 +133,7 @@ def ecrire_pages(db):
         for m in charge.get("medias", []):
             if m.get("score") is not None:
                 m["bord"] = base.bord(m["score"])
+            m["statut"] = base.statut(m.get("score"))   # une édition d'avant les statuts : tous ses médias sont classés
         charge.setdefault("classement", {})["seuils"] = SEUILS
         for m in charge.get("classement", {}).get("medias", []):
             if m.get("ic") is None and m["nom"] in fiche:
@@ -138,6 +148,8 @@ def ecrire_pages(db):
         # Le suivi d'un sujet : sa présence dans toutes les éditions gardées, s'il y figure plus d'un jour.
         charge["suivi"] = {s["id"]: suivi[s["id"]] for s in charge["sujets"] if len(suivi.get(s["id"], [])) > 1}
         charge["min_medias"] = syntheses.MIN_MEDIAS
+        # Les versions de cette édition : celles du jour où elle a été faite. methode '' : avant la version 1.0.
+        charge["versions"] = {"methode": r["methode"] or "", "classement": r["classement"] or ""}
         charge["methode"] = methode.charge()   # la version de la méthode et son historique, lus par la page Démarche
         charge["mesure"] = "umami" if config.umami() else None   # lu par la page Mentions et le pied de page
         # La synthèse de la semaine par mail : null quand le SMTP n'est pas réglé (ni formulaire, ni mention).

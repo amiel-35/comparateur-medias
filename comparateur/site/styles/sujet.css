@@ -29,3 +29,5 @@
 .mots li{background:var(--paper);border:1px solid var(--line);padding:10px 12px}
 .mots q{font-family:var(--serif);font-size:1.2rem;quotes:none}
 .pn{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:34px}
+.nc-col{margin-top:16px}
+.nc-col>header{border-bottom:1px dashed var(--mute)}

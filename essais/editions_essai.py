@@ -34,6 +34,8 @@ SUJETS = {  # id: (titre, {jour: {bord: nb médias}})
  "s52": ("Hôpital : la Cour des comptes alerte sur la dette des établissements publics", {"2026-11-12": {"gauche": 1, "centre": 2}, "2026-11-14": {"gauche": 2, "centre-gauche": 1, "centre": 1}}),
 }
 JOURS = ["2026-11-11", "2026-11-12", "2026-11-13", "2026-11-14"]
+# Un média fictif, hors de FrIdéo, dans les deux dernières éditions : il sert à voir le statut « non classé ».
+NC = "Le Journal d'essai"
 def edition(jour, ancienne=False):
     sujets, pris = [], set()
     for sid, (titre, jours) in SUJETS.items():
@@ -53,6 +55,9 @@ def edition(jour, ancienne=False):
                        "analyse": {"g": "Met en avant la mobilisation et la colère sociale.", "c": "Décrit le calendrier et les chiffres.", "d": "Aucun titre." if not any(b in jours[jour] for b in ("droite", "centre-droit")) else "Insiste sur le coût et les blocages."} if analyse else {"g": vide, "c": vide, "d": vide},
                        "mots": [{"terme": "« mobilisation »", "qui": "L'Humanité, Libération"}, {"terme": "« blocages »", "qui": "Le Figaro"}] if analyse else [],
                        "articles": arts})
+    if jour in JOURS[2:]:
+        for s in sujets[:3]:
+            s["articles"].append({"media": NC, "titre": "Un titre du journal non classé, sur ce sujet", "lien": f"https://journal-essai.test/{s['id']}/{jour}"})
     sujets.sort(key=lambda s: -len({a["media"] for a in s["articles"]}))
     seuls = [{"media": m["nom"], "titre": f"Un titre resté sans jumeau chez {m['nom']}", "lien": f"https://exemple.test/seul/{jour}/{i}"} for i, m in enumerate(lus[::3])]
     medias = sorted(({"nom": m["nom"], "score": m["score"], "bord": B(m), "proprietaire": None} for m in lus), key=lambda m: m["score"])
@@ -60,6 +65,9 @@ def edition(jour, ancienne=False):
     d = {"recolte": jour + "T05:02:11+00:00", "heures": 24, "total": 640, "mode": "auto", "medias": medias, "absents": sorted(ABSENTS),
          "source_classement": ref["source"], "classement": {"source": ref["source"], "seuils": publier.SEUILS, "medias": sorted(cl, key=lambda m: m["score"])},
          "sujets": sujets, "seuls": seuls, "aveugle": {}}
+    if jour in JOURS[2:]:
+        d["medias"].append({"nom": NC, "score": None, "bord": None, "statut": "non-classe", "proprietaire": None})
+        d["non_classes"] = [NC]
     if not ancienne:
         d["ecartes"] = {"rubriques": ["culture", "sport"], "titres": 87}
         d["rythme"] = {"recolte_minutes": 180, "edition_heure": 6}

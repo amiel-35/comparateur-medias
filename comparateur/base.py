@@ -3,7 +3,7 @@
 Dates en UTC (ISO 8601). Un article = l'empreinte de son adresse. La note d'un média est une donnée
 (table notes_media : une ligne par méthode, avec source et confiance), jamais une constante du code.
 """
-import hashlib, json, os, sqlite3
+import hashlib, json, os, re, sqlite3
 from datetime import datetime, timedelta, timezone
 
 from . import config
@@ -41,7 +41,10 @@ CREATE TABLE IF NOT EXISTS avis_note (
   votant_id TEXT NOT NULL REFERENCES votants(id), media_id INTEGER NOT NULL REFERENCES medias(id),
   accord INTEGER NOT NULL, cree TEXT NOT NULL, PRIMARY KEY (votant_id, media_id));
 -- Une édition par jour : la photographie complète de ce que le site affichait ce jour-là.
-CREATE TABLE IF NOT EXISTS editions (jour TEXT PRIMARY KEY, cree TEXT NOT NULL, donnees TEXT NOT NULL);
+-- methode, classement : les versions qui l'ont produite (« 1.0 », « FrIdéo v1.0 »). '' : édition d'avant la
+-- numérotation de la méthode. Elles sont à côté des données, qui ne sont jamais réécrites.
+CREATE TABLE IF NOT EXISTS editions (jour TEXT PRIMARY KEY, cree TEXT NOT NULL, donnees TEXT NOT NULL,
+  methode TEXT, classement TEXT);
 -- La synthèse de la semaine par mail. Une désinscription supprime la ligne. dernier_envoi : clé de la dernière
 -- semaine envoyée (« 2026-S46 »), contre tout double envoi.
 CREATE TABLE IF NOT EXISTS abonnes (
@@ -89,7 +92,34 @@ def migrer(db):
     """Met une base d'avant au schéma courant, sans rien perdre. Rend True si quelque chose a changé."""
     a = migrer_rubrique(db)
     b = migrer_dates(db)
-    return a or b
+    c = migrer_versions(db)
+    return a or b or c
+
+
+def migrer_versions(db):
+    """Les colonnes editions.methode et editions.classement. Une édition déjà gardée reçoit les versions qui l'ont
+    produite, sans que ses données soient réécrites : méthode '' (elle précède la version 1.0, première numérotée),
+    classement relu dans la source citée par l'édition elle-même (« FrIdéo v1.0 »), '' s'il n'y figure pas."""
+    colonnes = {c[1] for c in db.execute("PRAGMA table_info(editions)")}
+    if {"methode", "classement"} <= colonnes:
+        return False
+    try:
+        for c in ("methode", "classement"):
+            if c not in colonnes:
+                db.execute(f"ALTER TABLE editions ADD COLUMN {c} TEXT")
+    except sqlite3.OperationalError:   # une autre connexion vient de les ajouter
+        return False
+    maj = []
+    for jour, donnees in db.execute("SELECT jour, donnees FROM editions WHERE methode IS NULL").fetchall():
+        try:
+            source = str(json.loads(donnees).get("source_classement") or "")
+        except ValueError:
+            source = ""
+        m = re.search(r"FrIdéo v[\d.]+\d", source)
+        maj.append(("", m.group(0) if m else "", jour))
+    db.executemany("UPDATE editions SET methode = ?, classement = ? WHERE jour = ?", maj)
+    db.commit()
+    return True
 
 
 def migrer_rubrique(db):
@@ -145,14 +175,24 @@ def cle_article(media, titre, lien):
     return hashlib.sha256((lien or (media + "\0" + titre)).encode()).hexdigest()[:32]
 
 
+def statut(note):
+    """« classe » : le média a une note FrIdéo, donc une bande. « non-classe » : il est lu, ses titres comptent dans
+    la couverture d'un sujet, mais dans aucun bord ni aucun silence. Ce site ne classe aucun média lui-même : un
+    média hors de FrIdéo reste non classé."""
+    return "non-classe" if note is None else "classe"
+
+
 def charger_medias(db, chemin=None):
-    """Charge ou met à jour la liste des médias et leur note de départ (FrIdéo) depuis medias.json."""
+    """Charge ou met à jour la liste des médias et leur note de départ (FrIdéo) depuis medias.json. Un média sans
+    score (« score »: null) est non classé : il est lu, aucune note n'est écrite pour lui."""
     chemin = chemin or os.path.join(config.ICI, "medias.json")
     ref = json.load(open(chemin, encoding="utf-8"))
     for m in ref["medias"]:
         db.execute("INSERT INTO medias (nom, flux) VALUES (?, ?) ON CONFLICT(nom) DO UPDATE SET flux = excluded.flux",
                    (m["nom"], json.dumps(m["flux"])))
         mid = db.execute("SELECT id FROM medias WHERE nom = ?", (m["nom"],)).fetchone()["id"]
+        if m.get("score") is None:
+            continue
         db.execute("""INSERT INTO notes_media (media_id, note, methode, source, confiance, cree)
                       VALUES (?, ?, 'etude tierce', ?, 'moyenne', ?)
                       ON CONFLICT(media_id, methode, source) DO UPDATE SET note = excluded.note""",
