@@ -29,6 +29,7 @@ Elles priment sur les recommandations du document là où elles diffèrent.
 |---|---|---|
 | 6 | Prestataire d'envoi (phase 0) | **Brevo est gardé.** Son relais SMTP ajoute un pixel d'ouverture et réécrit les liens ; ce suivi ne se coupe pas. Les mentions doivent le dire. Le point « le suivi des clics de Brevo est vérifié » de la phase 0 est donc fait ; reste la phrase des mentions. |
 | 7 | Structure et neutralité financière (questions 1 et 4, 8.4) | **Projet mené seul, sur les deniers d'Amiel.** La question se rouvre si cela change : premier euro venu d'ailleurs ou seconde personne. |
+| 8 | Domaine, avant la phase 2 (question 8, 5.2) | **Le site reste sur un sous-domaine d'`inflexion.me`, y compris pour les comptes.** Les noms d'hôte de la phase 2 sont `compte.compare-media.inflexion.me` et `urne.compare-media.inflexion.me`. |
 
 ## 1. Ce que ce cadrage avance
 
