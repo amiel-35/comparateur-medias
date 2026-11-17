@@ -38,8 +38,8 @@ Deux enregistrements de plus, vers le même serveur que le site : `compte.compar
    Un hôte inconnu est servi comme le site.
 4. Aucun cache tiers devant `compte.` et `urne.` (cadrage, phase 1 : « pas de cache tiers devant un nom d'hôte qui
    porte `/api/` »).
-5. Les journaux d'accès de Traefik : à vérifier et couper, au moins pour `compte.` et `urne.` (phase 0, toujours à
-   faire).
+5. Les journaux d'accès de Traefik sont désactivés (vérifié le 17/11/2026, voir les Mentions) : les garder ainsi
+   pour les trois noms d'hôte, `compte.` et `urne.` compris.
 
 ## L'ordre, le jour du passage
 
