@@ -49,7 +49,7 @@ def alerte(jour, charge):
         par = syntheses.repartition(noms, bord)
         sujets.append({"id": s["id"], "titre": s["titre"], "medias": len(set(noms)), "titres": len(noms),
                        "rubriques": rubriques_du_sujet(s["articles"]),
-                       "silences": syntheses.silencieux(par, lus, len(set(noms))),
+                       "silences": syntheses.silencieux(par, lus, syntheses.classes(noms, bord)),
                        "page": f"/editions/{jour}.html#/sujet/{s['id']}"})
     sujets.sort(key=lambda s: (-s["medias"], -s["titres"], s["id"]))
     return {"jour": jour, "page": f"/editions/{jour}.html", "titres_ecrits_par_un_modele": True, "sujets": sujets}
