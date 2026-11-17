@@ -53,7 +53,16 @@ Le squelette nomme chaque morceau par une ligne `/*INCLURE chemin*/`. L'ordre de
    « à gauche » est « plus à gauche que les autres journaux du panel », pas « de gauche ».
 9. **Le dessin.** Fond crème, cadres noirs épais, serif, pas de carte arrondie ni d'ombre. Thèmes clair et
    sombre. Lisible à 375 px sans défilement horizontal. Les couleurs passent par les variables de
-   `styles/base.css`, jamais par une valeur écrite dans une vue.
+   `styles/base.css`, jamais par une valeur écrite dans une vue. Tout texte garde un contraste de 4,5:1 au moins
+   sur son fond, et tout élément atteint au clavier montre un contour de focus.
+10. **Un export n'est jamais une copie de `comparateur.db`.** La base ne porte pas que des données publiques :
+   les adresses des abonnés, les votants, le journal de la fabrique y sont aussi. Un export, un index, un jeu de
+   données se construit champ par champ à partir de ce qui est déjà publié (les éditions), jamais en copiant le
+   fichier ou une table. Une sauvegarde est une copie, et c'est pour cela qu'elle n'est jamais publiée. Seul
+   `base.py` ouvre la base. *Test : `Assise.test_un_export_n_est_jamais_une_copie_de_la_base`.*
+11. **La méthode a une version.** Changer une règle de comptage (bords, silences, fenêtre, rubriques) change la
+   version de `comparateur/methode.py` et ajoute une ligne à son historique. La page Démarche l'affiche : c'est
+   le document de référence.
 
 ## Ajouter une vue
 
@@ -82,6 +91,21 @@ COMPARATEUR_DONNEES=/tmp/essai PORT=8765 python3 -m comparateur servir
 ```bash
 node essais/rendu.js http://127.0.0.1:8765 /tmp/empreintes.txt
 ```
+
+```bash
+node essais/accessibilite.js http://127.0.0.1:8765
+```
+
+`essais/accessibilite.js` est la mesure d'accessibilité, écrite à la main : sur chaque vue, un seul `h1` et aucun
+niveau de titre sauté, un titre d'onglet qui reprend le `h1`, un nom lisible pour chaque lien, bouton, champ et
+figure, le contraste de chaque texte contre son fond réel (WCAG 2.2, 4,5:1), celui de la bordure des champs (3:1),
+et un contour de focus d'au moins 2 px et 3:1 sur tout ce qu'atteint la touche Tab, dans les deux thèmes. Elle
+passe aussi sur `aveugle.html` et `mail.html`, avec leurs états d'après un geste (réponses du serveur simulées).
+Pour voir l'encart du mail de la page Semaine, écrire les pages d'essai avec des réglages SMTP factices
+(`COMPARATEUR_SMTP_UTILISATEUR=essai COMPARATEUR_SMTP_MOT_DE_PASSE=essai python3 -m comparateur pages`) : rien ne
+part. Elle ne voit ni le survol ni les contenus `::before`. Le 17/11/2026, elle a trouvé : sur `aveugle.html`, un
+focus sans contour, le message d'erreur à 4,2:1, deux étiquettes sans champ, des bordures de champ à 1,3:1 ; sur
+tout le site, un contour de focus jaune à 1,4:1 sur le fond clair. Tout est corrigé (jeton `--focus`).
 
 `essais/rendu.js` ouvre chaque vue de chaque édition à 375 px et 1280 px, en clair et en sombre. Il échoue sur
 une erreur de console, un défilement horizontal ou un « undefined » à l'écran, et écrit l'empreinte de chaque

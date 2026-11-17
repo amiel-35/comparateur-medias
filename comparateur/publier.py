@@ -5,7 +5,7 @@ Les lecteurs ne lisent que ces fichiers : ni la base ni les modèles ne sont sol
 """
 import json, os, re, shutil
 
-from . import aveugle, base, config, syntheses
+from . import aveugle, base, config, methode, syntheses
 from .fabrique import hors_ecartees, sujets_du_jour
 
 
@@ -138,6 +138,7 @@ def ecrire_pages(db):
         # Le suivi d'un sujet : sa présence dans toutes les éditions gardées, s'il y figure plus d'un jour.
         charge["suivi"] = {s["id"]: suivi[s["id"]] for s in charge["sujets"] if len(suivi.get(s["id"], [])) > 1}
         charge["min_medias"] = syntheses.MIN_MEDIAS
+        charge["methode"] = methode.charge()   # la version de la méthode et son historique, lus par la page Démarche
         charge["mesure"] = "umami" if config.umami() else None   # lu par la page Mentions et le pied de page
         # La synthèse de la semaine par mail : null quand le SMTP n'est pas réglé (ni formulaire, ni mention).
         charge["mail"] = {"prestataire": "Brevo"} if config.mail() else None

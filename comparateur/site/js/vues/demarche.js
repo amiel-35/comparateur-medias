@@ -2,7 +2,11 @@
 function vDemarche(){
   var tot=0;D.sujets.forEach(function(s){tot+=s.articles.length;});
   var dt=new Date(D.recolte).toLocaleString('fr-FR',{timeZone:'Europe/Paris',day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  /* La méthode est versionnée (comparateur/methode.py) : cette page en est le document de référence. D.methode est
+     facultatif, une page écrite avant la numérotation n'en a pas. */
+  var MT=D.methode||null;
   var h='<h1 tabindex="-1" id="h1">Ce que fait le programme, ce que fait le modèle</h1>'+
+  (MT?'<p class="note version"><b>Méthode, version '+esc(MT.version)+', en vigueur depuis le '+esc(jourLong(MT.date))+'.</b> Cette page en est le document de référence. Elle décrit les règles en vigueur, pas forcément celles de l’édition affichée.</p>':'')+
   '<p class="lede" style="font-family:var(--serif);font-size:1.2rem;max-width:56ch">Quatre étapes entre un flux RSS et cette page. Deux passent par un modèle de langage. Deux non.</p>';
   h+='<h2>Pourquoi des titres</h2><p style="max-width:68ch">Le titre, c’est ce qu’une rédaction choisit de mettre en avant. Plusieurs titres d’un même fait, côte à côte : on voit ce que chaque bord retient, avec quels mots. Et ce qu’il laisse de côté.</p>';
   h+='<div class="nums"><div><b>'+D.total+'</b><span>titres récoltés sur '+D.heures+' h</span></div><div><b>'+D.medias.length+'</b><span>médias lus sur '+MEDIAS.length+'</span></div><div><b>'+D.sujets.length+'</b><span>sujets, '+tot+' titres rangés</span></div><div><b>'+D.seuls.length+'</b><span>titres sans jumeau</span></div></div>';
@@ -17,6 +21,10 @@ function vDemarche(){
   h+='<h2>Ce qu’un modèle fait, et ne fait pas</h2><div class="two"><div><h3>Il fait</h3><ul><li>Regrouper des titres en sujets.</li><li>Décrire, à partir des seuls titres, l’angle de chaque bord.</li><li>Repérer des mots qui diffèrent.</li></ul></div><div><h3>Il ne fait pas</h3><ul><li>Il ne note jamais un média : les notes viennent du classement FrIdéo.</li><li>Il ne place aucun média sur l’axe gauche-droite.</li><li>Il ne lit pas les articles.</li></ul></div></div>';
   h+='<p style="max-width:68ch;margin-top:14px">Les sujets, les faits communs, les analyses et les mots sont écrits par Claude, à partir des seuls titres. Chaque passage porte l’étiquette <span class="mdl" style="margin:0">écrit par un modèle</span>.</p>';
   h+='<h2>Les limites</h2><ul class="lim" style="max-width:68ch"><li><b>Des titres, pas des articles.</b> Un titre peut être plus neutre ou plus appuyé que le texte qu’il coiffe.</li><li><b>Un seul jour</b>, le '+esc(new Date(D.recolte).toLocaleDateString('fr-FR',{timeZone:'Europe/Paris'}))+', sur '+D.heures+' h. Un silence aujourd’hui n’est pas un silence habituel.</li>'+(D.absents.length?'<li><b>'+(D.absents.length>1?D.absents.length+' flux illisibles':'Un flux illisible')+' :</b> '+D.absents.map(esc).join(', ')+'. Leur silence ne compte pas comme un silence. Ils sortent des comptages par bord.</li>':'')+'<li><b>Les bords ne sont pas de ce site :</b> ce sont les sept bandes de FrIdéo, avec ses mots et ses seuils. Ce site n’en fait qu’un regroupement, en trois côtés, pour les textes d’angle écrits par le modèle et pour les silences.</li>'+(EC?'<li><b>Pas de '+EC.rubriques.map(esc).join(' ni de ')+'.</b> La rubrique est lue dans l’adresse de l’article. Un article dont l’adresse ne dit rien de sa rubrique n’est pas écarté.</li>':'')+'</ul>';
+  if(MT&&MT.historique&&MT.historique.length){
+    h+='<h2>La méthode change, et le dit</h2><p class="note">Une version change quand une règle de comptage change. Une édition garde ce qui a été fait ce jour-là : ses sujets, ses titres, ses textes d’angle, sa fenêtre et ses rubriques écartées. Deux choses seulement sont refaites à l’affichage, avec les règles en vigueur : le bord de chaque média, relu dans son score FrIdéo, et les silences.</p><ol class="versions">'+
+    MT.historique.map(function(v){return '<li><b>'+(v.version?'Version '+esc(v.version)+', '+esc(jourLong(v.jour)):esc(jourLong(v.jour).replace(/^./,function(c){return c.toUpperCase();})))+'.</b> '+esc(v.texte)+'</li>';}).join('')+'</ol>';
+  }
   h+='<p class="note" style="margin-top:20px">Le détail du classement : <a href="#/classement">le classement des médias</a>. Ce que ce site doit à d’autres : <a href="#/origine">d’où vient ce site</a>.</p>';
   return h;
 }

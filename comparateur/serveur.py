@@ -1,7 +1,7 @@
 """Le serveur : le site statique et le guichet des votes. Bibliothèque standard seulement.
 
   GET  /sante                      état du service (pour le contrôle de santé de Coolify)
-  POST /api/inscription            {code, bord}  -> {jeton}     un code d'invitation ouvre un jeton anonyme
+  POST /api/inscription            {code, bord}  -> {jeton}     un code d'invitation ouvre un jeton (un pseudonyme)
   GET  /api/lot                    -> {lot: {id, titres} | null, restants}   (Authorization: Bearer <jeton>)
   POST /api/avis-aveugle           {lot, note}   note de -2 (gauche) à +2 (droite)
   POST /api/avis-note              {media, accord}
@@ -11,11 +11,12 @@
   POST /api/mail/desinscription    {jeton}, ou ?jeton= avec List-Unsubscribe=One-Click (RFC 8058) : supprime l'abonné
   tout le reste                    fichiers de <données>/public/
 
-Anonymat : la base ne garde que l'empreinte du jeton et le bord déclaré. Aucun lien entre une
-invitation et un votant, aucun nom, aucune adresse (ni courriel ni IP). Les abonnés au mail de la semaine
+Pseudonyme, pas anonymat : la base garde l'empreinte du jeton, le bord déclaré et les avis, sans nom ni adresse (ni
+courriel ni IP). Le jeton relie entre eux les avis d'un même votant. L'éditeur sait à qui il a remis chaque code, et
+invitations.utilisee_le et votants.cree portent le même jour : avec peu d'inscrits, le rapprochement se fait à la main. Les abonnés au mail de la semaine
 sont à part (table abonnes, voir lettre.py) : leur adresse n'est écrite dans aucun journal.
 """
-import hashlib, json, mimetypes, os, re, secrets, threading, time
+import hashlib, json, mimetypes, os, re, secrets, sys, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
@@ -44,17 +45,32 @@ ENTETES = {
 
 
 class Debit:
-    """Limite de débit en mémoire : au plus `maxi` appels par fenêtre de `secondes`, par clé."""
+    """Limite de débit en mémoire : au plus `maxi` appels par fenêtre de `secondes`, par clé.
+
+    Une clé (une adresse IP, l'empreinte d'une adresse mail) est oubliée au plus tard une fenêtre et une minute après
+    son dernier appel : un fil à part (`oublier`) purge toutes les minutes, même sans trafic. Rien n'est écrit
+    ailleurs qu'en mémoire."""
 
     def __init__(self):
-        self.vus, self.verrou = {}, threading.Lock()
+        self.vus, self.fenetres, self.verrou, self.purge = {}, {}, threading.Lock(), 0.0
+
+    def purger(self, t=None):
+        t = time.time() if t is None else t
+        with self.verrou:
+            self._purger(t)
+
+    def _purger(self, t):
+        self.vus = {k: v for k, v in self.vus.items() if v and t - v[-1] < self.fenetres.get(k, 3600)}
+        self.fenetres = {k: f for k, f in self.fenetres.items() if k in self.vus}
+        self.purge = t
 
     def autorise(self, cle, maxi, secondes):
         t = time.time()
         with self.verrou:
-            if len(self.vus) > 20000:  # purge grossière : jamais de croissance sans borne
-                self.vus = {k: v for k, v in self.vus.items() if v and t - v[-1] < 3600}
+            if t - self.purge >= 60 or len(self.vus) > 20000:   # jamais de croissance sans borne
+                self._purger(t)
             passes = [x for x in self.vus.get(cle, []) if t - x < secondes]
+            self.fenetres[cle] = max(secondes, self.fenetres.get(cle, 0))
             if len(passes) >= maxi:
                 self.vus[cle] = passes
                 return False
@@ -64,6 +80,19 @@ class Debit:
 
 
 DEBIT = Debit()
+
+
+def oublier(debit=None, pause=60):
+    """Le fil qui purge la limite de débit toutes les minutes : une adresse IP n'est jamais gardée plus d'une heure
+    et une minute après sa dernière requête, qu'il y ait du trafic ou non."""
+    debit = debit or DEBIT
+
+    def boucle():
+        while True:
+            time.sleep(pause)
+            debit.purger()
+
+    threading.Thread(target=boucle, daemon=True, name="oubli").start()
 
 
 def empreinte(jeton):
@@ -306,9 +335,15 @@ class Guichet(BaseHTTPRequestHandler):
             self.envoyer(200, f.read(), type_mime, cache=cache)
 
 
+class Serveur(ThreadingHTTPServer):
+    def handle_error(self, request, client_address):
+        """socketserver écrirait l'adresse du client et la trace : ici, le type de l'erreur seulement."""
+        print("erreur de connexion :", sys.exc_info()[0].__name__, flush=True)
+
+
 def creer(port=None, hote="0.0.0.0"):
     base.connexion().close()  # crée le schéma au démarrage
-    return ThreadingHTTPServer((hote, config.port() if port is None else port), Guichet)
+    return Serveur((hote, config.port() if port is None else port), Guichet)
 
 
 def _planifier(minutes):
@@ -362,6 +397,7 @@ def _planifier(minutes):
 
 def servir():
     srv = creer()
+    oublier()
     print(f"comparateur : écoute sur le port {srv.server_address[1]}", flush=True)
     if config.fabrique_minutes() > 0:
         print(f"comparateur : récolte toutes les {config.fabrique_minutes()} min, édition chaque jour à "

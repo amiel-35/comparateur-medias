@@ -9,10 +9,10 @@
 <meta name="theme-color" content="#f1ede4" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#14130f" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-title" content="Cadrages">
-<title>Jugement à l'aveugle</title>
+<title>Jugement à l'aveugle · Cadrages</title>
 <style>
-:root { --fond: #f6f4ef; --carte: #fffdf9; --trait: #e2ddd2; --encre: #1f1d1a; --doux: #6b665d; --g: #c8456a; --c: #b9a25a; --d: #3d6fb4; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --fond: #17161a; --carte: #201f24; --trait: #35333b; --encre: #eeebe4; --doux: #a29d93; --g: #e0718f; --c: #cdb873; --d: #6f9ad6; } }
+:root { --fond: #f6f4ef; --carte: #fffdf9; --trait: #e2ddd2; --encre: #1f1d1a; --doux: #6b665d; --g: #c8456a; --c: #b9a25a; --d: #3d6fb4; --ko: #9a2a1a; --focus: #1f1d1a; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --fond: #17161a; --carte: #201f24; --trait: #35333b; --encre: #eeebe4; --doux: #a29d93; --g: #e0718f; --c: #cdb873; --d: #6f9ad6; --ko: #ff9c8a; --focus: #f2c230; } }
 * { box-sizing: border-box; } [hidden] { display: none !important; }
 body { margin: 0; background: var(--fond); color: var(--encre); font: 16px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif; }
 main { max-width: 680px; margin: 0 auto; padding: 24px 16px 64px; }
@@ -20,44 +20,46 @@ h1 { font: 700 28px/1.15 Georgia, serif; margin: 0 0 6px; }
 p.note { color: var(--doux); margin: 0 0 16px; }
 .carte { background: var(--carte); border: 1px solid var(--trait); border-radius: 14px; padding: 18px; margin: 0 0 14px; }
 label { display: block; font-weight: 600; margin: 12px 0 6px; }
-input[type=text] { width: 100%; font: inherit; padding: 10px 12px; border: 1px solid var(--trait); border-radius: 10px; background: var(--fond); color: inherit; }
+input[type=text] { width: 100%; font: inherit; padding: 10px 12px; border: 1px solid var(--doux); border-radius: 10px; background: var(--fond); color: inherit; }
 .echelle { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
-.echelle button { font: inherit; font-size: 14px; padding: 12px 4px; border: 1px solid var(--trait); border-radius: 10px; background: var(--fond); color: inherit; cursor: pointer; }
+.echelle button { font: inherit; font-size: 14px; padding: 12px 4px; border: 1px solid var(--doux); border-radius: 10px; background: var(--fond); color: inherit; cursor: pointer; }
 .echelle button[aria-pressed="true"], .echelle button:hover { border-color: var(--encre); }
 .echelle button:nth-child(1) { border-bottom: 4px solid var(--g); } .echelle button:nth-child(2) { border-bottom: 4px solid color-mix(in srgb, var(--g) 55%, var(--c)); }
 .echelle button:nth-child(3) { border-bottom: 4px solid var(--c); } .echelle button:nth-child(4) { border-bottom: 4px solid color-mix(in srgb, var(--d) 55%, var(--c)); }
 .echelle button:nth-child(5) { border-bottom: 4px solid var(--d); }
 button.action { font: inherit; font-weight: 600; margin-top: 16px; padding: 11px 18px; border: 0; border-radius: 10px; background: var(--encre); color: var(--fond); cursor: pointer; }
 ol { margin: 0; padding-left: 22px; } ol li { padding: 6px 0; overflow-wrap: anywhere; }
-#message { color: var(--g); min-height: 1.5em; }
+#message { color: var(--ko); min-height: 1.5em; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.lab { display: block; font-weight: 600; margin: 12px 0 6px; }
 a { color: inherit; }
 </style>
 </head>
 <body>
 <main>
   <h1>Jugement à l'aveugle</h1>
-  <p class="note">Dix titres d'un même média, sans son nom. Où le placez-vous, de la gauche à la droite ? Votre réponse est anonyme : ni nom, ni adresse, seulement le bord que vous déclarez pour vous-même.</p>
+  <p class="note">Dix titres d'un même média, sans son nom. Où le placez-vous, de la gauche à la droite ? Vos réponses partent sous un pseudonyme : un code aléatoire, gardé dans ce navigateur. Ce site ne garde ni nom ni adresse. Mais l'éditeur sait à qui il a remis chaque invitation, et la base garde le jour de votre inscription. Avec peu d'inscrits, un votant peut donc être retrouvé.</p>
   <p id="message" role="status"></p>
 
   <section class="carte" id="inscription" hidden>
     <label for="code">Code d'invitation</label>
     <input type="text" id="code" autocomplete="off" autocapitalize="none" spellcheck="false">
-    <label>Vous-même, où vous situez-vous ?</label>
-    <div class="echelle" id="mon-bord"></div>
-    <button class="action" id="entrer">Entrer</button>
+    <p class="lab" id="lab-bord">Vous-même, où vous situez-vous ?</p>
+    <div class="echelle" id="mon-bord" role="group" aria-labelledby="lab-bord"></div>
+    <button class="action" id="entrer" type="button">Entrer</button>
   </section>
 
   <section class="carte" id="lot" hidden>
     <ol id="titres"></ol>
-    <label>Ce média est plutôt…</label>
-    <div class="echelle" id="note"></div>
+    <p class="lab" id="lab-note">Ce média est plutôt…</p>
+    <div class="echelle" id="note" role="group" aria-labelledby="lab-note"></div>
     <p class="note" id="restants" style="margin:12px 0 0"></p>
   </section>
 
   <section class="carte" id="fini" hidden>
     <p style="margin:0">Merci, vous avez jugé tous les lots du moment. De nouveaux lots arrivent chaque jour.</p>
   </section>
-  <p class="note"><a href="./">Retour au comparateur</a></p>
+  <p class="note"><a href="./">Retour à Cadrages</a></p>
 </main>
 <script>
 const LIBELLES = ['Gauche', 'Plutôt à gauche', 'Centre', 'Plutôt à droite', 'Droite'];
@@ -118,7 +120,9 @@ $('entrer').addEventListener('click', async () => {
   } catch (e) { $('message').textContent = e.message; }
 });
 echelle($('mon-bord'), (v) => { monBord = v; });
-const code = new URLSearchParams(location.search).get('code');
+// Le code arrive dans le fragment (#code=…) : le navigateur ne l'envoie pas au serveur, aucun journal ne le voit.
+// L'ancienne forme (?code=…) marche encore, pour les liens déjà envoyés.
+const code = (/^#code=([\w-]{4,64})$/.exec(location.hash) || [])[1] || new URLSearchParams(location.search).get('code');
 if (code) { $('code').value = code; history.replaceState(null, '', location.pathname); }  // le code ne reste pas dans l'adresse
 if (jeton) suivant(); else montrer('inscription');
 // l'application installable : sans effet si le navigateur ne connaît pas les service workers
