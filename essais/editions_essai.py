@@ -6,12 +6,15 @@ Efface les éditions de la base visée : à lancer sur un dossier de données à
     COMPARATEUR_DONNEES=/tmp/essai python3 essais/editions_essai.py
     COMPARATEUR_DONNEES=/tmp/essai python3 -m comparateur servir
 """
-import json, os, random, sys
+import json, os, random, re, sys, unicodedata
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 if not os.environ.get("COMPARATEUR_DONNEES"):
     sys.exit("COMPARATEUR_DONNEES n'est pas réglé : ce script efface les éditions, il lui faut un dossier à part.")
 from comparateur import base, config, publier
 random.seed(7)
+def hote(nom):
+    """Un domaine d'essai par média (« le-monde.exemple.test ») : l'index public déduit le média du domaine."""
+    return re.sub(r"[^a-z0-9]+", "-", unicodedata.normalize("NFKD", nom).encode("ascii", "ignore").decode().lower()).strip("-") + ".exemple.test"
 ref = json.load(open(os.path.join(config.ICI, "medias.json"), encoding="utf-8"))
 ABSENTS = {"Le Point", "Les Echos"}
 tous = ref["medias"]
@@ -46,7 +49,7 @@ def edition(jour, ancienne=False):
                 pris.add(nom)
                 for k in range(random.choice([1, 1, 2])):
                     arts.append({"media": nom, "titre": f"{titre.split(' : ')[-1].capitalize()}, vu par {nom}" + (" : la suite" if k else ""),
-                                 "lien": f"https://exemple.test/{sid}/{jour}/{nom}/{k}".replace(" ", "-")})
+                                 "lien": f"https://{hote(nom)}/{sid}/{jour}/{k}"})
         nm = len({a["media"] for a in arts})
         analyse = nm >= 4
         vide = "Sujet non analysé (trop peu couvert)."
@@ -59,7 +62,7 @@ def edition(jour, ancienne=False):
         for s in sujets[:3]:
             s["articles"].append({"media": NC, "titre": "Un titre du journal non classé, sur ce sujet", "lien": f"https://journal-essai.test/{s['id']}/{jour}"})
     sujets.sort(key=lambda s: -len({a["media"] for a in s["articles"]}))
-    seuls = [{"media": m["nom"], "titre": f"Un titre resté sans jumeau chez {m['nom']}", "lien": f"https://exemple.test/seul/{jour}/{i}"} for i, m in enumerate(lus[::3])]
+    seuls = [{"media": m["nom"], "titre": f"Un titre resté sans jumeau chez {m['nom']}", "lien": f"https://{hote(m['nom'])}/seul/{jour}/{i}"} for i, m in enumerate(lus[::3])]
     medias = sorted(({"nom": m["nom"], "score": m["score"], "bord": B(m), "proprietaire": None} for m in lus), key=lambda m: m["score"])
     cl = [{"nom": m["nom"], "score": m["score"]} if ancienne else {k: m.get(k) for k in ("nom", "score", "ic", "sources")} | {"peu_documente": bool(m.get("peu_documente"))} for m in tous]
     d = {"recolte": jour + "T05:02:11+00:00", "heures": 24, "total": 640, "mode": "auto", "medias": medias, "absents": sorted(ABSENTS),

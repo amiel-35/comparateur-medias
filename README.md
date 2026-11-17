@@ -194,6 +194,38 @@ le même identifiant d'un jour à l'autre, ce qui permet de le suivre ; deux suj
 même fait sont comptés deux fois. Les synthèses sont recalculées à chaque publication et s'ouvrent depuis
 l'accueil (« la semaine », « le mois »).
 
+## L'index et « Situer un article »
+
+`public/index.json` est un fichier unique, à une seule adresse, sans paramètre : les mêmes octets pour tous
+(`comparateur/index.py`, écrit par `publier.ecrire_pages`, atomiquement). Il se construit à partir des éditions
+gardées des sept derniers jours, jamais de la base. Format `v: 1` : `genere_le` (le jour de la dernière édition),
+`methode`, `classement`, `medias` (domaine, puis nom, statut, bande, score, intervalle ; un média non classé n'a
+que son nom et son statut), `sujets` (titre, jour, titres par bande, côtés silencieux, page) et `articles` (clé,
+puis identifiant de sujet). Le domaine d'un média est déduit des adresses de ses articles ; un domaine vu chez
+deux médias n'est pas retenu. Un champ facultatif `domaines` d'une entrée de `medias.json` s'ajouterait aux
+domaines vus.
+
+La clé d'un article est les 16 premiers caractères hexadécimaux du SHA-256 de son adresse normalisée. La règle
+de normalisation est écrite deux fois, en Python (`index.normaliser`) et en JavaScript (`js/adresse.js`), et
+essayée avec les mêmes vecteurs (`tests/vecteurs-adresses.json`, calculés par Python) :
+
+1. les espaces des bords sont retirés ;
+2. le schéma doit être `http` ou `https`, sinon rien ; il est ensuite oublié ;
+3. l'hôte est mis en minuscules, sans point final, sans port, sans identifiants ;
+4. un préfixe d'usage est retiré une fois en tête d'hôte (`www.`, `m.`, `mobile.`, `amp.`), si l'hôte garde au
+   moins deux étiquettes ;
+5. le chemin est gardé tel quel (casse et `%xx` conservés) ; vide, il devient `/` ; une barre finale est retirée,
+   sauf pour `/` ;
+6. les paramètres (`?…`) et le fragment (`#…`) sont retirés.
+
+Le résultat est l'hôte suivi du chemin. Une adresse sans hôte, ou dont l'hôte est une adresse IPv6, n'a pas de
+forme normalisée.
+
+La vue `#/situer` télécharge `/index.json` une fois, puis cherche sur l'appareil : l'adresse collée n'est envoyée
+à personne. Elle dit le média (bande FrIdéo ou « non classé », ou « ce site ne lit pas ce média ») et, si
+l'article est dans l'index, le sujet, la répartition sur sept bords, les côtés silencieux et le lien vers la page
+du sujet. Un test refuse tout autre appel réseau dans la vue. Le contrat : `docs/cadrage-long-terme.md`, 6.3.
+
 ## L'API des votes
 
 | Route | Corps | Réponse |

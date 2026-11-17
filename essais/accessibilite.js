@@ -176,7 +176,7 @@ async function etats(page, chemin) {
       for (const j of jours) {
         const d = await (await fetch(`${B}/data/editions/${j}.json`)).json();
         const vues = ['#/', '#/pourquoi', '#/silences', '#/sujet/seuls', '#/semaine', '#/mois', '#/demarche', '#/origine', '#/mentions', '#/installer',
-          '#/classement', '#/medias', '#/media/' + encodeURIComponent(d.medias[0].nom), '#/editions'].concat(d.sujets.map(s => '#/sujet/' + s.id));
+          '#/classement', '#/medias', '#/situer', '#/media/' + encodeURIComponent(d.medias[0].nom), '#/editions'].concat(d.sujets.map(s => '#/sujet/' + s.id));
         for (const v of vues) pages.push(`/editions/${j}.html${v}`);
       }
       pages.push('/aveugle.html', '/aveugle.html#lot', '/aveugle.html#fini', '/mail.html#confirmer=essai-essai-essai',

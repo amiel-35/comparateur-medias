@@ -5,7 +5,7 @@ Les lecteurs ne lisent que ces fichiers : ni la base ni les modèles ne sont sol
 """
 import hashlib, json, os, re, shutil, time
 
-from . import aveugle, base, config, export, methode, syntheses
+from . import aveugle, base, config, export, index, methode, syntheses
 from .fabrique import hors_ecartees, sujets_du_jour
 
 
@@ -207,6 +207,7 @@ def ecrire_pages(db):
             _ecrire(os.path.join(pub, "index.html"), page)
             _ecrire(os.path.join(pub, "data", "jour.json"), texte)
     _ecrire(os.path.join(pub, "data", "editions.json"), json.dumps(jours))
+    index.ecrire(pub, charges)   # l'index public : les éditions des sept derniers jours (public/index.json)
     retirer_anciens_actifs(pub, actifs)   # les pages citent les nouveaux : les anciens ne servent plus
     for nom in os.listdir(SITE):   # les autres pages (aveugle.html) ; les morceaux du gabarit ne sont pas publiés
         if nom != "gabarit.html" and os.path.isfile(os.path.join(SITE, nom)):
