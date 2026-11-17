@@ -1043,7 +1043,7 @@ class Assise(unittest.TestCase):
         # vit dans sauvegarde.py et n'écrit jamais dans public/).
         paquet = base.config.ICI
         for nom in os.listdir(paquet):
-            if nom.endswith(".py") and nom not in ("base.py", "sauvegarde.py", "comptes.py"):   # comptes.py : identites.db
+            if nom.endswith(".py") and nom not in ("base.py", "sauvegarde.py", "comptes.py", "urne.py"):   # identites.db, urnes/*.db
                 with open(os.path.join(paquet, nom), encoding="utf-8") as f:
                     source = f.read()
                 self.assertFalse("sqlite3.connect" in source, nom)

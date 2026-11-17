@@ -1,0 +1,345 @@
+"""Phase 3, le panel : signature aveugle (RFC 9474), urne par questionnaire, carte de votant, séparation tenue par des
+tests. Sans réseau ni vrai SMTP.  python3 -m unittest discover -s tests"""
+import contextlib, io, json, os, re, shutil, sqlite3, subprocess, sys, tempfile, threading, unittest
+import urllib.error, urllib.request
+
+ICI = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(ICI, ".."))
+from comparateur import ceremonie, comptes, config, lettre, serveur, signature, urne  # noqa: E402
+
+REGLAGES = {"COMPARATEUR_SMTP_UTILISATEUR": "essai", "COMPARATEUR_SMTP_MOT_DE_PASSE": "secret",
+            "COMPARATEUR_SITE_URL": "https://cadrages.test"}
+_AVANT = {}
+BITS = 1024   # des clés courtes pour que les essais aillent vite ; 2048 en vrai (ceremonie.ouvrir)
+
+
+class FauxSMTP:
+    envoyes = []
+
+    def __init__(self, cfg):
+        pass
+
+    def send_message(self, msg):
+        FauxSMTP.envoyes.append(msg)
+
+    def quit(self):
+        pass
+
+
+def setUpModule():
+    global DOSSIER
+    DOSSIER = tempfile.mkdtemp(prefix="comparateur-panel-")
+    for k, v in dict(REGLAGES, COMPARATEUR_DONNEES=DOSSIER).items():
+        _AVANT[k] = os.environ.get(k)
+        os.environ[k] = v
+    _AVANT["smtp"], lettre.ouvrir_smtp = lettre.ouvrir_smtp, FauxSMTP
+    lettre.EN_ARRIERE_PLAN = False
+
+
+def tearDownModule():
+    lettre.ouvrir_smtp, lettre.EN_ARRIERE_PLAN = _AVANT.pop("smtp"), True
+    for k, v in _AVANT.items():
+        if v is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = v
+    shutil.rmtree(DOSSIER, ignore_errors=True)
+
+
+def vecteurs():
+    with open(os.path.join(ICI, "vecteurs-rfc9474.json"), encoding="utf-8") as f:
+        return json.load(f)
+
+
+class Signature(unittest.TestCase):
+    """Premier cadrage, règle 8 : la cryptographie suit la RFC, vecteurs à l'appui, des deux côtés."""
+
+    def test_vecteurs_de_la_rfc_en_python(self):
+        v = vecteurs()
+        h, i = (lambda k: bytes.fromhex(v[k])), (lambda k: int(v[k], 16))
+        cle = {"n": i("n"), "e": i("e"), "d": i("d")}
+        pk = signature.publique(cle)
+        prep = signature.preparer(h("msg"), h("msg_prefix"))
+        self.assertEqual(prep, h("prepared_msg"))
+        self.assertEqual(signature.emsa_pss_encoder(prep, pk["n"].bit_length() - 1, h("salt")), h("encoded_msg"))
+        av, inv = signature.aveugler(pk, prep, h("salt"), pow(i("inv"), -1, pk["n"]))
+        self.assertEqual((av, inv), (h("blinded_msg"), i("inv")))
+        self.assertEqual(signature.signer_aveugle(cle, av), h("blind_sig"))
+        self.assertEqual(signature.finaliser(pk, prep, h("blind_sig"), inv), h("sig"))
+        self.assertTrue(signature.verifier(pk, prep, h("sig")))
+        self.assertFalse(signature.verifier(pk, prep + b"x", h("sig")))
+
+    @unittest.skipUnless(shutil.which("node"), "node absent : la moitié JavaScript n'est pas essayée")
+    def test_vecteurs_en_javascript_et_d_un_cote_a_l_autre(self):
+        """Les mêmes vecteurs dans compte/aveugle-rsa.js ; puis un bulletin aveuglé en JS, signé en Python, dévoilé et
+        vérifié en JS ; et vérifié en Python."""
+        cle = signature.nouvelle_cle(BITS)
+        pk = signature.en_hex(signature.publique(cle))
+        script = r"""
+const A = require(process.argv[1]), v = require(process.argv[2]), pk = JSON.parse(process.argv[3]);
+const modinv = (a, m) => { let [r0, r1, t0, t1] = [m, a % m, 0n, 1n]; while (r1) { const q = r0 / r1; [r0, r1] = [r1, r0 - q * r1]; [t0, t1] = [t1, t0 - q * t1]; } return ((t0 % m) + m) % m; };
+(async () => {
+  const prep = A.preparer(A.deHex(v.msg), A.deHex(v.msg_prefix));
+  const a = await A.aveugler({ n: v.n, e: v.e }, prep, A.deHex(v.salt), modinv(BigInt('0x' + v.inv), BigInt('0x' + v.n)));
+  const sig = await A.finaliser({ n: v.n, e: v.e }, prep, A.deHex(v.blind_sig), a.inv);
+  const neuf = A.preparer(new TextEncoder().encode('essai'));
+  const b = await A.aveugler(pk, neuf);
+  console.log(JSON.stringify({ prep: A.hex(prep) === v.prepared_msg, blind: A.hex(a.aveugle) === v.blinded_msg,
+    sig: A.hex(sig) === v.sig, neuf: A.hex(neuf), aveugle: A.hex(b.aveugle), inv: b.inv.toString(16) }));
+})();
+"""
+        js = os.path.join(config.ICI, "compte", "aveugle-rsa.js")
+        r = subprocess.run(["node", "-e", script, js, os.path.join(ICI, "vecteurs-rfc9474.json"), json.dumps(pk)],
+                           capture_output=True, text=True, timeout=60)
+        self.assertEqual(r.returncode, 0, r.stderr[-400:])
+        x = json.loads(r.stdout)
+        self.assertEqual((x["prep"], x["blind"], x["sig"]), (True, True, True))
+        sig_aveugle = signature.signer_aveugle(cle, bytes.fromhex(x["aveugle"]))           # le guichet signe sans voir
+        script2 = r"""
+const A = require(process.argv[1]), pk = JSON.parse(process.argv[2]);
+A.finaliser(pk, A.deHex(process.argv[3]), A.deHex(process.argv[4]), BigInt('0x' + process.argv[5])).then(s => console.log(A.hex(s)), e => { console.error(e.message); process.exit(1); });
+"""
+        r = subprocess.run(["node", "-e", script2, js, json.dumps(pk), x["neuf"], sig_aveugle.hex(), x["inv"]],
+                           capture_output=True, text=True, timeout=60)
+        self.assertEqual(r.returncode, 0, r.stderr[-400:])
+        self.assertTrue(signature.verifier(signature.publique(cle), bytes.fromhex(x["neuf"]), bytes.fromhex(r.stdout.strip())))
+
+    def test_le_guichet_masque_et_reverifie(self):
+        cle = signature.nouvelle_cle(BITS)
+        with self.assertRaises(signature.ErreurSignature):
+            signature.signer_aveugle(cle, b"\x01" * 3)                                     # taille fausse
+        with self.assertRaises(signature.ErreurSignature):
+            signature.signer_aveugle(cle, b"\xff" * (BITS // 8))                          # au-delà du module
+
+
+class Questionnaire(unittest.TestCase):
+    """Premier cadrage, règle 13 : un questionnaire se refuse lui-même."""
+    BON = {"id": "essai-confiance", "titre": "Questionnaire factice", "fermeture": "2099-01-01",
+           "questions": [{"id": "q1", "texte": "Question factice ?", "choix": ["Oui", "Non", "Je ne sais pas"]},
+                         {"id": "age", "texte": "Votre tranche d'âge ?", "choix": ["Moins de 30 ans", "30 à 59 ans", "60 ans et plus"], "profil": True}]}
+
+    def test_trois_questionnaires_fautifs_refuses(self):
+        self.assertEqual(urne.verifier_questionnaire(self.BON), [])
+        libre = json.loads(json.dumps(self.BON)); libre["questions"][0]["type"] = "texte"
+        profils = json.loads(json.dumps(self.BON)); profils["questions"] += [
+            {"id": f"p{i}", "texte": "Profil ?", "choix": ["a", "b"], "profil": True} for i in range(2)]
+        fin = json.loads(json.dumps(self.BON)); fin["questions"][1]["choix"] = [f"{x} ans" for x in range(15, 75, 10)]
+        for q in (libre, profils, fin):
+            self.assertTrue(urne.verifier_questionnaire(q))
+
+
+class Parcours(unittest.TestCase):
+    """Le parcours entier, sur un vrai port, avec les trois noms d'hôte : code, session, adhésion, retrait, dépôt,
+    effacement, clôture, résultats ; puis la carte de votant."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls._vraie = signature.nouvelle_cle
+        signature.nouvelle_cle = lambda bits=2048: cls._vraie(BITS)
+        cls.srv = serveur.creer(port=0, hote="127.0.0.1")
+        cls.url = "http://127.0.0.1:%d" % cls.srv.server_address[1]
+        threading.Thread(target=cls.srv.serve_forever, daemon=True).start()
+
+    @classmethod
+    def tearDownClass(cls):
+        signature.nouvelle_cle = cls._vraie
+        cls.srv.shutdown()
+        cls.srv.server_close()
+
+    def setUp(self):
+        FauxSMTP.envoyes.clear()
+        serveur.DEBIT.vus.clear()
+
+    def appel(self, methode, chemin, corps=None, hote="compte.cadrages.test", cookie=None, entetes=None):
+        h = {"Host": hote}
+        if corps is not None:
+            h["Content-Type"] = "application/json"
+        if cookie:
+            h["Cookie"] = cookie
+        h.update(entetes or {})
+        req = urllib.request.Request(self.url + chemin, method=methode, headers=h, data=json.dumps(corps).encode() if corps is not None else None)
+        try:
+            with urllib.request.urlopen(req, timeout=20) as r:
+                return r.status, r.headers, json.loads(r.read() or b"{}")
+        except urllib.error.HTTPError as e:
+            return e.code, e.headers, json.loads(e.read() or b"{}")
+
+    def connecter(self, adresse):
+        serveur.DEBIT.vus.clear()   # plusieurs comptes depuis la même adresse IP d'essai
+        self.appel("POST", "/api/compte/code", {"adresse": adresse})
+        code = re.search(r"\b(\d{6})\b", FauxSMTP.envoyes[-1].get_body(("plain",)).get_content()).group(1)
+        s, e, _ = self.appel("POST", "/api/compte/connexion", {"adresse": adresse, "code": code})
+        self.assertEqual(s, 200)
+        return e["Set-Cookie"].split(";")[0]
+
+    def membre(self, adresse, anciennete=30):
+        cookie = self.connecter(adresse)
+        ident = comptes.connexion()
+        try:
+            code = comptes.inviter_panel(ident)[0]
+        finally:
+            ident.close()
+        self.assertEqual(self.appel("POST", "/api/compte/panel/rejoindre", {"code": code, "consentement": False}, cookie=cookie)[0], 400)
+        self.assertEqual(self.appel("POST", "/api/compte/panel/rejoindre", {"code": code, "consentement": True}, cookie=cookie)[0], 200)
+        self.assertEqual(self.appel("POST", "/api/compte/panel/rejoindre", {"code": "inconnu", "consentement": True},
+                                    cookie=self.connecter("autre-" + adresse))[0], 403)
+        ident = comptes.connexion()
+        try:   # l'adhésion date de `anciennete` jours : le panel est figé sept jours avant l'ouverture
+            ident.execute("UPDATE abonnements SET cree_jour = date('now', ?) WHERE type = 'panel' AND compte = "
+                          "(SELECT id FROM comptes WHERE adresse = ?)", (f"-{anciennete} days", adresse))
+            ident.commit()
+        finally:
+            ident.close()
+        return cookie
+
+    def bulletin(self, cookie, q, pk):
+        """Ce que fait l'appareil (ici en Python ; la page fait la même chose en JavaScript)."""
+        prep = signature.preparer(q.encode() + b"\x00" + os.urandom(32))
+        av, inv = signature.aveugler(pk, prep)
+        s, _, r = self.appel("POST", "/api/compte/bulletin", {"questionnaire": q, "aveugle": av.hex()}, cookie=cookie)
+        if s != 200:
+            return s, None, None
+        return s, prep, signature.finaliser(pk, prep, bytes.fromhex(r["signature"]), inv)
+
+    def deposer(self, q, prep, sig, bord=-1, reponses=None, entetes=None):
+        return self.appel("POST", "/api/urne/depot", {"questionnaire": q, "bulletin": prep.hex(), "signature": sig.hex(), "bord": bord,
+                                                      "reponses": reponses or {"q1": 0, "age": 1}},
+                          hote="urne.cadrages.test", entetes=dict({"Origin": "https://compte.cadrages.test"}, **(entetes or {})))
+
+    def test_parcours_entier(self):
+        journal = io.StringIO()
+        with contextlib.redirect_stdout(journal):
+            q = json.loads(json.dumps(Questionnaire.BON))
+            public = ceremonie.ouvrir(q)
+            pk = signature.de_hex(public["cle"])
+            membres = [self.membre(f"membre{i}@exemple.fr") for i in range(6)]
+            tard = self.membre("tard@exemple.fr", anciennete=2)
+            etat = self.appel("GET", "/api/compte/panel", cookie=membres[0])[2]
+            self.assertTrue(etat["membre"])
+            self.assertEqual([x["id"] for x in etat["questionnaires"]], [q["id"]])
+            self.assertNotIn("bord", json.dumps(etat))
+            # un membre arrivé après le gel ne retire rien
+            self.assertEqual(self.bulletin(tard, q["id"], pk)[0], 403)
+            recus = []
+            for i, cookie in enumerate(membres):
+                s, prep, sig = self.bulletin(cookie, q["id"], pk)
+                self.assertEqual(s, 200)
+                self.assertEqual(self.bulletin(cookie, q["id"], pk)[0], 409)               # un seul retrait
+                s, e, _ = self.deposer(q["id"], prep, sig, bord=[-2, -1, 0, 1, 2, -1][i])
+                self.assertEqual(s, 201)
+                self.assertEqual(e["Access-Control-Allow-Origin"], "https://compte.cadrages.test")
+                self.assertEqual(self.deposer(q["id"], prep, sig)[0], 409)                  # un dépôt par bulletin
+                recus.append(prep)
+            # un bulletin forgé, un bulletin d'un autre questionnaire, une identité jointe : refusés
+            faux = signature.preparer(q["id"].encode() + b"\x00" + os.urandom(32))
+            self.assertEqual(self.deposer(q["id"], faux, b"\x01" * (BITS // 8))[0], 403)
+            self.assertEqual(self.deposer(q["id"], recus[0], b"\x01" * (BITS // 8), entetes={"Cookie": "x=y"})[0], 400)
+            self.assertEqual(self.deposer(q["id"], recus[0], b"\x01" * (BITS // 8), entetes={"Authorization": "Bearer x"})[0], 400)
+            self.assertEqual(self.appel("OPTIONS", "/api/urne/depot", hote="urne.cadrages.test",
+                                        entetes={"Origin": "https://ailleurs.test"})[0], 403)
+            # l'urne n'a ni heure ni rang
+            with sqlite3.connect(urne.chemin(q["id"])) as u:
+                for (sql,) in u.execute("SELECT sql FROM sqlite_master WHERE type = 'table'"):
+                    self.assertIn("WITHOUT ROWID", sql)
+                    self.assertNotRegex(sql.lower(), r"date|jour|heure|cree|rang|autoincrement")
+                ordre = [r[0] for r in u.execute("SELECT empreinte FROM reponses")]
+            self.assertEqual(ordre, sorted(ordre))
+            # l'effacement par le reçu
+            s, _, r = self.appel("POST", "/api/urne/effacement", {"questionnaire": q["id"], "bulletin": recus[-1].hex()}, hote="urne.cadrages.test")
+            self.assertEqual((s, r["efface"]), (200, True))
+            # rien avant la clôture
+            with self.assertRaises(urne.Refus):
+                urne.resultats(q["id"])
+            res = ceremonie.fermer(q["id"])
+            self.assertEqual((res["delivres"], res["recues"]), (6, 5))
+            self.assertEqual(res["etiquette"], "Panel de volontaires. Ce n'est pas un sondage.")
+            self.assertEqual(res["questions"][0]["par_bord"]["g"]["statut"], "moins de 5")   # 3 à gauche : rien
+            self.assertEqual(self.bulletin(membres[0], q["id"], pk)[0], 410)               # après : plus de bulletin
+            self.assertEqual(self.deposer(q["id"], *self.bulletin_signe_hors_guichet(q["id"], pk))[0], 410)
+            ident = comptes.connexion()
+            try:
+                self.assertEqual(ident.execute("SELECT COUNT(*) FROM cles WHERE questionnaire = ?", (q["id"],)).fetchone()[0], 0)
+                self.assertEqual(ident.execute("SELECT COUNT(*) FROM retraits WHERE questionnaire = ?", (q["id"],)).fetchone()[0], 0)
+            finally:
+                ident.close()
+            self.assertTrue(os.path.isfile(os.path.join(config.public(), "panel", "resultats", q["id"] + ".json")))
+            self.assertFalse(os.path.exists(os.path.join(config.public(), "panel", "cles", q["id"] + ".json")))
+            # aucune valeur commune entre les deux fichiers, hors l'identifiant du questionnaire
+            self.assertEqual(self.valeurs_communes(comptes.chemin(), urne.chemin(q["id"])) - {q["id"]}, set())
+        texte = journal.getvalue()
+        for secret in ["membre0@exemple.fr", "127.0.0.1"] + [p.hex() for p in recus] + [urne.empreinte(p) for p in recus]:
+            self.assertNotIn(secret, texte)
+
+    def bulletin_signe_hors_guichet(self, q, pk):
+        return signature.preparer(q.encode() + b"\x00" + os.urandom(32)), b"\x00" * (BITS // 8)
+
+    @staticmethod
+    def valeurs_communes(a, b):
+        def valeurs(chemin):
+            out = set()
+            with sqlite3.connect(chemin) as db:
+                for (t,) in db.execute("SELECT name FROM sqlite_master WHERE type = 'table'"):
+                    for ligne in db.execute(f"SELECT * FROM {t}"):
+                        out.update(str(x) for x in ligne if x is not None and len(str(x)) > 3)
+            return out
+        return valeurs(a) & valeurs(b)
+
+    def test_carte_de_votant(self):
+        cookie = self.membre("votant@exemple.fr")
+        etat = self.appel("GET", "/api/compte/panel", cookie=cookie)[2]
+        carte = etat["carte"]
+        self.assertEqual((carte["id"], carte["retiree"]), (urne.carte_id(ceremonie.trimestre()), False))
+        pk = signature.de_hex(carte["cle"])
+        s, prep, sig = self.bulletin(cookie, carte["id"], pk)
+        self.assertEqual(s, 200)
+        self.assertEqual(self.bulletin(cookie, carte["id"], pk)[0], 409)                    # une carte par trimestre
+        avis = lambda lot, note=1: self.appel("POST", "/api/urne/avis", {"trimestre": carte["trimestre"], "carte": prep.hex(),
+                                                                         "signature": sig.hex(), "lot": lot, "note": note, "bord": 0}, hote="urne.cadrages.test")
+        self.assertEqual(avis(7)[0], 201)
+        self.assertEqual(avis(7)[0], 409)                                                    # un avis par lot et par carte
+        self.assertEqual(avis(8, note=3)[0], 400)
+        s, _, r = self.appel("POST", "/api/urne/lots-juges", {"trimestre": carte["trimestre"], "carte": prep.hex()}, hote="urne.cadrages.test")
+        self.assertEqual(r["lots"], [7])
+        agg = ceremonie.clore_trimestre(carte["trimestre"])
+        self.assertEqual(agg["lots"]["7"]["c"], [1, 1])
+        self.assertEqual(agg["cartes_delivrees"], 1)
+        self.assertNotIn(urne.empreinte(prep), json.dumps(agg))                              # jamais une carte publiée
+
+
+class Separation(unittest.TestCase):
+    """Premier cadrage, règle 1 : aucun module n'importe l'autre côté ; l'urne ne lit que ses fichiers et les clés
+    publiques ; pas d'ATTACH."""
+
+    def source(self, nom):
+        with open(os.path.join(config.ICI, nom), encoding="utf-8") as f:
+            return f.read()
+
+    def imports(self, nom):
+        """Les modules du paquet qu'un module importe (from . import a, b)."""
+        return {m.strip() for l in re.findall(r"^\s*from \. import ([^\n]+)", self.source(nom), re.M) for m in l.split(",")}
+
+    def test_aucun_module_n_importe_l_autre_cote(self):
+        self.assertEqual(self.imports("urne.py"), {"config", "signature"})
+        self.assertNotIn("urne", self.imports("comptes.py"))
+        self.assertEqual(self.imports("signature.py"), set())
+        for nom in ("comptes.py", "abonnements.py"):
+            self.assertNotIn("urne", self.imports(nom))
+
+    def test_l_urne_ne_lit_que_ses_fichiers_et_les_cles_publiques(self):
+        s = self.source("urne.py")
+        for interdit in ("config.base", "identites", "comptes", "base.connexion", "abonnes", "ATTACH"):
+            self.assertNotIn(interdit, s)
+        ouvertures = re.findall(r"\bopen\((.+?), encoding", s) + re.findall(r"sqlite3\.connect\((\w+)", s)
+        self.assertEqual(sorted(ouvertures), sorted(['os.path.join(config.public(), "panel", "cles", questionnaire + ".json")', "c"]))
+
+    def test_les_mots_de_l_ecran(self):
+        for nom in os.listdir(os.path.join(config.ICI, "compte")):
+            if nom.endswith(".html"):
+                with open(os.path.join(config.ICI, "compte", nom), encoding="utf-8") as f:
+                    page = re.sub(r"<script.*?</script>|<style.*?</style>", "", f.read(), flags=re.S).lower()
+                for mot in ("jeton", "signature", "clé", "anonymisation"):           # premier cadrage, règle 15
+                    self.assertNotIn(mot, page, nom)
+
+
+if __name__ == "__main__":
+    unittest.main()

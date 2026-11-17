@@ -8,15 +8,16 @@ lecture. Les dates y sont arrondies : au jour pour une création, au mois pour l
   abonnements  (compte, type, cible) : le registre d'abonnements.py dit ce qui est admis
   sessions     l'empreinte du jeton de session (le cookie __Host- de compte.<domaine>), jamais le jeton
   codes        l'empreinte salée du code à six chiffres envoyé par mail, cinq essais, dix minutes
-  retraits     (questionnaire, compte) : qui a retiré son bulletin ; vide jusqu'au panel (phase 3)
-  cles         la clé de chaque questionnaire ouvert ; vide jusqu'au panel (phase 3)
+  retraits     (questionnaire, compte) : qui a retiré son bulletin ; vidé à la clôture
+  cles         la clé de chaque questionnaire ouvert, détruite à la clôture
+  invitations_panel  l'empreinte des codes d'invitation au panel ; un code servi est effacé, sans trace de qui
 
-Ce module n'importe que config et abonnements. Il ne lit ni comparateur.db ni une urne, et aucun ATTACH.
+Ce module n'importe que config, abonnements et signature (qui n'importe rien). Il ne lit ni comparateur.db ni une urne, et aucun ATTACH.
 """
 import hashlib, hmac, os, re, secrets, sqlite3, time
 from datetime import date, datetime, timedelta, timezone
 
-from . import abonnements, config
+from . import abonnements, config, signature
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS comptes (
@@ -37,6 +38,7 @@ CREATE TABLE IF NOT EXISTS retraits (
   PRIMARY KEY (questionnaire, compte)) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS cles (
   questionnaire TEXT PRIMARY KEY, n TEXT NOT NULL, e INTEGER NOT NULL, d TEXT NOT NULL, ouverte_jour TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS invitations_panel (empreinte TEXT PRIMARY KEY, cree_jour TEXT NOT NULL) WITHOUT ROWID;
 """
 
 ADRESSE = re.compile(r"^[^@\s<>\"',;()\[\]\\]+@[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$")
@@ -287,4 +289,98 @@ def purger(db):
     n = db.execute("""DELETE FROM comptes WHERE id NOT IN (SELECT compte FROM abonnements)
                       AND id NOT IN (SELECT compte FROM sessions)""").rowcount
     db.commit()
+    return n
+
+
+# ---- le panel : le guichet sait qui est membre et qui a retiré son bulletin, jamais ce qu'il répond
+
+CARENCE_JOURS = 7   # un membre arrivé moins de sept jours avant l'ouverture ne répond pas : le panel est figé
+
+
+def inviter_panel(db, n=1):
+    """Des codes d'invitation au panel, tant qu'il reste un cercle invité. Seule leur empreinte est gardée ; un code
+    servi est effacé : rien ne relie ensuite un code à un compte."""
+    codes = []
+    for _ in range(n):
+        code = secrets.token_urlsafe(9)
+        db.execute("INSERT INTO invitations_panel (empreinte, cree_jour) VALUES (?, ?)", (empreinte(code), jour()))
+        codes.append(code)
+    db.commit()
+    return codes
+
+
+def rejoindre_panel(db, compte, code):
+    """Consomme le code (d'un seul geste : deux usages simultanés ne passent pas) et inscrit le compte au panel.
+    Rend True, ou False si le code est inconnu ou déjà servi. Le bord n'est jamais demandé ici : il reste sur
+    l'appareil et voyage avec chaque réponse."""
+    if db.execute("SELECT 1 FROM abonnements WHERE compte = ? AND type = 'panel'", (compte,)).fetchone():
+        return True
+    if not code or len(code) > 64:
+        return False
+    if db.execute("DELETE FROM invitations_panel WHERE empreinte = ?", (empreinte(str(code).strip()),)).rowcount != 1:
+        db.rollback()
+        return False
+    cible = abonnements.verifier("panel", "", ouvert_requis=False)
+    db.execute("INSERT INTO abonnements (compte, type, cible, etat, cree_jour, sortie) VALUES (?, 'panel', ?, 'actif', ?, ?)",
+               (compte, cible, jour(), secrets.token_urlsafe(24)))
+    db.commit()
+    return True
+
+
+def membre(db, compte):
+    r = db.execute("SELECT cree_jour FROM abonnements WHERE compte = ? AND type = 'panel' AND etat = 'actif'", (compte,)).fetchone()
+    return r["cree_jour"] if r else None
+
+
+def ouvrir_cle(db, questionnaire, cle):
+    """Garde la clé privée d'un questionnaire (ou d'une carte de votant) jusqu'à sa clôture."""
+    db.execute("INSERT INTO cles (questionnaire, n, e, d, ouverte_jour) VALUES (?, ?, ?, ?, ?)",
+               (questionnaire, format(cle["n"], "x"), cle["e"], format(cle["d"], "x"), jour()))
+    db.commit()
+
+
+def cles_ouvertes(db):
+    return [dict(r) for r in db.execute("SELECT questionnaire, n, e, ouverte_jour FROM cles ORDER BY questionnaire")]
+
+
+class RetraitRefuse(Exception):
+    def __init__(self, code, message):
+        super().__init__(message)
+        self.code, self.message = code, message
+
+
+def retirer(db, compte, questionnaire, aveugle):
+    """Le retrait du bulletin : le guichet vérifie que le compte est membre depuis assez longtemps et n'a pas déjà
+    retiré, note « retiré », puis signe sans voir. La contrainte d'unicité, pas le code, empêche deux retraits
+    (premier cadrage, règle 7). Rend la signature aveugle. Il ne garde ni le bulletin aveuglé, ni la signature."""
+    r = db.execute("SELECT n, e, d, ouverte_jour FROM cles WHERE questionnaire = ?", (questionnaire,)).fetchone()
+    if not r:
+        raise RetraitRefuse(410, "questionnaire clos ou inconnu")
+    depuis = membre(db, compte)
+    borne = jour(datetime.fromisoformat(r["ouverte_jour"]).replace(tzinfo=timezone.utc) - timedelta(days=CARENCE_JOURS))
+    if depuis is None or (not questionnaire.startswith("carte-") and depuis > borne):
+        raise RetraitRefuse(403, "réservé aux membres du panel inscrits avant l'ouverture")
+    try:
+        db.execute("INSERT INTO retraits (questionnaire, compte) VALUES (?, ?)", (questionnaire, compte))
+    except sqlite3.IntegrityError:
+        db.rollback()
+        raise RetraitRefuse(409, "déjà retiré")
+    try:
+        sig = signature.signer_aveugle({"n": int(r["n"], 16), "e": r["e"], "d": int(r["d"], 16)}, aveugle)
+    except signature.ErreurSignature:
+        db.rollback()
+        raise RetraitRefuse(400, "bulletin aveuglé invalide")
+    db.commit()
+    return sig
+
+
+def fermer_cle(db, questionnaire):
+    """La clôture, côté guichet : la clé privée est détruite, la liste des retraits est effacée. Rend le nombre de
+    bulletins délivrés, le seul chiffre qui en reste. Après cela, plus personne ne peut fabriquer un bulletin, ni
+    savoir qui a participé."""
+    n = db.execute("SELECT COUNT(*) FROM retraits WHERE questionnaire = ?", (questionnaire,)).fetchone()[0]
+    db.execute("DELETE FROM retraits WHERE questionnaire = ?", (questionnaire,))
+    db.execute("DELETE FROM cles WHERE questionnaire = ?", (questionnaire,))
+    db.commit()
+    db.execute("VACUUM")   # les pages libérées ne gardent ni la clé ni les retraits
     return n

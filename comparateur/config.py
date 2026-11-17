@@ -135,5 +135,24 @@ def compte_url():
     """Adresse de la page du compte, ou None si le mail est éteint (sans mail, pas de compte : aucun code à envoyer)."""
     if not mail_en_service():
         return None
-    schema = "http" if site_url().startswith("http://") else "https"
-    return env("COMPARATEUR_COMPTE_URL", f"{schema}://{hotes()['compte']}").rstrip("/")
+    return env("COMPARATEUR_COMPTE_URL", _origine("compte")).rstrip("/")
+
+
+def _origine(nom):
+    """L'origine d'un des trois hôtes, avec le schéma et le port du site (en local : http://compte.localhost:8765)."""
+    s = site_url()
+    schema = "http" if s.startswith("http://") else "https"
+    hote_port = s.split("://", 1)[-1].split("/")[0]
+    port = ":" + hote_port.rsplit(":", 1)[1] if ":" in hote_port else ""
+    return f"{schema}://{hotes()[nom]}{port}"
+
+
+def urne_url():
+    """L'origine de l'urne, que la page du compte appelle sans cookie (dépôt, effacement)."""
+    return env("COMPARATEUR_URNE_URL", _origine("urne")).rstrip("/")
+
+
+def urnes():
+    """Dossier des urnes : un fichier SQLite par questionnaire. Dans le compose, un volume à part, sauvegardé à la
+    clôture seulement (docs/cadrage-long-terme.md, 5.2)."""
+    return env("COMPARATEUR_URNES", os.path.join(donnees(), "urnes"))
