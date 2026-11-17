@@ -11,13 +11,14 @@ function sitCharger(){
     if(!ix||ix.v!==1||typeof ix.medias!=='object'||typeof ix.sujets!=='object'||typeof ix.articles!=='object'||!ix.medias||!ix.sujets||!ix.articles)throw new Error('format');
     return ix;
   });
+  /* un échec n'est pas gardé : le prochain essai redemande l'index */
+  SIT_IX.catch(function(){SIT_IX=null;});
   return SIT_IX;
 }
-/* le média d'un hôte : l'hôte lui-même, puis ses domaines parents (abonnes.exemple.fr, puis exemple.fr) */
-function sitMedia(ix,hote){
-  var et=hote.split('.');
-  for(var i=0;i<=et.length-2;i++){var m=ix.medias[et.slice(i).join('.')];if(m&&typeof m==='object')return m;}
-  return null;
+/* le média d'une adresse : par son domaine (domaineAdresse, la même règle que l'index) */
+function sitMedia(ix,adresse){
+  var d=domaineAdresse(adresse),m=d?ix.medias[d]:null;
+  return m&&typeof m==='object'&&typeof m.nom==='string'?m:null;
 }
 function sitDate(ix){return /^\d{4}-\d\d-\d\d$/.test(ix.genere_le)?jourLong(ix.genere_le):'date inconnue';}
 function sitMeta(ix){
@@ -26,19 +27,20 @@ function sitMeta(ix){
 function sitReponse(ix,adresse,cle){
   var n=normaliserAdresse(adresse);
   if(n===null)return '<p><b>Cette adresse n’est pas celle d’une page web.</b> Il faut une adresse qui commence par http:// ou https://.</p>';
-  var m=sitMedia(ix,n.split('/')[0]),h='';
-  if(!m)h+='<p><b>Ce site ne lit pas ce média.</b> Il ne le connaît pas : aucune bande, aucun sujet.</p>';
+  var m=sitMedia(ix,adresse),h='';
+  if(!m)h+='<p><b>Ce domaine n’est celui d’aucun média du panel.</b> Ou bien plusieurs médias le partagent, et ce site ne choisit pas entre eux.</p>';
   else if(m.statut==='classe'&&BL[m.bande]){
     h+='<p><b>'+esc(m.nom)+'</b> '+bchip(m.bande)+'</p>';
     h+='<p class="note">Bande du classement FrIdéo'+(typeof m.score==='number'?', score '+fs(m.score):'')+
        (m.ic&&m.ic.length===2&&typeof m.ic[0]==='number'&&typeof m.ic[1]==='number'?' (intervalle de '+fs(m.ic[0])+' à '+fs(m.ic[1])+')':'')+'. Ce site ne classe aucun média.</p>';
   }else h+='<p><b>'+esc(m.nom)+'</b> '+bchip(null)+'</p><p class="note">Ce site lit ce média, mais FrIdéo ne le classe pas : il n’a aucune bande ici.</p>';
   var s=cle?ix.sujets[ix.articles[cle]]:null;
-  if(!s||typeof s!=='object')return m?h+'<p>Cet article n’est dans aucune édition des sept derniers jours.</p>':h;
+  if(!s||typeof s!=='object')return h+'<p>Cet article n’est rangé sous aucun sujet des sept derniers jours. Il peut figurer parmi les titres sans jumeau d’une édition, ou être plus ancien.</p>';
   var par={};BORDS.forEach(function(b){par[b]=Number(s.par&&s.par[b])||0;});
   var sil=(Array.isArray(s.silences)?s.silences:[]).filter(function(x){return GL[x];});
   h+='<h2>Le sujet</h2><p class="sit-sujet">'+esc(s.titre)+' '+mdl()+'</p>'+bar5(par);
-  h+='<p>'+(sil.length?'<b>Côtés silencieux :</b> '+sil.map(function(x){return esc(GL[x].toLowerCase());}).join(', ')+'. Aucun titre de ce côté n’est rangé sous ce sujet.':'Aucun côté silencieux sur ce sujet.')+'</p>';
+  var juge=!(typeof s.medias==='number'&&s.medias<MIN);
+  h+='<p>'+(!juge?'Les silences ne sont pas relevés sur ce sujet : moins de '+MIN+' médias classés en parlent.':sil.length?'<b>Côtés silencieux :</b> '+sil.map(function(x){return esc(GL[x].toLowerCase());}).join(', ')+'. Aucun titre de ce côté n’est rangé sous ce sujet.':'Aucun côté silencieux sur ce sujet.')+'</p>';
   if(typeof s.page==='string'&&s.page.indexOf('/editions/')===0&&s.page.indexOf('//')<0)h+='<p><a href="'+esc(s.page)+'">Voir la page du sujet</a>'+(/^\d{4}-\d\d-\d\d$/.test(s.jour)?' (édition du '+esc(jourCourt(s.jour))+')':'')+'</p>';
   return h;
 }
@@ -52,7 +54,7 @@ function vSituer(){
       if(!adresse.trim()){sortie.innerHTML='<p>Collez d’abord une adresse.</p>';champ.focus();return;}
       sortie.innerHTML='<p>Un instant…</p>';
       Promise.all([sitCharger(),cleAdresse(adresse)]).then(function(r){sortie.innerHTML=sitReponse(r[0],adresse,r[1]);},
-        function(){sortie.innerHTML='<p><b>L’index n’a pas pu être lu.</b> Réessayez plus tard.</p>';});
+        function(e){sortie.innerHTML=e&&e.message==='crypto'?'<p><b>Ce navigateur ne peut pas faire la recherche ici.</b> Elle demande une connexion sûre (https).</p>':'<p><b>L’index n’a pas pu être lu.</b> Réessayez dans un moment.</p>';});
     });
   }
   sitCharger().then(function(ix){var p=document.getElementById('sitMeta');if(p)p.innerHTML=sitMeta(ix);},function(){});
@@ -63,7 +65,7 @@ function vSituer(){
      '<button class="btn hl" type="submit">Situer</button></span></form>';
   h+='<div id="sitRep" class="sit-rep" role="status" aria-live="polite"></div>';
   h+='<p id="sitMeta" class="note"></p>';
-  h+='<h2>Comment lire cette page</h2><ul class="lim" style="max-width:68ch"><li><b>Le média se reconnaît à son domaine.</b> Ce site ne connaît que les domaines vus dans les liens des articles qu’il a lus. Un domaine vu chez deux médias n’est pas retenu.</li>'+
+  h+='<h2>Comment lire cette page</h2><ul class="lim" style="max-width:68ch"><li><b>Le média se reconnaît à son domaine</b> (lemonde.fr pour abonnes.lemonde.fr). Ce site connaît le domaine des flux qu’il lit, et ceux qui reviennent dans les liens de leurs articles. Un domaine que deux médias partagent n’est pas retenu.</li>'+
      '<li><b>L’article se reconnaît à son adresse.</b> Les paramètres, le fragment, www. et le port sont ignorés ; le reste du chemin compte.</li>'+
      '<li><b>Sept jours seulement.</b> Un article plus ancien, ou jamais rangé sous un sujet, n’est pas retrouvé. Cela ne dit rien de lui.</li>'+
      '<li><b>Le titre du sujet est écrit par un modèle.</b> La bande vient de FrIdéo, les comptages d’une formule fixe.</li></ul>';

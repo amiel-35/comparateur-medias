@@ -40,7 +40,7 @@ class Actifs(unittest.TestCase):
         with open(os.path.join(self.pub, *chemin), encoding="utf-8") as f:
             return f.read()
 
-    def test_les_actifs_sont_nommes_par_leur_empreinte(self):
+        noms = sorted((n for n in os.listdir(os.path.join(self.pub, "actifs")) if n != "retires.json"), key=lambda n: n.rsplit(".")[-1])
         noms = sorted(os.listdir(os.path.join(self.pub, "actifs")), key=lambda n: n.rsplit(".")[-1])
         self.assertEqual([re.sub(r"[0-9a-f]{12}", "H", n) for n in noms], ["site-H.css", "site-H.js"])
         for n in noms:
@@ -79,27 +79,26 @@ class Actifs(unittest.TestCase):
         self.assertEqual(len(actifs), 2)
         self.assertEqual(modele.count("/*DONNEES*/null"), 1)
 
-    def test_les_anciens_actifs_sont_retires_une_fois_les_nouveaux_ecrits(self):
+    def test_les_anciens_actifs_sont_gardes_un_jour_apres_leur_derniere_citation(self):
         dossier = os.path.join(self.pub, "actifs")
-        vieux = [os.path.join(dossier, n) for n in ("site-000000000000.css", "site-ffffffffffff.js")]
+        actuels = publier.gabarit_en_actifs()[1]
+        vieux = os.path.join(dossier, "site-000000000000.css")
         autre = os.path.join(dossier, "autre.css")      # ce qui n'est pas un actif du site n'est pas touché
-        for chemin in vieux + [autre]:
+        for chemin in (vieux, autre):
             with open(chemin, "w") as f:
                 f.write("x")
-        recent = os.path.join(dossier, "site-111111111111.css")   # plus cité depuis une heure : gardé encore
-        with open(recent, "w") as f:
-            f.write("x")
-        os.utime(recent, (time.time() - 3600,) * 2)
-        for chemin in vieux:                             # plus cités depuis deux jours : retirés
-            os.utime(chemin, (time.time() - 2 * 86400,) * 2)
-        publier.pages(self.db)
-        for chemin in vieux:
-            self.assertFalse(os.path.exists(chemin), chemin)
-        self.assertTrue(os.path.exists(recent))
-        os.remove(recent)
+        os.utime(vieux, (time.time() - 30 * 86400,) * 2)   # la date du fichier ne compte pas : la dernière citation
+        t = time.time()
+        publier.retirer_anciens_actifs(self.pub, actuels, t)              # vu sans citation : l'horloge part
+        self.assertTrue(os.path.exists(vieux))
+        publier.retirer_anciens_actifs(self.pub, actuels, t + 23 * 3600)  # 23 h après : encore là
+        self.assertTrue(os.path.exists(vieux))
+        publier.retirer_anciens_actifs(self.pub, actuels, t + 25 * 3600)  # 25 h après : retiré
+        self.assertFalse(os.path.exists(vieux))
         self.assertTrue(os.path.exists(autre))
         os.remove(autre)
-        self.assertEqual(len(os.listdir(dossier)), 2)
+        with open(os.path.join(dossier, "retires.json"), encoding="utf-8") as f:
+            self.assertEqual(json.load(f), {})
 
     def test_un_changement_du_code_change_le_nom(self):
         avant = sorted(os.listdir(os.path.join(self.pub, "actifs")))

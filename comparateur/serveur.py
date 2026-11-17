@@ -96,7 +96,7 @@ DEBIT = Debit()
 COMPRESSIBLES = ("text/html", "text/css", "text/javascript", "application/javascript", "application/json",
                  "image/svg+xml", "application/manifest+json")
 SEUIL_GZIP = 1024
-IMMUABLE = re.compile(r"actifs/site-[0-9a-f]{12}\.(css|js)$")   # nommé par son empreinte : ne change jamais
+IMMUABLE = re.compile(r"^actifs/site-[0-9a-f]{12}\.(css|js)$")   # nommé par son empreinte : ne change jamais
 
 
 def accepte_gzip(entete):
@@ -267,7 +267,9 @@ class Guichet(BaseHTTPRequestHandler):
         # inconnu (une adresse IP, le contrôle de santé du conteneur) est le site.
         self.cote = "compte" if self.hote() == h["compte"] else "urne" if self.hote() == h["urne"] else "site"
         try:
-            if chemin == "/sante":
+            if chemin == "/sante":   # ouvre la base : limité, comme l'API
+                if not DEBIT.autorise("sante:" + self.adresse(), 120, 60):
+                    raise Erreur(429, "trop de requêtes")
                 return self.sante()
             if self.cote == "compte":
                 return self.compte(chemin)

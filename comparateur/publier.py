@@ -66,15 +66,27 @@ def ecrire_actifs(pub, actifs):
 GARDE_ACTIFS = 86400   # un actif que les pages ne citent plus reste un jour : une page gardée en cache le cite encore
 
 
-def retirer_anciens_actifs(pub, actifs):
+def retirer_anciens_actifs(pub, actifs, maintenant=None):
     """Supprime les site-*.css/js que les pages ne citent plus depuis plus d'un jour. Une page en cache dans un
     navigateur ou un proxy (max-age=300, copie du service worker) peut encore citer l'actif d'avant : il reste là le
-    temps qu'elle soit oubliée. Un actif cité est réécrit à chaque publication, sa date suit."""
-    dossier, t = os.path.join(pub, "actifs"), time.time()
+    temps qu'elle soit oubliée. actifs/retires.json garde l'heure où chaque actif a cessé d'être cité."""
+    dossier, t = os.path.join(pub, "actifs"), time.time() if maintenant is None else maintenant
+    registre = os.path.join(dossier, "retires.json")
+    try:
+        with open(registre, encoding="utf-8") as f:
+            retires = {k: float(v) for k, v in json.load(f).items()}
+    except (OSError, ValueError, AttributeError):
+        retires = {}
+    garde = {}
     for ancien in os.listdir(dossier):
-        chemin = os.path.join(dossier, ancien)
-        if ACTIF.match(ancien) and "actifs/" + ancien not in actifs and t - os.path.getmtime(chemin) > GARDE_ACTIFS:
-            os.remove(chemin)
+        if not ACTIF.match(ancien) or "actifs/" + ancien in actifs:
+            continue
+        depuis = retires.get(ancien, t)   # vu pour la première fois sans être cité : l'horloge part maintenant
+        if t - depuis > GARDE_ACTIFS:
+            os.remove(os.path.join(dossier, ancien))
+        else:
+            garde[ancien] = depuis
+    _ecrire(registre, json.dumps(garde, sort_keys=True))
 
 
 def balise_mesure():

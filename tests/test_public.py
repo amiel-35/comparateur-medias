@@ -74,7 +74,11 @@ class NonClasse(unittest.TestCase):
         su = syntheses.suivi([("2026-11-20", charge)])["s1"][0]
         self.assertEqual(su["medias"], 4)                      # la couverture compte le non classé
         self.assertEqual(sum(su["par"].values()), 3)           # aucun bord ne le compte
-        self.assertEqual(su["silences"], ["d"])                # il ne comble pas le silence de la droite
+        self.assertEqual(su["silences"], [])                   # 3 classés : sous le seuil, le non classé n'en fait naître aucun
+        charge["medias"].append({"nom": "E", "score": -0.3})
+        charge["sujets"][0]["articles"].append({"media": "E", "titre": "E", "lien": "https://x.test/E"})
+        su = syntheses.suivi([("2026-11-20", charge)])["s1"][0]
+        self.assertEqual(su["silences"], ["d"])                # 4 classés : la droite se tait, le non classé n'y change rien
         p = syntheses.periode([("2026-11-20", charge)], "2026-S47", "2026-11-16", "2026-11-22")
         f = {m["nom"]: m for m in p["medias"]}["Fictif"]
         self.assertEqual((f["bord"], f["cote"]), (None, None))
@@ -136,3 +140,49 @@ class Versions(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class VuesExecutees(unittest.TestCase):
+    """Les données de la page, calculées par le vrai code du site (socle.js, donnees.js), exécuté par Node."""
+
+    @unittest.skipUnless(shutil.which("node"), "node absent : le calcul JavaScript n'est pas essayé")
+    def test_un_non_classe_dans_donnees_js(self):
+        import subprocess
+        medias = [{"nom": n, "score": s, "bord": base.bord(s), "statut": "classe"} for n, s in
+                  (("A", -1.0), ("B", -0.5), ("C", 0.0), ("D", 1.0))] + [{"nom": "Fictif", "score": None, "bord": None, "statut": "non-classe"}]
+        d = {"recolte": "2026-11-20T05:00:00+00:00", "medias": medias, "non_classes": ["Fictif"], "seuls": [], "min_medias": 4,
+             "classement": {"medias": [{"nom": m["nom"], "score": m["score"]} for m in medias[:4]]},
+             "sujets": [{"id": "s1", "titre": "t", "analyse": None, "mots": [], "articles": [
+                 {"media": m, "titre": m, "lien": "https://x.test/" + m} for m in ("A", "B", "C", "Fictif")]},
+                        {"id": "s2", "titre": "u", "analyse": None, "mots": [], "articles": [
+                 {"media": m, "titre": m, "lien": "https://x.test/2" + m} for m in ("A", "B", "C", "D", "Fictif")]}]}
+        site = os.path.join(config.ICI, "site", "js")
+        code = "".join(open(os.path.join(site, f), encoding="utf-8").read() + "\n" for f in ("socle.js", "donnees.js"))
+        script = ("const vm=require('vm');const ctx=vm.createContext({localStorage:{getItem:()=>null,setItem:()=>{}},"
+                  "DONNEES:%s});ctx.CLASSEMENT=ctx.DONNEES.classement;vm.runInContext(%s+"
+                  "';this.R=rounds.map(function(r){return {id:r.id,nmed:r.nmed,nmedc:r.nmedc,sil:r.sil,nc:r.nc.length,"
+                  "par:BORDS.reduce(function(s,b){return s+r.par[b];},0),bordNc:BY.Fictif.bord,ncFlag:BY.Fictif.nc};});',ctx);"
+                  "console.log(JSON.stringify(ctx.R));") % (json.dumps(d), json.dumps(code))
+        r = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=60)
+        self.assertEqual(r.returncode, 0, r.stderr[-500:])
+        s1, s2 = json.loads(r.stdout)[:2]
+        self.assertEqual((s1["nmed"], s1["nmedc"], s1["par"], s1["nc"], s1["sil"]), (4, 3, 3, 1, []))   # sous le seuil
+        self.assertEqual((s2["nmed"], s2["nmedc"], s2["par"], s2["sil"]), (5, 4, 4, []))                # 4 classés, tous côtés
+        self.assertEqual((s1["bordNc"], s1["ncFlag"]), (None, True))                                     # jamais au centre
+
+
+class VersionsParDate(unittest.TestCase):
+    def test_une_edition_du_jour_de_la_version_ou_d_apres_la_suit(self):
+        db = base.connexion()
+        try:
+            for jour in ("2026-11-16", methode.DATE, "2026-12-01"):
+                db.execute("INSERT OR REPLACE INTO editions (jour, cree, donnees) VALUES (?, ?, '{}')", (jour, base.iso()))
+            db.commit()
+            self.assertTrue(base.migrer_versions(db))       # les lignes sans version, même quand les colonnes existent
+            v = dict(db.execute("SELECT jour, methode FROM editions WHERE jour IN ('2026-11-16', ?, '2026-12-01')", (methode.DATE,)).fetchall())
+            self.assertEqual(v, {"2026-11-16": "", methode.DATE: methode.VERSION, "2026-12-01": methode.VERSION})
+            self.assertFalse(base.migrer_versions(db))
+        finally:
+            db.execute("DELETE FROM editions WHERE jour IN ('2026-11-16', ?, '2026-12-01')", (methode.DATE,))
+            db.commit()
+            db.close()
