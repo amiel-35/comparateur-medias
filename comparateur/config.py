@@ -104,3 +104,36 @@ def mail():
             "utilisateur": utilisateur, "mot_de_passe": mot_de_passe,
             "expediteur": env("COMPARATEUR_MAIL_EXPEDITEUR", "no-reply@inflexion.me"),
             "nom": MARQUE, "site": site_url()}
+
+
+def identites():
+    """Dossier du tiroir identité (identites.db). Dans le compose, un volume à part, monté sur le guichet seul :
+    la fabrique ne le voit pas. Par défaut, le dossier des données."""
+    d = env("COMPARATEUR_IDENTITES", donnees())
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+def hotes():
+    """Les trois noms d'hôte servis par le même serveur, triés sur l'en-tête Host : le site, le compte, l'urne.
+    Par défaut, compte.<hôte du site> et urne.<hôte du site> (décision du 17/11/2026 : compte.compare-media.inflexion.me
+    et urne.compare-media.inflexion.me). En local : compte.localhost et urne.localhost."""
+    site = site_url().split("://", 1)[-1].split("/")[0].split(":")[0].lower()
+    return {"site": site,
+            "compte": env("COMPARATEUR_HOTE_COMPTE", "compte." + site).lower(),
+            "urne": env("COMPARATEUR_HOTE_URNE", "urne." + site).lower()}
+
+
+def mail_en_service():
+    """Le mail est-il en service ? Le guichet le sait par ses réglages SMTP. La fabrique, qui ne tient pas la clé
+    d'envoi, le sait par COMPARATEUR_MAIL_EN_SERVICE=1 : elle s'en sert pour montrer ou non le formulaire et le lien
+    du compte dans les pages."""
+    return mail() is not None or env("COMPARATEUR_MAIL_EN_SERVICE", "0") == "1"
+
+
+def compte_url():
+    """Adresse de la page du compte, ou None si le mail est éteint (sans mail, pas de compte : aucun code à envoyer)."""
+    if not mail_en_service():
+        return None
+    schema = "http" if site_url().startswith("http://") else "https"
+    return env("COMPARATEUR_COMPTE_URL", f"{schema}://{hotes()['compte']}").rstrip("/")

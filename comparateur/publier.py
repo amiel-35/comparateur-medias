@@ -5,7 +5,7 @@ Les lecteurs ne lisent que ces fichiers : ni la base ni les modèles ne sont sol
 """
 import hashlib, json, os, re, shutil, time
 
-from . import aveugle, base, config, export, index, methode, syntheses
+from . import aveugle, base, config, export, flux, index, methode, syntheses
 from .fabrique import hors_ecartees, sujets_du_jour
 
 
@@ -194,7 +194,9 @@ def ecrire_pages(db):
         charge["methode"] = methode.charge()   # la version de la méthode et son historique, lus par la page Démarche
         charge["mesure"] = "umami" if config.umami() else None   # lu par la page Mentions et le pied de page
         # La synthèse de la semaine par mail : null quand le SMTP n'est pas réglé (ni formulaire, ni mention).
-        charge["mail"] = {"prestataire": "Brevo"} if config.mail() else None
+        charge["mail"] = {"prestataire": "Brevo"} if config.mail_en_service() else None
+        # La page du compte (compte.<domaine>), seulement si le mail est réglé : sans mail, aucun code à envoyer.
+        charge["compte"] = config.compte_url()
         charge["periodes"] = {"semaine": semaines[syntheses.cle_semaine(r["jour"])], "mois": mois[r["jour"][:7]],
                               "semaines": liste_s, "mois_liste": liste_m}
         charge["edition"] = {"jour": r["jour"], "precedent": jours[i - 1] if i else None,
@@ -213,6 +215,7 @@ def ecrire_pages(db):
         if nom != "gabarit.html" and os.path.isfile(os.path.join(SITE, nom)):
             shutil.copyfile(os.path.join(SITE, nom), os.path.join(pub, nom))
     export.ecrire(pub, [(j, c, c["versions"]) for j, c in charges])   # l'export public, champ par champ
+    flux.ecrire(pub, charges, semaines)   # synthèses et alertes pour le guichet, flux Atom par sujet
     return jours
 
 

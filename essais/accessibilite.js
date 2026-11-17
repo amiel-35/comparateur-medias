@@ -25,6 +25,14 @@
 // Demande Playwright et Chromium, comme essais/rendu.js (outil de développement, pas une dépendance du site).
 const { chromium } = require('playwright');
 const B = process.argv[2];
+// La page du compte vit sur son propre hôte (compte.<domaine>). En local : COMPTE=http://compte.localhost:8765, avec un
+// serveur lancé avec COMPARATEUR_SITE_URL=http://localhost:8765 et des réglages SMTP factices. Ses trois écrans sont
+// contrôlés, réponses du serveur simulées.
+const COMPTE = process.env.COMPTE || '';
+const SAIT = { sait: { compte: { adresse: 'essai@exemple.fr', cree_jour: '2026-11-17', vu_mois: '2026-11' },
+  abonnements: [{ type: 'lettre', cible: '', etat: 'actif', cree_jour: '2026-11-17', fin_jour: null, dernier_envoi: null },
+    { type: 'rubrique', cible: 'international', etat: 'actif', cree_jour: '2026-11-17', fin_jour: null, dernier_envoi: null }],
+  sessions: [{ cree_jour: '2026-11-17', fin_jour: '2027-11-17' }] } };
 if (!B) { console.error('usage : node essais/accessibilite.js <adresse du site>'); process.exit(2); }
 
 // Exécuté dans la page. Rend la liste des défauts de la vue affichée.
@@ -159,6 +167,10 @@ async function etats(page, chemin) {
   } else if (chemin === '/aveugle.html#fini') {
     await page.route('**/api/lot', r => r.fulfill({ json: { lot: null, restants: 0 } }));
     await page.addInitScript(() => { try { localStorage.setItem('comparateur.jeton', 'essai'); } catch (e) {} });
+  } else if (chemin.startsWith('COMPTE')) {
+    const reg = await (await fetch(B + '/api/compte/registre', { headers: { Host: new URL(COMPTE).host } })).json();
+    await page.route('**/api/compte', r => chemin === 'COMPTE#compte' ? r.fulfill({ json: Object.assign({}, SAIT, reg) }) : r.fulfill({ status: 401, json: {} }));
+    await page.route('**/api/compte/code', r => r.fulfill({ status: 202, json: { ok: true } }));
   } else if (chemin.startsWith('/mail.html#confirmer') || chemin.startsWith('/mail.html#desinscrire')) {
     await page.route('**/api/mail/**', r => r.fulfill({ status: chemin.endsWith('404') ? 404 : 200, json: {} }));
   }
@@ -181,11 +193,16 @@ async function etats(page, chemin) {
       }
       pages.push('/aveugle.html', '/aveugle.html#lot', '/aveugle.html#fini', '/mail.html#confirmer=essai-essai-essai',
         '/mail.html#desinscrire=essai-essai-essai', '/mail.html#desinscrire=essai-essai-clic', '/mail.html#confirmer=essai-essai-404', '/mail.html');
+      if (COMPTE) pages.push('COMPTE#adresse', 'COMPTE#code', 'COMPTE#compte');
+      // « Mes sujets » n'apparaît à l'accueil que si l'appareil en suit : une visite avec deux sujets suivis
+      pages.push('/editions/' + jours[jours.length - 1] + '.html#/?mes');
       for (const p of pages) {
         await page.unrouteAll();
         await etats(page, p);
         await page.goto('about:blank'); await page.waitForTimeout(30);
-        await page.goto(B + p.replace(/#(lot|fini)$/, ''));
+        if (p.endsWith('#/?mes')) await page.addInitScript(() => { try { localStorage.setItem('cadrages.sujets', JSON.stringify([{ id: 's45', titre: 'Un sujet suivi' }, { id: 'zz9', titre: 'Un sujet absent' }])); } catch (e) {} });
+        await page.goto(p.startsWith('COMPTE') ? COMPTE + '/' : B + p.replace(/#(lot|fini)$/, '').replace(/\?mes$/, ''));
+        if (p === 'COMPTE#code') { await page.waitForTimeout(80); await page.fill('#adr', 'essai@exemple.fr'); await page.click('#f-adresse button'); }
         await page.waitForTimeout(80);
         if (p.startsWith('/mail.html#') && !p.endsWith('essai')) {   // le résultat d'un clic sur le bouton
           await page.click('section:not([hidden]) button').catch(() => {});

@@ -1,27 +1,28 @@
-"""La synthèse de la semaine, par mail. Envoi par SMTP (Brevo), bibliothèque standard seulement.
+"""Les mails du compte : la synthèse de la semaine et l'alerte du matin. Envoi par SMTP (Brevo), bibliothèque
+standard seulement. Ce module tourne dans le guichet, jamais dans la fabrique.
 
-Inscription en double confirmation : l'adresse est gardée, avec un jeton aléatoire, puis confirmée par un clic
-sur un bouton (POST) depuis la page mail.html. Rien ne se confirme ni ne se désinscrit sur un simple GET : les
-antivirus de messagerie ouvrent les liens tout seuls. Une désinscription supprime la ligne. Une inscription non
-confirmée sous 7 jours est supprimée.
+Le partage du travail (docs/cadrage-long-terme.md, phase 2) : la fabrique calcule la synthèse de chaque semaine et
+la liste des sujets de chaque édition, et les écrit dans le tiroir public (public/lettre/<semaine>.json,
+public/alertes/<jour>.json), sans aucune adresse. Le guichet lit ces fichiers et envoie, aux abonnés du tiroir
+identité (comptes.py). Il n'ouvre pas la base publique pour cela.
 
-Le lundi, une fois l'édition du jour faite, la boucle de la fabrique envoie la synthèse de la semaine ISO qui
-vient de finir (lundi au dimanche). abonnes.dernier_envoi garde la clé de la dernière semaine envoyée
-(« 2026-S46 ») : pas de double envoi, même après un redémarrage.
+Inscription en double confirmation (comptes.inscrire_lettre), confirmation et désinscription par un bouton (POST)
+sur mail.html : rien ne se fait sur un simple GET, les antivirus de messagerie ouvrent les liens tout seuls.
+Chaque abonnement a son jeton de sortie ; abonnements.dernier_envoi garde la clé du dernier envoi (« 2026-S46 »,
+« 2026-11-17 ») : pas de double envoi, même après un redémarrage.
 
 Aucune adresse n'est écrite dans les journaux : seulement des comptes.
 """
-import html, json, re, secrets, smtplib, ssl, threading, time
+import html, json, os, re, secrets, smtplib, ssl, threading, time
 from datetime import date, timedelta
 from email.message import EmailMessage
 from email.utils import formataddr, formatdate, make_msgid
 
-from . import base, config, syntheses
+from . import abonnements, base, comptes, config, syntheses
 
 M = config.MARQUE   # le nom du site, dans chaque mail
 
-ADRESSE = re.compile(r"^[^@\s<>\"',;()\[\]\\]+@[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$")
-JOURS_SANS_CONFIRMATION = 7
+JOURS_SANS_CONFIRMATION = comptes.JOURS_SANS_CONFIRMATION
 TOP = 10                 # sujets dans le mail
 ESSAIS = 3               # essais par adresse et par semaine avant d'abandonner jusqu'à la semaine suivante
 PAUSE_ESSAIS = 30 * 60   # secondes entre deux essais pour une même adresse
@@ -35,58 +36,9 @@ def dire(m):
 
 
 def normaliser(adresse):
-    """L'adresse en minuscules, ou None si elle n'a pas la forme d'une adresse."""
-    a = str(adresse or "").strip().lower()
-    return a if len(a) <= 254 and ADRESSE.match(a) else None
-
-
-# ---- la base
-
-def purger(db):
-    """Supprime les inscriptions non confirmées depuis plus de 7 jours. Rend le nombre supprimé."""
-    borne = base.iso(base.maintenant() - timedelta(days=JOURS_SANS_CONFIRMATION))
-    n = db.execute("DELETE FROM abonnes WHERE confirme_le IS NULL AND cree < ?", (borne,)).rowcount
-    db.commit()
-    return n
-
-
-def inscrire(db, adresse):
-    """Rend (adresse, jeton) s'il faut envoyer un mail de confirmation, sinon None : adresse invalide, ou déjà
-    confirmée. Une adresse en attente reçoit de nouveau son lien (le débit est limité par le serveur)."""
-    purger(db)
-    a = normaliser(adresse)
-    if not a:
-        return None
-    r = db.execute("SELECT jeton, confirme_le FROM abonnes WHERE adresse = ?", (a,)).fetchone()
-    if r:
-        return None if r["confirme_le"] else (a, r["jeton"])
-    jeton = secrets.token_urlsafe(24)
-    try:
-        db.execute("INSERT INTO abonnes (adresse, jeton, cree) VALUES (?, ?, ?)", (a, jeton, base.iso()))
-        db.commit()
-    except base.sqlite3.IntegrityError:   # deux inscriptions simultanées de la même adresse
-        db.rollback()
-        return None
-    return a, jeton
-
-
-def confirmer(db, jeton):
-    """Confirme l'inscription liée au jeton. Rend True si le jeton est connu (déjà confirmé compris)."""
-    purger(db)
-    if not jeton or len(jeton) > 100:
-        return False
-    db.execute("UPDATE abonnes SET confirme_le = ? WHERE jeton = ? AND confirme_le IS NULL", (base.iso(), jeton))
-    db.commit()
-    return db.execute("SELECT 1 FROM abonnes WHERE jeton = ?", (jeton,)).fetchone() is not None
-
-
-def desinscrire(db, jeton):
-    """Supprime la ligne de l'abonné. Rend True si une ligne a été supprimée."""
-    if not jeton or len(jeton) > 100:
-        return False
-    n = db.execute("DELETE FROM abonnes WHERE jeton = ?", (jeton,)).rowcount
-    db.commit()
-    return n > 0
+    """L'adresse en minuscules, ou None si elle n'a pas la forme d'une adresse (comptes.normaliser)."""
+    from .comptes import normaliser as n
+    return n(adresse)
 
 
 # ---- les messages
@@ -228,6 +180,60 @@ def message_semaine(cfg, adresse, jeton, p):
     return m
 
 
+def message_alerte(cfg, adresse, lignes, a):
+    """L'alerte du matin d'un compte : l'édition est parue (type alerte-edition), et les sujets du jour de chaque
+    rubrique suivie (type rubrique). `lignes` : les abonnements du compte à servir ; `a` : public/alertes/<jour>.json.
+    Les titres des sujets sont écrits par un modèle : signalés. Un lien de sortie par abonnement."""
+    MDL = "écrit par un modèle"
+    e = html.escape
+    page = f"{cfg['site']}{a.get('page') or '/'}"
+    sujets = a.get("sujets", [])
+    titre = f"L’édition du {_jour(a['jour'])} est parue"
+    t, h = [titre, ""], [f'<h1 style="font-size:24px;line-height:1.2;margin:0 0 12px">{e(titre)}</h1>']
+    tag = (' <span style="font:11px Arial,sans-serif;border:1px solid #5b564b;color:#5b564b;padding:0 4px;'
+           f'white-space:nowrap">{MDL}</span>')
+
+    def liste(ss):
+        t.extend(f"- {x['titre']} ({MDL}), {_pl(x['medias'], 'média', 'médias')}\n  {cfg['site']}{x['page']}" for x in ss)
+        h.append('<ul style="padding-left:20px;margin:0 0 14px">' + "".join(
+            f'<li style="margin:0 0 6px"><a href="{e(cfg["site"] + x["page"])}" style="color:#16140f">{e(x["titre"])}</a>{tag}'
+            f' <span style="font:13px Arial,sans-serif;color:#5b564b">{_pl(x["medias"], "média", "médias")}</span></li>'
+            for x in ss) + '</ul>')
+
+    types = {r["type"] for r in lignes}
+    if "alerte-edition" in types:
+        t.append(f"{_pl(len(sujets), 'sujet', 'sujets')} dans l'édition. Les plus couverts :")
+        h.append(f'<p style="margin:0 0 8px">{_pl(len(sujets), "sujet", "sujets")} dans l’édition. Les plus couverts :</p>')
+        liste(sujets[:5])
+    for r in (r for r in lignes if r["type"] == "rubrique"):
+        nom = abonnements.NOMS_RUBRIQUES.get(r["cible"], r["cible"])
+        ss = [x for x in sujets if r["cible"] in x.get("rubriques", [])]
+        t += ["", f"RUBRIQUE {nom.upper()}"]
+        h.append(f'<h2 style="font-size:18px;margin:18px 0 6px">Rubrique {e(nom)}</h2>')
+        if ss:
+            liste(ss[:8])
+        else:
+            t.append("Aucun sujet de cette rubrique aujourd'hui.")
+            h.append('<p style="margin:0 0 10px">Aucun sujet de cette rubrique aujourd’hui.</p>')
+    t += ["", f"L'édition complète : {page}", "", "--",
+          "La rubrique d'un sujet est lue dans l'adresse de ses articles, par un programme. Les comptes ne gardent rien d'autre que ces choix."]
+    h.append(f'<p style="margin:20px 0"><a href="{e(page)}" style="display:inline-block;padding:10px 16px;border:2px solid #16140f;'
+             'background:#16140f;color:#f1ede4;text-decoration:none;font:700 15px Arial,sans-serif">L’édition complète</a></p>')
+    sorties = []
+    for r in lignes:
+        quoi = "l’alerte du matin" if r["type"] == "alerte-edition" else "la rubrique " + abonnements.NOMS_RUBRIQUES.get(r["cible"], r["cible"])
+        sorties.append((quoi, lien_page(cfg, "desinscrire", r["sortie"])))
+    t += [f"Ne plus recevoir {q} : {l}" for q, l in sorties] + [""]
+    h.append('<p style="font:13px/1.6 Arial,sans-serif;color:#5b564b;border-top:1px solid #cfc8b6;padding-top:12px">'
+             'La rubrique d’un sujet est lue dans l’adresse de ses articles, par un programme.<br>' +
+             "<br>".join(f'<a href="{e(l)}" style="color:#5b564b">Ne plus recevoir {e(q)}</a>' for q, l in sorties) + '</p>')
+    m = _message(cfg, adresse, f"{M} : " + titre[0].lower() + titre[1:], "\n".join(t), _page("".join(h)))
+    premiere = next((r for r in lignes if r["type"] == "alerte-edition"), lignes[0])
+    m["List-Unsubscribe"] = f"<{cfg['site']}/api/mail/desinscription?jeton={premiere['sortie']}>"
+    m["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
+    return m
+
+
 # ---- l'envoi
 
 def ouvrir_smtp(cfg):
@@ -271,6 +277,45 @@ class Envoi:
             self.smtp = None
 
 
+def message_code(cfg, adresse, code):
+    """Le code de connexion au compte : six chiffres, dix minutes, sans lien (un lien serait ouvert par les
+    antivirus de messagerie)."""
+    texte = (f"Bonjour,\n\nVotre code pour {M} : {code}\n\nTapez-le sur la page qui vous l'a demandé. Il vaut dix "
+             "minutes et ne sert qu'une fois.\nSi vous n'avez rien demandé, ignorez ce mail : sans le code, personne ne "
+             f"peut entrer.\n\n{M}, {cfg['site']}\n")
+    page = _page(f'<p>Bonjour,</p><p>Votre code pour {M} :</p><p style="font:700 32px/1.2 Arial,sans-serif;letter-spacing:.2em;'
+                 f'margin:12px 0">{html.escape(code)}</p><p style="font-size:14px">Tapez-le sur la page qui vous l’a demandé. '
+                 'Il vaut dix minutes et ne sert qu’une fois. Si vous n’avez rien demandé, ignorez ce mail : sans le code, '
+                 'personne ne peut entrer.</p>')
+    return _message(cfg, adresse, f"{M} : votre code, {code}", texte, page)
+
+
+def _envoyer_un(fabriquer, nom):
+    cfg = config.mail()
+    if not cfg:
+        return False
+    e = Envoi(cfg)
+    try:
+        ok = e.envoyer(fabriquer(cfg))
+    finally:
+        e.fermer()
+    dire(f"{nom} : " + ("1 envoyé" if ok else "1 en échec"))
+    return ok
+
+
+def plus_tard(fonction, *args):
+    """Un mail court (code, confirmation) part dans un fil à part : la réponse au formulaire ne dépend pas de
+    l'envoi, et son délai ne trahit pas si l'adresse était déjà connue."""
+    if EN_ARRIERE_PLAN:
+        threading.Thread(target=fonction, args=args, daemon=True).start()
+    else:
+        fonction(*args)
+
+
+def envoyer_code(adresse, code):
+    return _envoyer_un(lambda cfg: message_code(cfg, adresse, code), "code")
+
+
 def envoyer_confirmation(adresse, jeton):
     cfg = config.mail()
     if not cfg:
@@ -300,69 +345,110 @@ def semaine_finie(jour):
     return syntheses.cle_semaine(lundi), lundi, dimanche
 
 
-def synthese(db, cle, lundi, dimanche):
-    """La synthèse de la semaine, calculée par syntheses.py sur les éditions gardées. None s'il n'y en a aucune."""
-    eds = [(r["jour"], json.loads(r["donnees"])) for r in db.execute(
-        "SELECT jour, donnees FROM editions WHERE jour BETWEEN ? AND ? ORDER BY jour", (lundi, dimanche))]
-    return syntheses.periode(eds, cle, lundi, dimanche) if eds else None
-
-
-def envoyer_semaine(db, jour=None):
-    """Envoie la synthèse de la semaine finie aux abonnés confirmés qui ne l'ont pas encore reçue. Sans effet si
-    le mail est éteint ou si tout est déjà parti. Rend {semaine, envoyes, echecs}."""
-    cfg = config.mail()
-    if not cfg:
+def _lire_public(*chemin):
+    """Un fichier du tiroir public écrit par la fabrique, ou None. Le guichet ne lit que cela."""
+    try:
+        with open(os.path.join(config.public(), *chemin), encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
         return None
-    purger(db)
-    cle, lundi, dimanche = semaine_finie(jour or base.paris().strftime("%Y-%m-%d"))
-    lignes = db.execute("""SELECT id, adresse, jeton FROM abonnes WHERE confirme_le IS NOT NULL
-                           AND (dernier_envoi IS NULL OR dernier_envoi < ?) ORDER BY id""", (cle,)).fetchall()
+
+
+def synthese(cle):
+    """La synthèse de la semaine `cle`, telle que la fabrique l'a écrite (publier.ecrire_tiroir_mails)."""
+    if not re.fullmatch(r"\d{4}-S\d{2}", cle or ""):
+        return None
+    return _lire_public("lettre", cle + ".json")
+
+
+def alerte(jour):
+    """Les sujets de l'édition du jour, avec leurs rubriques, tels que la fabrique les a écrits."""
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", jour or ""):
+        return None
+    return _lire_public("alertes", jour + ".json")
+
+
+def _envoyer_par_lots(ident, lignes, cle, fabriquer):
+    """Un mail par compte (ses lignes d'abonnement groupées), trois essais espacés en cas d'échec. Rend (ok, ko)."""
+    cfg = config.mail()
     t = time.time()
+    par_compte = {}
+    for r in lignes:
+        par_compte.setdefault(r["compte"], []).append(r)
     with _verrou:
-        lignes = [r for r in lignes if _echecs.get((cle, r["id"]), (0, 0))[0] < ESSAIS
-                  and t - _echecs.get((cle, r["id"]), (0, 0))[1] >= PAUSE_ESSAIS]
-    if not lignes:
-        return {"semaine": cle, "envoyes": 0, "echecs": 0}
-    p = synthese(db, cle, lundi, dimanche)
-    if p is None:
-        return {"semaine": cle, "envoyes": 0, "echecs": 0, "editions": 0}
+        comptes_ = [c for c in par_compte if _echecs.get((cle, c), (0, 0))[0] < ESSAIS
+                    and t - _echecs.get((cle, c), (0, 0))[1] >= PAUSE_ESSAIS]
     envoi, ok, ko = Envoi(cfg), 0, 0
     try:
-        for r in lignes:
-            if envoi.envoyer(message_semaine(cfg, r["adresse"], r["jeton"], p)):
-                db.execute("UPDATE abonnes SET dernier_envoi = ? WHERE id = ?", (cle, r["id"]))
-                db.commit()
+        for c in comptes_:
+            ls = par_compte[c]
+            if envoi.envoyer(fabriquer(cfg, ls[0]["adresse"], ls)):
+                comptes.noter_envoi(ident, [r["id"] for r in ls], cle)
                 ok += 1
             else:
                 ko += 1
                 with _verrou:
-                    _echecs[(cle, r["id"])] = (_echecs.get((cle, r["id"]), (0, 0))[0] + 1, time.time())
+                    _echecs[(cle, c)] = (_echecs.get((cle, c), (0, 0))[0] + 1, time.time())
     finally:
         envoi.fermer()
+    return ok, ko
+
+
+def envoyer_semaine(ident, jour=None):
+    """Envoie la synthèse de la semaine finie aux abonnés de la lettre qui ne l'ont pas encore reçue. Sans effet si
+    le mail est éteint, si la fabrique n'a pas encore écrit la synthèse, ou si tout est déjà parti.
+    Rend {semaine, envoyes, echecs[, editions]}, ou None."""
+    if not config.mail():
+        return None
+    comptes.purger(ident)
+    cle, _, _ = semaine_finie(jour or base.paris().strftime("%Y-%m-%d"))
+    lignes = comptes.destinataires(ident, ["lettre"], cle)
+    if not lignes:
+        return {"semaine": cle, "envoyes": 0, "echecs": 0}
+    p = synthese(cle)
+    if p is None:
+        return {"semaine": cle, "envoyes": 0, "echecs": 0, "editions": 0}
+    ok, ko = _envoyer_par_lots(ident, lignes, cle, lambda cfg, a, ls: message_semaine(cfg, a, ls[0]["sortie"], p))
     dire(f"semaine {cle} : {ok} envoyé(s), {ko} en échec")
     return {"semaine": cle, "envoyes": ok, "echecs": ko, "editions": len(p["jours"])}
 
 
-def essai(db, adresse):
-    """Envoie à une seule adresse la synthèse de la dernière semaine finie (ou, à défaut, de la dernière semaine
-    qui a des éditions). N'inscrit personne et ne touche pas dernier_envoi. Rend la clé de la semaine, ou None."""
+def envoyer_alertes(ident, jour=None):
+    """L'alerte du matin : l'édition du jour est parue, et les sujets des rubriques suivies. Un mail par compte, une
+    fois par jour, quand la fabrique a écrit public/alertes/<jour>.json. Rend {jour, envoyes, echecs}, ou None."""
+    if not config.mail():
+        return None
+    jour = jour or base.paris().strftime("%Y-%m-%d")
+    lignes = comptes.destinataires(ident, ["alerte-edition", "rubrique"], jour)
+    if not lignes:
+        return {"jour": jour, "envoyes": 0, "echecs": 0}
+    a = alerte(jour)
+    if a is None:
+        return {"jour": jour, "envoyes": 0, "echecs": 0, "edition": False}
+    ok, ko = _envoyer_par_lots(ident, lignes, jour, lambda cfg, ad, ls: message_alerte(cfg, ad, ls, a))
+    dire(f"alerte du {jour} : {ok} envoyée(s), {ko} en échec")
+    return {"jour": jour, "envoyes": ok, "echecs": ko}
+
+
+def essai(adresse):
+    """Envoie à une seule adresse la synthèse de la dernière semaine écrite par la fabrique. N'inscrit personne.
+    Rend la clé de la semaine, ou None."""
     cfg = config.mail()
     a = normaliser(adresse)
     if not cfg or not a:
         return None
-    cle, lundi, dimanche = semaine_finie(base.paris().strftime("%Y-%m-%d"))
-    p = synthese(db, cle, lundi, dimanche)
+    cle, _, _ = semaine_finie(base.paris().strftime("%Y-%m-%d"))
+    p = synthese(cle)
     if p is None:
-        r = db.execute("SELECT MAX(jour) AS j FROM editions").fetchone()
-        if not r or not r["j"]:
+        try:
+            cles = sorted(n[:-5] for n in os.listdir(os.path.join(config.public(), "lettre")) if n.endswith(".json"))
+        except OSError:
+            cles = []
+        if not cles:
             return None
-        lundi, dimanche = syntheses.bornes_semaine(r["j"])
-        cle = syntheses.cle_semaine(lundi)
-        p = synthese(db, cle, lundi, dimanche)
-    r = db.execute("SELECT jeton FROM abonnes WHERE adresse = ?", (a,)).fetchone()
-    jeton = r["jeton"] if r else secrets.token_urlsafe(24)   # hors liste : le lien de désinscription ne mène à rien
+        cle, p = cles[-1], synthese(cles[-1])
     e = Envoi(cfg)
-    try:
-        return cle if e.envoyer(message_semaine(cfg, a, jeton, p)) else None
+    try:   # un jeton de sortie qui ne mène à rien : l'adresse d'essai n'est inscrite nulle part
+        return cle if e.envoyer(message_semaine(cfg, a, secrets.token_urlsafe(24), p)) else None
     finally:
         e.fermer()

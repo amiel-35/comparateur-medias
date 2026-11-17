@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="color-scheme" content="light dark">
+<meta name="apple-mobile-web-app-title" content="Cadrages">
+<title>Votre compte · Cadrages</title>
+<style>
+/* La page du compte, servie sur compte.<domaine> seulement. Aucune mesure d'audience, rien d'extérieur. Les couleurs
+   sont celles de styles/base.css. */
+:root { --bg: #f1ede4; --paper: #fbf9f4; --ink: #16140f; --mute: #5b564b; --line: #cfc8b6; --ko: #9a2a1a; --focus: #16140f; }
+@media (prefers-color-scheme: dark) { :root { --bg: #14130f; --paper: #1d1b16; --ink: #efe9da; --mute: #aaa392; --line: #403b2f; --ko: #ff9c8a; --focus: #f2c230; } }
+* { box-sizing: border-box; } [hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+header { border-bottom: 2px solid var(--ink); }
+header a { display: inline-block; padding: 14px 16px; font: 700 1.1rem Georgia, serif; text-decoration: none; color: inherit; }
+main { max-width: 640px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font: 700 clamp(1.6rem, 6vw, 2.3rem)/1.15 "Iowan Old Style", Palatino, Georgia, serif; margin: 0 0 12px; overflow-wrap: anywhere; }
+h2 { font: 700 1.25rem/1.2 Georgia, serif; margin: 28px 0 8px; }
+p { margin: .6em 0; overflow-wrap: anywhere; }
+.note { color: var(--mute); font-size: .9rem; }
+label { display: block; font-weight: 700; margin: 14px 0 6px; }
+input[type=email], input[type=text] { width: 100%; font: inherit; padding: 10px 12px; min-height: 44px; border: 2px solid var(--ink); border-radius: 0; background: var(--paper); color: inherit; }
+#code { font-size: 1.5rem; letter-spacing: .3em; max-width: 12rem; }
+button { font: inherit; font-weight: 700; color: var(--bg); background: var(--ink); border: 2px solid var(--ink); padding: 10px 16px; min-height: 44px; cursor: pointer; margin: 12px 8px 0 0; }
+button.second { color: var(--ink); background: var(--paper); }
+button:disabled { opacity: .5; cursor: default; }
+.choix { list-style: none; margin: 8px 0; padding: 0; }
+.choix li { border-bottom: 1px solid var(--line); padding: 10px 0; }
+.choix label { display: flex; gap: 10px; align-items: flex-start; font-weight: 400; margin: 0; }
+.choix input { width: 22px; height: 22px; margin: 2px 0 0; flex: none; accent-color: var(--ink); }
+.choix b { display: block; }
+.choix .sous { list-style: none; margin: 6px 0 0 32px; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.deux { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 600px) { .deux { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.deux > div { background: var(--paper); border: 1px solid var(--line); padding: 10px 14px; }
+.deux ul { margin: .4em 0; padding-left: 1.2em; } .deux li { margin: .3em 0; overflow-wrap: anywhere; }
+#message { min-height: 1.5em; font-weight: 700; }
+#message.ko { color: var(--ko); }
+.pot { position: absolute; left: -9999px; }
+a { color: inherit; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<header><a href="/">Cadrages</a></header>
+<main>
+  <section id="adresse" hidden>
+    <h1 tabindex="-1">Une adresse mail suffit, sans mot de passe</h1>
+    <p>Un code de six chiffres part à cette adresse. Il ouvre votre compte sur cet appareil. Première visite ou non, c’est le même chemin.</p>
+    <form id="f-adresse">
+      <label for="adr">Votre adresse mail</label>
+      <input id="adr" type="email" name="adresse" autocomplete="email" inputmode="email" required maxlength="254">
+      <span class="pot" aria-hidden="true"><label>Ne pas remplir <input name="site" type="text" tabindex="-1" autocomplete="off"></label></span>
+      <button type="submit">Recevoir un code</button>
+    </form>
+  </section>
+
+  <section id="code-ecran" hidden>
+    <h1 tabindex="-1">Un code vient de partir à cette adresse</h1>
+    <p>Tapez-le ici. <span class="note" id="rappel-adresse"></span></p>
+    <form id="f-code">
+      <label for="code">Le code à six chiffres</label>
+      <input id="code" type="text" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required>
+      <button type="submit">Entrer</button>
+      <button type="button" class="second" id="autre-adresse">Changer d’adresse</button>
+    </form>
+    <p class="note">Le code vaut dix minutes. Rien reçu ? Regardez les indésirables, ou redemandez-le.</p>
+  </section>
+
+  <section id="compte" hidden>
+    <h1 tabindex="-1">Vous êtes connecté sur cet appareil</h1>
+    <h2>Ce que vous recevez par mail</h2>
+    <p class="note">Cochez ou décochez : c’est enregistré tout de suite. Chaque mail porte aussi un lien pour se désinscrire en un clic.</p>
+    <ul class="choix" id="choix"></ul>
+    <h2 id="h-sait">Ce que ce site sait de vous</h2>
+    <div class="deux" aria-labelledby="h-sait">
+      <div><p><b>Gardé par le site</b></p><ul id="garde-site"></ul></div>
+      <div><p><b>Gardé sur cet appareil seulement</b></p><ul>
+        <li>Votre choix de thème, clair ou sombre.</li>
+        <li>« Mes sujets », si vous en suivez sur le site.</li>
+        <li>La connexion à ce compte, dans un seul cookie, réservé à cette page.</li></ul>
+        <p class="note">Ces réglages ne sont pas sur les serveurs de ce site. Ils ne suivent pas d’un appareil à l’autre.</p></div>
+    </div>
+    <button type="button" class="second" id="deconnexion">Se déconnecter</button>
+    <button type="button" class="second" id="supprimer">Supprimer mon compte</button>
+    <p id="confirmer-suppression" hidden>L’adresse et tout ce qui la suit sont effacés de la base. Rien n’est gardé de côté.
+      <button type="button" id="supprimer-oui">Supprimer pour de bon</button></p>
+  </section>
+
+  <p id="message" role="status" aria-live="polite"></p>
+  <p class="note"><a href="#" id="lien-site">Retour à Cadrages</a> · <a href="#" id="lien-mentions">Mentions et données personnelles</a></p>
+</main>
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var msg = $('message'), adresse = '', etat = null;
+  /* le site public : compte.<domaine> sans « compte. » */
+  var site = location.protocol + '//' + location.host.replace(/^compte\./, '');
+  $('lien-site').href = site + '/'; $('lien-mentions').href = site + '/#/mentions';
+  function dire(t, ko) { msg.textContent = t || ''; msg.className = ko ? 'ko' : ''; }
+  function montrer(id) {
+    ['adresse', 'code-ecran', 'compte'].forEach(function (s) { $(s).hidden = s !== id; });
+    var h = $(id).querySelector('h1'); if (h) h.focus();
+  }
+  function appel(methode, chemin, corps) {
+    return fetch(chemin, { method: methode, credentials: 'same-origin', headers: corps ? { 'Content-Type': 'application/json' } : {},
+      body: corps ? JSON.stringify(corps) : undefined })
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { statut: r.status, d: d }; }); });
+  }
+  function texte(x) { return x == null ? '' : String(x); }
+  function li(t) { var e = document.createElement('li'); e.textContent = t; return e; }
+
+  /* « Ce que ce site sait de vous » : engendré depuis les lignes du compte rendues par le serveur, rien d'écrit à la main */
+  function afficher(r) {
+    etat = r;
+    var s = r.sait, g = $('garde-site'), noms = {};
+    r.registre.forEach(function (t) { noms[t.type] = t; });
+    g.replaceChildren(li('Votre adresse : ' + texte(s.compte.adresse) + ', depuis le ' + texte(s.compte.cree_jour) + '.'));
+    if (s.compte.vu_mois) g.appendChild(li('Le mois de votre dernière visite : ' + texte(s.compte.vu_mois) + '.'));
+    s.abonnements.forEach(function (a) {
+      var t = noms[a.type], cible = a.cible && t && t.cibles ? (t.cibles.filter(function (c) { return c.cible === a.cible; })[0] || {}).nom : '';
+      g.appendChild(li((t ? t.nom : a.type) + (cible ? ' : ' + cible : '') + (a.etat === 'attente' ? ' (inscription à confirmer)' : '') +
+        ', depuis le ' + texte(a.cree_jour) + (a.dernier_envoi ? '. Dernier envoi : ' + texte(a.dernier_envoi) : '') + '.'));
+    });
+    g.appendChild(li(s.sessions.length > 1 ? s.sessions.length + ' appareils connectés, chacun jusqu’à un an.' : 'Un appareil connecté, jusqu’à un an.'));
+    var actifs = {};
+    s.abonnements.forEach(function (a) { actifs[a.type + '|' + a.cible] = true; });
+    var ul = $('choix'); ul.replaceChildren();
+    r.registre.forEach(function (t) {
+      var e = document.createElement('li');
+      if (!t.cibles) {
+        var l = document.createElement('label'), c = document.createElement('input');
+        c.type = 'checkbox'; c.checked = !!actifs[t.type + '|']; c.disabled = !t.ouvert;
+        c.addEventListener('change', function () { changer(t.type, '', c); });
+        var d = document.createElement('span'); d.innerHTML = '<b></b><span class="note"></span>';
+        d.firstChild.textContent = t.nom + (t.ouvert ? '' : ' (bientôt)'); d.lastChild.textContent = t.phrase;
+        l.append(c, d); e.appendChild(l);
+      } else {
+        var titre = document.createElement('div'); titre.innerHTML = '<b></b><span class="note"></span>';
+        titre.firstChild.textContent = t.nom + 's'; titre.lastChild.textContent = t.phrase;
+        var sous = document.createElement('ul'); sous.className = 'sous'; sous.setAttribute('aria-label', t.nom + 's');
+        t.cibles.forEach(function (ci) {
+          var s2 = document.createElement('li'), l2 = document.createElement('label'), c2 = document.createElement('input');
+          c2.type = 'checkbox'; c2.checked = !!actifs[t.type + '|' + ci.cible];
+          c2.addEventListener('change', function () { changer(t.type, ci.cible, c2); });
+          l2.append(c2, document.createTextNode(ci.nom)); s2.appendChild(l2); sous.appendChild(s2);
+        });
+        e.append(titre, sous);
+      }
+      ul.appendChild(e);
+    });
+  }
+  function changer(type, cible, case_) {
+    case_.disabled = true; dire('Un instant…');
+    appel('POST', '/api/compte/abonnement', { type: type, cible: cible, actif: case_.checked }).then(function (x) {
+      if (x.statut === 200) { afficher(x.d); dire('C’est enregistré.'); }
+      else if (x.statut === 401) { montrer('adresse'); dire('La connexion a expiré. Recommencez avec votre adresse.', true); }
+      else { case_.checked = !case_.checked; case_.disabled = false; dire(x.d.erreur ? 'Refusé : ' + x.d.erreur + '.' : 'Le serveur n’a pas répondu.', true); }
+    }, function () { case_.checked = !case_.checked; case_.disabled = false; dire('Pas de réseau. Réessayez plus tard.', true); });
+  }
+
+  $('f-adresse').addEventListener('submit', function (e) {
+    e.preventDefault();
+    adresse = this.adresse.value.trim(); if (!adresse) return;
+    var b = this.querySelector('button'); b.disabled = true; dire('Un instant…');
+    appel('POST', '/api/compte/code', { adresse: adresse, site: this.site.value }).then(function (x) {
+      b.disabled = false;
+      if (x.statut === 202) { $('rappel-adresse').textContent = 'Adresse : ' + adresse + '.'; dire(''); montrer('code-ecran'); }
+      else dire(x.statut === 429 ? 'Trop d’essais depuis cette connexion. Réessayez dans une heure.' : 'Le serveur n’a pas répondu.', true);
+    }, function () { b.disabled = false; dire('Pas de réseau. Réessayez plus tard.', true); });
+  });
+  $('f-code').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var b = this.querySelector('button[type=submit]'); b.disabled = true; dire('Un instant…');
+    appel('POST', '/api/compte/connexion', { adresse: adresse, code: this.code.value.trim() }).then(function (x) {
+      b.disabled = false;
+      if (x.statut === 200) { dire(''); charger(); }
+      else dire(x.statut === 429 ? 'Trop d’essais. Réessayez dans une heure.' : 'Ce code ne marche pas : il est faux, ou il a plus de dix minutes. Redemandez-en un si besoin.', true);
+    }, function () { b.disabled = false; dire('Pas de réseau. Réessayez plus tard.', true); });
+  });
+  $('autre-adresse').addEventListener('click', function () { dire(''); montrer('adresse'); });
+  $('deconnexion').addEventListener('click', function () {
+    appel('POST', '/api/compte/deconnexion', {}).then(function () { dire('Vous êtes déconnecté sur cet appareil.'); montrer('adresse'); });
+  });
+  $('supprimer').addEventListener('click', function () { $('confirmer-suppression').hidden = false; $('supprimer-oui').focus(); });
+  $('supprimer-oui').addEventListener('click', function () {
+    appel('POST', '/api/compte/suppression', {}).then(function (x) {
+      if (x.statut === 200) { $('confirmer-suppression').hidden = true; dire('C’est fait. L’adresse est effacée.'); montrer('adresse'); }
+      else dire('La suppression n’a pas abouti. Réessayez plus tard.', true);
+    });
+  });
+  function charger() {
+    appel('GET', '/api/compte').then(function (x) {
+      if (x.statut === 200) { afficher(x.d); montrer('compte'); } else montrer('adresse');
+    }, function () { montrer('adresse'); dire('Pas de réseau. Réessayez plus tard.', true); });
+  }
+  charger();
+})();
+</script>
+</body>
+</html>

@@ -31,6 +31,7 @@ function titleLi(r,a){
 function sujetView(r){
   var h='<div><p class="crumb"><a href="#/">Les sujets du jour</a> / Sujet '+r.n+'</p>'+
   '<p class="mono mute">Sujet '+r.n+' sur '+rounds.length+'</p><h1 tabindex="-1" id="h1">'+esc(r.titre)+(r.kind==='sujet'?mdl():'')+'</h1>';
+  if(r.kind==='sujet')h+=boutonSuivre(r);
   if(r.fait)h+='<div class="fait"><span class="mono">Le fait commun'+mdl()+'</span><p>'+esc(r.fait)+'</p></div>';
   /* qui en parle */
   h+='<h2>Qui en parle</h2><p class="note">Les titres, comptés sur les sept bandes de FrIdéo. Par formule, sans modèle.</p>'+brows(r);

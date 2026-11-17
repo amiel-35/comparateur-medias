@@ -121,27 +121,40 @@ menu y ont été relevés dans l'aide d'Apple, de Google et de Microsoft le 15/1
 pu l'être (pages de Mozilla illisibles par un robot) et sont écrits avec prudence. Les icônes se refont avec
 `python3 essais/icones.py`.
 
-## La synthèse de la semaine par mail
+## Le compte et les mails (phase 2)
 
-Allumée par les deux réglages SMTP (voir « Sur Coolify »), éteinte sans eux : `D.mail` vaut alors `null`, aucun
-formulaire n'est montré, aucune route `/api/mail/` ne répond. Pas de compte, pas de mot de passe, pas de cookie.
+Allumés par les deux réglages SMTP du guichet, éteints sans eux : ni formulaire, ni page de compte, ni route
+`/api/mail/` ou `/api/compte/`. Le détail du déploiement : [docs/deploiement-phase-2.md](docs/deploiement-phase-2.md).
 
-- **Inscription** en double confirmation, depuis l'encart de la page Semaine (`#/semaine/mail`). La réponse est
-  toujours la même, que l'adresse soit nouvelle, déjà inscrite ou invalide ; le mail de confirmation part dans un
-  fil à part. Un champ caché écarte les robots. 5 essais par heure et par adresse IP, 2 liens par jour et par
-  adresse mail.
-- **Confirmation et désinscription** sur la page `mail.html`, par un bouton (POST). Rien ne se fait sur un simple
-  GET : les antivirus de messagerie ouvrent les liens. Le jeton est dans le fragment (`#`) de l'adresse.
-  Chaque mail porte `List-Unsubscribe` et `List-Unsubscribe-Post: List-Unsubscribe=One-Click` (RFC 8058) : le POST
-  du logiciel de messagerie désinscrit directement. Une désinscription supprime la ligne. Une inscription non
-  confirmée sous 7 jours est supprimée.
-- **Envoi** le lundi, une fois l'édition du jour faite, par la boucle de la fabrique : la semaine ISO qui vient de
-  finir, calculée par `syntheses.py` (sujets les plus couverts, silences par bord, éditions gardées, « synthèse
-  partielle » sous 7, lien vers la page Semaine). Un mail par abonné, texte et HTML. `abonnes.dernier_envoi` garde
-  la semaine envoyée : pas de double envoi, même après un redémarrage. Une adresse en échec ne bloque pas les
-  autres (trois essais espacés de 30 minutes). Les journaux comptent, ils ne nomment personne.
-- **Essai** : `python -m comparateur mail-essai <adresse>` envoie la synthèse de la dernière semaine à cette seule
-  adresse, sans l'inscrire.
+- **Deux processus, quatre tiroirs.** La `fabrique` (`python -m comparateur fabrique`) récolte, fait l'édition et
+  écrit le tiroir public, sans port ni clé d'envoi. Le `guichet` (`python -m comparateur guichet`) sert le site,
+  `compte.<domaine>` et `urne.<domaine>` (tri sur l'en-tête `Host`), tient `identites.db` et envoie les mails.
+  `python -m comparateur servir` fait les deux dans un processus, pour un poste de développement. Un test vérifie
+  qu'aucun module du côté de la fabrique n'importe le tiroir identité, et que son processus ne le charge pas.
+- **Le tiroir identité** (`comptes.py`, `identites.db`) : comptes, abonnements, sessions, codes ; `retraits` et
+  `cles` créées vides pour le panel. Dates au jour, dernière visite au mois. Ni bord, ni sujet, ni lecture.
+- **Le registre** (`abonnements.py`) : lettre de la semaine, alerte du matin, rubriques larges (six, trois au plus),
+  et le panel, déclaré et fermé. Un type inconnu, une classe « opinion », une cible hors liste sont refusés.
+  Ajouter un type ne change pas le schéma.
+- **La connexion** : un code de six chiffres par mail, dix minutes, cinq essais, gardé en empreinte salée ; puis un
+  cookie, un seul, `__Host-cadrages` (`Secure`, `HttpOnly`, `SameSite=Strict`, sans `Domain`), sur `compte.` seulement,
+  un an. Une requête d'un autre site est refusée (JSON exigé, `Origin` et `Sec-Fetch-Site` contrôlés). 5 codes par
+  heure et par IP, 3 par adresse, 20 essais de connexion par heure et par IP.
+- **La page du compte** (`comparateur/compte/compte.html`, servie sur `compte.` seulement, sans mesure d'audience) :
+  cases d'abonnement, et « Ce que ce site sait de vous », engendré depuis les lignes du compte.
+- **La lettre sans compte** : l'encart de la page Semaine marche comme avant (double confirmation, désinscription
+  en un clic, RFC 8058). Un abonné est un compte avec une ligne ; il ne se connecte jamais. Une désinscription qui
+  laisse le compte vide efface l'adresse.
+- **Les envois** : la fabrique écrit `public/lettre/<semaine>.json` et `public/alertes/<jour>.json` (sujets du jour et
+  rubriques lues dans l'adresse des articles) ; le guichet envoie la lettre le lundi et l'alerte chaque matin, un mail
+  par compte, une fois (`abonnements.dernier_envoi`).
+- **La migration d'`abonnes`** : `python -m comparateur verser-abonnes` puis `oublier-abonnes` (voir le document de
+  déploiement). Écrite et testée sur des données d'essai, jamais lancée sur une vraie base.
+- **« Mes sujets » et les flux** : suivre un sujet le garde dans le navigateur (`localStorage`, clé
+  `cadrages.sujets`) ; l'accueil compare la liste à l'édition. Chaque sujet a un flux Atom,
+  `/flux/sujets/<id>.xml`, le même pour tous. Pas de suivi par mail (décision 3).
+- **Essai** : `python -m comparateur mail-essai <adresse>` envoie la synthèse de la dernière semaine écrite par la
+  fabrique à cette seule adresse, sans l'inscrire.
 
 ## Sept bords, trois côtés
 
@@ -239,6 +252,11 @@ du sujet. Un test refuse tout autre appel réseau dans la vue. Le contrat : `doc
 | `POST /api/mail/inscription` | `{adresse}` | `202 {ok}`, toujours ; seulement si le mail est réglé |
 | `POST /api/mail/confirmation` | `{jeton}` | `200` ; `404` si le lien est inconnu ou expiré |
 | `POST /api/mail/desinscription` | `{jeton}`, ou `?jeton=` en un clic (RFC 8058) | `200`, toujours |
+| `POST /api/compte/code` (sur `compte.`) | `{adresse}` | `202`, toujours |
+| `POST /api/compte/connexion` | `{adresse, code}` | `200` et le cookie ; `403` si le code est faux ou expiré |
+| `GET /api/compte` | cookie | `{sait, registre}` ; `401` sans session |
+| `POST /api/compte/abonnement` | `{type, cible, actif}` | `{sait, registre}` ; `400` si le registre refuse |
+| `POST /api/compte/deconnexion`, `/suppression` | | `200`, le cookie effacé |
 
 **Un pseudonyme, pas un anonymat.** La base garde l'empreinte du jeton, le bord déclaré et les avis, sans nom ni
 adresse ; les dates sont arrondies au jour. Le jeton relie entre eux les avis d'un même votant : c'est un

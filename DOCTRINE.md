@@ -26,6 +26,8 @@ comparateur/site/
   (publiés dans public/actifs/ sous des noms d'empreinte : le CSS en un fichier, le JavaScript en un fichier)
   aveugle.html        la page du vote à l'aveugle, à part
   mail.html           la page qui confirme ou supprime une inscription au mail de la semaine, à part
+  js/mes-sujets.js    « Mes sujets », gardés dans le navigateur ; rien ne part au serveur
+comparateur/compte/compte.html   la page du compte, servie sur compte.<domaine> seulement, hors du tiroir public
   manifest.webmanifest, sw.js, icone-*.png, apple-touch-icon.png   l'application installable (essais/icones.py)
 ```
 

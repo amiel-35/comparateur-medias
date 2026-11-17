@@ -1,4 +1,5 @@
-# Comparateur de cadrages : une image, deux usages (le serveur, et la fabrique lancée par tâche planifiée).
+# Cadrages : une image, deux services du compose (« fabrique » et « guichet », voir docker-compose.yml). Lancée seule,
+# sans commande, elle fait les deux dans un processus, comme avant la phase 2.
 FROM python:3.13-slim
 
 # curl : lecture des flux RSS et contrôle de santé. tzdata : les éditions sont datées en heure de Paris.
