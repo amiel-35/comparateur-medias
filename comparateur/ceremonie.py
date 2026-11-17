@@ -12,7 +12,7 @@ garder. Il ne lit jamais une ligne de l'urne ni une ligne d'un compte.
 Fichiers publics : public/panel/cles/<id>.json, public/panel/questionnaires/<id>.json (ce que l'appareil montre),
 public/panel/resultats/<id>.json, public/panel/aveugle/<trimestre>.json.
 """
-import json, os
+import json, os, re
 from datetime import date
 
 from . import comptes, config, signature, urne
@@ -63,24 +63,38 @@ def ouvrir(q, ident=None, bits=2048):
 
 
 def fermer(questionnaire, ident=None):
-    """La clôture comme cérémonie (premier cadrage, idée 5). Rend les résultats publiés."""
+    """La clôture comme cérémonie (premier cadrage, idée 5). Rend les résultats publiés.
+
+    Dans cet ordre, chaque geste se rejouant sans dommage : l'urne se ferme (plus de dépôt) et garde le nombre de
+    bulletins délivrés ; la clé et les retraits sont détruits ; l'urne est scellée ; les résultats sont publiés, puis
+    la description et la clé publique retirées. Une clôture interrompue se reprend (echeances, ou la commande)."""
     propre = ident is None
     ident = ident or comptes.connexion()
     try:
-        delivres = comptes.fermer_cle(ident, questionnaire)
+        urne.clore(questionnaire, comptes.delivres(ident, questionnaire))
+        comptes.fermer_cle(ident, questionnaire)
     finally:
         if propre:
             ident.close()
-    res = urne.fermer(questionnaire, delivres)
+    res = urne.sceller(questionnaire)
     _ecrire(_public("resultats", questionnaire + ".json"), res)
     _effacer(_public("questionnaires", questionnaire + ".json"))
     _effacer(_public("cles", questionnaire + ".json"))
     return res
 
 
+def a_reprendre(ident):
+    """Les questionnaires dont la clôture a commencé sans finir : leur description publique est encore là, leur clé
+    n'y est plus (l'ouverture écrit la description après la clé ; seule la clôture retire la clé avant elle)."""
+    ouvertes = {r["questionnaire"] for r in comptes.cles_ouvertes(ident)}
+    dossier = os.path.join(config.public(), "panel", "questionnaires")
+    noms = sorted(os.listdir(dossier)) if os.path.isdir(dossier) else []
+    return [n[:-5] for n in noms if n.endswith(".json") and urne.ID.match(n[:-5]) and n[:-5] not in ouvertes]
+
+
 def republier(questionnaire):
-    """Recalcule les résultats d'un questionnaire clos (après un effacement par le reçu, par exemple)."""
-    res = urne.resultats(questionnaire)
+    """Recompte un questionnaire clos (après un effacement par le reçu, par exemple), le scelle de nouveau et republie."""
+    res = urne.sceller(questionnaire)
     _ecrire(_public("resultats", questionnaire + ".json"), res)
     return res
 
@@ -91,31 +105,38 @@ def trimestre(d=None):
 
 
 def assurer_carte(ident, t=None, bits=2048):
-    """La clé de la carte de votant du trimestre, créée à la première demande. Rend l'identifiant (« carte-2026t4 »)."""
+    """La clé de la carte de votant du trimestre, créée à la première demande. Rend l'identifiant (« carte-2026t4 »).
+    Si la clé existe sans son fichier public (un arrêt entre les deux), le fichier est réécrit depuis la clé."""
     cid = urne.carte_id(t or trimestre())
-    if not ident.execute("SELECT 1 FROM cles WHERE questionnaire = ?", (cid,)).fetchone():
-        cle = signature.nouvelle_cle(bits)
-        try:
-            comptes.ouvrir_cle(ident, cid, cle)
-        except Exception:   # créée entre-temps par une autre requête
-            ident.rollback()
-            return cid
-        _ecrire(_public("cles", cid + ".json"), signature.en_hex(signature.publique(cle)))
+    r = ident.execute("SELECT n, e FROM cles WHERE questionnaire = ?", (cid,)).fetchone()
+    if r:
+        if not os.path.isfile(_public("cles", cid + ".json")):
+            _ecrire(_public("cles", cid + ".json"), signature.en_hex({"n": int(r["n"], 16), "e": int(r["e"])}))
+        return cid
+    cle = signature.nouvelle_cle(bits)
+    try:
+        comptes.ouvrir_cle(ident, cid, cle)
+    except Exception:   # créée entre-temps par une autre requête
+        ident.rollback()
+        return assurer_carte(ident, t, bits)
+    _ecrire(_public("cles", cid + ".json"), signature.en_hex(signature.publique(cle)))
     return cid
 
 
 def clore_trimestre(t, ident=None):
-    """Le trimestre fini : clé de la carte détruite, retraits effacés, urne du vote close, agrégats publiés."""
+    """Le trimestre fini, dans l'ordre et chaque geste se rejouant : urne du vote close (le nombre de cartes gardé
+    dedans), clé de la carte détruite et retraits effacés, agrégats publiés."""
     cid = urne.carte_id(t)
     propre = ident is None
     ident = ident or comptes.connexion()
     try:
-        delivres = comptes.fermer_cle(ident, cid)
+        n = comptes.delivres(ident, cid)
+        urne.clore(urne.urne_aveugle(t), n, urne.SCHEMA_AVEUGLE)
+        comptes.fermer_cle(ident, cid)
     finally:
         if propre:
             ident.close()
     agg = urne.clore_trimestre(t)
-    agg["cartes_delivrees"] = delivres
     _ecrire(_public("aveugle", t + ".json"), agg)
     _effacer(_public("cles", cid + ".json"))
     return agg
@@ -123,10 +144,11 @@ def clore_trimestre(t, ident=None):
 
 def echeances(ident, aujourdhui=None):
     """Ce que le guichet fait seul, chaque minute : clore les trimestres passés et les questionnaires dont le jour de
-    fermeture est passé. Rend la liste de ce qui a été clos."""
+    fermeture est passé, et finir une clôture interrompue. Rend la liste de ce qui a été clos."""
     aujourdhui = aujourdhui or date.today()
     fait = []
-    courant = urne.carte_id(trimestre(aujourdhui))
+    t_courant = trimestre(aujourdhui)
+    courant = urne.carte_id(t_courant)
     for r in comptes.cles_ouvertes(ident):
         q = r["questionnaire"]
         if q.startswith("carte-") and q != courant:
@@ -141,4 +163,14 @@ def echeances(ident, aujourdhui=None):
             if fin and fin < aujourdhui.isoformat():
                 fermer(q, ident)
                 fait.append(q)
+    for q in a_reprendre(ident):   # une clôture commencée, clé détruite, pas encore publiée
+        if urne.etat(q) is not None:
+            fermer(q, ident)
+            fait.append(q)
+    for nom in sorted(os.listdir(urne.dossier())):   # un trimestre clos dont les agrégats ne sont pas publiés
+        m = re.fullmatch(r"aveugle-(\d{4})t([1-4])\.db", nom)
+        t = m and f"{m.group(1)}T{m.group(2)}"
+        if t and t != t_courant and not os.path.isfile(_public("aveugle", t + ".json")):
+            clore_trimestre(t, ident)
+            fait.append(urne.carte_id(t))
     return fait

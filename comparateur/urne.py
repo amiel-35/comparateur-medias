@@ -59,7 +59,10 @@ def chemin(questionnaire):
 
 
 def _ouvrir(questionnaire, schema=SCHEMA, creer=False):
+    # une urne d'un type ne s'ouvre jamais avec le schéma de l'autre (un dépôt visant « aveugle-2026t4 » est inconnu)
     c = chemin(questionnaire)
+    if (schema is SCHEMA) == questionnaire.startswith(("aveugle-", "carte-")):
+        raise Refus(404, "questionnaire inconnu")
     if not creer and not os.path.isfile(c):
         raise Refus(404, "questionnaire inconnu")
     db = sqlite3.connect(c, timeout=30)
@@ -93,14 +96,16 @@ def _octets(x, nom, maxi=1024):
     return bytes.fromhex(x)
 
 
-def _bulletin_valide(questionnaire, bulletin, sig, pk):
+def _bulletin_valide(questionnaire, bulletin, sig, pk, extra=0):
     """Le bulletin (le message préparé, RFC 9474 : 32 octets au hasard, puis le message) doit nommer ce
-    questionnaire, et sa signature doit être bonne. Un bulletin signé pour un autre questionnaire est refusé."""
+    questionnaire, et sa signature doit être bonne. Un bulletin signé pour un autre questionnaire est refusé. `extra` :
+    les octets entre l'identifiant et l'aléa (la carte de votant y porte le bord). Rend le message."""
     message = bulletin[signature.LONGUEUR_PREFIXE:]
-    if not message.startswith(questionnaire.encode() + b"\x00") or len(message) != len(questionnaire) + 1 + 32:
+    if not message.startswith(questionnaire.encode() + b"\x00") or len(message) != len(questionnaire) + 1 + extra + 32:
         raise Refus(403, "bulletin refusé")
     if not signature.verifier(pk, bulletin, sig):
         raise Refus(403, "bulletin refusé")
+    return message
 
 
 def _bord(bord):
@@ -175,6 +180,7 @@ def deposer(questionnaire, bulletin, sig, bord, reponses):
     """Le dépôt. Rend l'empreinte du bulletin (le reçu, côté appareil, est le bulletin lui-même)."""
     db = _ouvrir(questionnaire)
     try:
+        db.execute("BEGIN IMMEDIATE")   # la clôture ne passe pas entre la lecture de l'état et l'écriture
         meta = _meta(db)
         if meta.get("etat") != "ouvert":
             raise Refus(410, "questionnaire clos")
@@ -241,15 +247,30 @@ def resultats(questionnaire):
             "scellement": meta.get("scellement", ""), "questions": questions}
 
 
-def fermer(questionnaire, delivres):
-    """La clôture, côté urne : plus de dépôt, le nombre de bulletins délivrés inscrit, le fichier compacté, puis
-    scellé (son empreinte publiée avec les résultats : chacun peut vérifier qu'il n'a pas bougé). Rend les résultats."""
+def clore(nom, delivres, schema=SCHEMA):
+    """Le premier geste de la clôture, et le seul qui compte pour les dépôts : plus rien n'entre. Garde le nombre de
+    bulletins (ou de cartes) délivrés, s'il est connu et pas déjà gardé. Se rejoue sans dommage : une clôture
+    interrompue se reprend au geste suivant."""
+    db = _ouvrir(nom, schema, creer=schema is SCHEMA_AVEUGLE)
+    try:
+        db.execute("BEGIN IMMEDIATE")
+        meta = _meta(db)
+        if meta.get("etat") != "clos":
+            db.execute("INSERT OR REPLACE INTO meta (cle, valeur) VALUES ('etat', 'clos')")
+        if "delivres" not in meta and delivres is not None:
+            db.execute("INSERT INTO meta (cle, valeur) VALUES ('delivres', ?)", (str(int(delivres)),))
+        db.commit()
+    finally:
+        db.close()
+
+
+def sceller(questionnaire):
+    """L'urne close est compactée, puis scellée : l'empreinte de ses lignes est publiée avec les résultats, chacun
+    peut vérifier qu'elle n'a pas bougé. Refait après un effacement, le scellement suit l'urne. Rend les résultats."""
     db = _ouvrir(questionnaire)
     try:
-        if _meta(db).get("etat") != "ouvert":
-            raise Refus(410, "questionnaire déjà clos")
-        db.executemany("INSERT OR REPLACE INTO meta (cle, valeur) VALUES (?, ?)", [("etat", "clos"), ("delivres", str(int(delivres)))])
-        db.commit()
+        if _meta(db).get("etat") != "clos":
+            raise Refus(409, "l'urne n'est pas close")
         db.execute("VACUUM")
         lignes = sorted(f"{r['empreinte']}|{r['bord']}|{r['reponses']}" for r in db.execute("SELECT * FROM reponses"))
         db.execute("INSERT OR REPLACE INTO meta (cle, valeur) VALUES ('scellement', ?)",
@@ -258,6 +279,18 @@ def fermer(questionnaire, delivres):
     finally:
         db.close()
     return resultats(questionnaire)
+
+
+def etat(nom):
+    """« ouvert », « clos », ou None si l'urne n'existe pas."""
+    try:
+        db = _ouvrir(nom, SCHEMA_AVEUGLE if nom.startswith("aveugle-") else SCHEMA)
+    except Refus:
+        return None
+    try:
+        return _meta(db).get("etat", "ouvert")
+    finally:
+        db.close()
 
 
 # ---- la carte de votant (le vote à l'aveugle)
@@ -272,17 +305,38 @@ def urne_aveugle(trimestre):
     return "aveugle-" + carte_id(trimestre)[6:]
 
 
-def donner_avis(trimestre, carte, sig, lot, note, bord):
-    """Un avis sur un lot, avec la carte de votant du trimestre. Un avis par carte et par lot. Rend True."""
+def lots_proposes():
+    """Les numéros des lots proposés en ce moment (public/aveugle/lots.json, écrit par la fabrique, le même pour
+    tous) : seuls ceux-là se jugent. Ensemble vide si le fichier manque."""
+    try:
+        with open(os.path.join(config.public(), "aveugle", "lots.json"), encoding="utf-8") as f:
+            return {x["id"] for x in json.load(f)["lots"] if isinstance(x, dict) and isinstance(x.get("id"), int)}
+    except (OSError, ValueError, KeyError, TypeError):
+        return set()
+
+
+def bord_de_la_carte(message, cid):
+    """Le bord est inscrit dans la carte (un octet, de 0 à 4 pour -2 à +2), signé à l'aveugle avec elle : le guichet
+    ne le voit pas, et une carte ne vaut que pour un bord tout le trimestre."""
+    b = message[len(cid) + 1]
+    if not 0 <= b <= 4:
+        raise Refus(403, "bulletin refusé")
+    return b - 2
+
+
+def donner_avis(trimestre, carte, sig, lot, note, bord=None):
+    """Un avis sur un lot proposé, avec la carte de votant du trimestre. Un avis par carte et par lot. Le bord est
+    celui de la carte ; celui de la requête est ignoré. Rend True."""
     cid = carte_id(trimestre)
     c, s = _octets(carte, "carte", 200), _octets(sig, "signature")
-    _bulletin_valide(cid, c, s, cle_publique(cid))
-    if not isinstance(lot, int) or isinstance(lot, bool) or lot < 1:
+    bord = bord_de_la_carte(_bulletin_valide(cid, c, s, cle_publique(cid), extra=1), cid)
+    if not isinstance(lot, int) or isinstance(lot, bool) or lot not in lots_proposes():
         raise Refus(400, "lot invalide")
     if not isinstance(note, int) or isinstance(note, bool) or not -2 <= note <= 2:
         raise Refus(400, "note attendue : entier de -2 à 2")
     db = _ouvrir(urne_aveugle(trimestre), SCHEMA_AVEUGLE, creer=True)
     try:
+        db.execute("BEGIN IMMEDIATE")
         if _meta(db).get("etat") == "clos":
             raise Refus(410, "trimestre clos")
         try:
@@ -334,14 +388,16 @@ def agregats_aveugle(nom_urne):
         db.close()
 
 
-def clore_trimestre(trimestre):
-    """Clôt l'urne du vote à l'aveugle d'un trimestre et rend ses agrégats, à publier dans le tiroir public."""
+def clore_trimestre(trimestre, delivres=None):
+    """Clôt l'urne du vote à l'aveugle d'un trimestre et rend ses agrégats, à publier dans le tiroir public. Se rejoue
+    sans dommage, comme clore."""
     nom = urne_aveugle(trimestre)
-    db = _ouvrir(nom, SCHEMA_AVEUGLE, creer=True)
+    clore(nom, delivres, SCHEMA_AVEUGLE)
+    db = _ouvrir(nom, SCHEMA_AVEUGLE)
     try:
-        db.execute("INSERT OR REPLACE INTO meta (cle, valeur) VALUES ('etat', 'clos')")
-        db.commit()
         db.execute("VACUUM")
+        cartes = int(_meta(db).get("delivres", "0"))
     finally:
         db.close()
-    return {"v": 1, "mesure": "aveugle", "trimestre": trimestre, "etiquette": ETIQUETTE, "lots": agregats_aveugle(nom)}
+    return {"v": 1, "mesure": "aveugle", "trimestre": trimestre, "etiquette": ETIQUETTE, "lots": agregats_aveugle(nom),
+            "cartes_delivrees": cartes}

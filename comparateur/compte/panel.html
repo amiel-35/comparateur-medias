@@ -114,6 +114,7 @@ h1:focus, h2:focus { outline: none; }
     <h1 tabindex="-1" id="h-bord">Où vous situez-vous ?</h1>
     <ul class="choix" id="bord-choix" role="radiogroup" aria-labelledby="h-bord"></ul>
     <p class="note">Ce choix reste sur cet appareil. Il part avec chacune de vos réponses, jamais avec votre nom.</p>
+    <p class="note" id="bord-carte" hidden>Pour le vote à l’aveugle, ce choix est inscrit dans votre carte du trimestre. Il vaut jusqu’à la fin du trimestre.</p>
     <button type="button" id="bord-suivant">Suivant</button>
     <button type="button" class="second" id="bord-retour">Retour au panel</button>
   </section>
@@ -340,9 +341,10 @@ h1:focus, h2:focus { outline: none; }
   /* ---- le retrait d'un bulletin (ou de la carte du trimestre) : l'appareil tire un message au hasard, le cache,
      le guichet le signe sans le voir, l'appareil dévoile et vérifie. Le guichet sait qu'un bulletin est retiré,
      jamais lequel. */
-  function retirer(id, cle) {
-    var nom = new TextEncoder().encode(id), message = new Uint8Array(nom.length + 33);
-    message.set(nom, 0); message[nom.length] = 0; message.set(A.hasard(32), nom.length + 1);
+  function retirer(id, cle, octet) {   // octet : le bord inscrit dans la carte de votant (0 à 4), absent pour un bulletin
+    var nom = new TextEncoder().encode(id), plus = octet == null ? 0 : 1, message = new Uint8Array(nom.length + 33 + plus);
+    message.set(nom, 0); message[nom.length] = 0; if (plus) message[nom.length + 1] = octet;
+    message.set(A.hasard(32), nom.length + 1 + plus);
     var prepare = A.preparer(message), inv;
     return A.aveugler(cle, prepare).then(function (x) {
       inv = x.inv;
@@ -384,10 +386,10 @@ h1:focus, h2:focus { outline: none; }
   function debuter(q, b) {
     cours = { q: q, b: b, bord: null, reponses: {}, i: 0 };
     apres = function (bord) { cours.bord = bord; montrerQuestion(0); };
-    montrerBord(q.titre + ' · avant les questions');
+    montrerBord(q.titre + ' · avant les questions', false);
   }
-  function montrerBord(rang) {
-    $('bord-rang').textContent = rang;
+  function montrerBord(rang, pourCarte) {
+    $('bord-rang').textContent = rang; $('bord-carte').hidden = !pourCarte;
     radios($('bord-choix'), 'bord', BORDS, monBord() == null ? null : monBord() + 2);
     dire(''); montrer('bord');
   }
@@ -510,13 +512,16 @@ h1:focus, h2:focus { outline: none; }
   $('quitter-effacer').addEventListener('click', function () { quitter(true); });
 
   /* ---- le vote à l'aveugle : une carte par trimestre, retirée comme un bulletin, gardée sur l'appareil */
-  function carte() {
+  function carteGardee() {
     var e = etat.carte, c = lire(CLE_CARTE, null);
-    if (c && c.id === e.id && typeof c.carte === 'string' && typeof c.signature === 'string') return Promise.resolve(c);
-    if (e.retiree) { refusRetrait(409, true); return Promise.resolve(null); }
-    return retirer(e.id, e.cle).then(function (x) {
+    return c && c.id === e.id && typeof c.carte === 'string' && typeof c.signature === 'string'
+      && typeof c.bord === 'number' && c.bord >= -2 && c.bord <= 2 ? c : null;
+  }
+  function retirerCarte(bord) {   // le bord part dans la carte, aveuglé : le guichet ne le voit pas
+    var e = etat.carte;
+    return retirer(e.id, e.cle, bord + 2).then(function (x) {
       if (x.statut !== 200) { refusRetrait(x.statut, true); return null; }
-      c = { id: e.id, trimestre: texte(e.trimestre), carte: x.bulletin, signature: x.signature };
+      var c = { id: e.id, trimestre: texte(e.trimestre), bord: bord, carte: x.bulletin, signature: x.signature };
       if (!ecrire(CLE_CARTE, c)) dire(AVERTIR.trim(), true);
       return c;
     });
@@ -529,15 +534,25 @@ h1:focus, h2:focus { outline: none; }
       if (x.statut === 401) return hors();
       var lots = x.statut === 200 && Array.isArray(x.d.lots) ? x.d.lots.filter(lotValide) : [];
       if (!lots.length) return dire('Aucun titre à juger en ce moment. Revenez dans quelques jours.');
-      return carte().then(function (c) {
-        if (!c) return;
+      var c = carteGardee();
+      if (c) {   // la carte du trimestre est sur cet appareil, avec son bord : les lots déjà jugés ne reviennent pas
         return urne('/api/urne/lots-juges', { trimestre: c.trimestre, carte: c.carte }).then(function (y) {
           if (y.statut !== 200 || !Array.isArray(y.d.lots)) return dire('Le serveur n’a pas répondu. Réessayez plus tard.', true);
-          vote = { carte: c, lots: lots.filter(function (l) { return y.d.lots.indexOf(l.id) < 0; }), lot: null, bord: null };
-          apres = function (bord) { vote.bord = bord; lotSuivant(); };
-          montrerBord('Le vote à l’aveugle · avant les titres');
+          vote = { carte: c, lots: lots.filter(function (l) { return y.d.lots.indexOf(l.id) < 0; }), lot: null };
+          dire(''); lotSuivant();
         });
-      });
+      }
+      if (etat.carte.retiree) return refusRetrait(409, true);
+      // une carte neuve n'a rien jugé : l'urne n'est pas appelée juste après son retrait
+      apres = function (bord) {
+        dire('Un instant…');
+        retirerCarte(bord).then(function (n) {
+          if (!n) return;
+          vote = { carte: n, lots: lots, lot: null };
+          dire(''); lotSuivant();
+        }, sansReseau);
+      };
+      montrerBord('Le vote à l’aveugle · avant votre carte du trimestre', true);
     }).catch(sansReseau).then(function () { bouton.disabled = false; });
   });
   function lotSuivant() {
@@ -559,7 +574,7 @@ h1:focus, h2:focus { outline: none; }
     var c = vote.carte, l = vote.lot, boutons = $('notes').querySelectorAll('button');
     Array.prototype.forEach.call(boutons, function (b) { b.disabled = true; });
     dire('Un instant…');
-    urne('/api/urne/avis', { trimestre: c.trimestre, carte: c.carte, signature: c.signature, lot: l.id, note: note, bord: vote.bord }).then(function (x) {
+    urne('/api/urne/avis', { trimestre: c.trimestre, carte: c.carte, signature: c.signature, lot: l.id, note: note }).then(function (x) {
       Array.prototype.forEach.call(boutons, function (b) { b.disabled = false; });
       if (x.statut === 201 || x.statut === 409) {
         vote.lots = vote.lots.filter(function (y) { return y.id !== l.id; });

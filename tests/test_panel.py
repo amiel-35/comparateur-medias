@@ -192,9 +192,10 @@ class Parcours(unittest.TestCase):
             ident.close()
         return cookie
 
-    def bulletin(self, cookie, q, pk):
-        """Ce que fait l'appareil (ici en Python ; la page fait la même chose en JavaScript)."""
-        prep = signature.preparer(q.encode() + b"\x00" + os.urandom(32))
+    def bulletin(self, cookie, q, pk, extra=b""):
+        """Ce que fait l'appareil (ici en Python ; la page fait la même chose en JavaScript). `extra` : le bord, pour
+        une carte de votant."""
+        prep = signature.preparer(q.encode() + b"\x00" + extra + os.urandom(32))
         av, inv = signature.aveugler(pk, prep)
         s, _, r = self.appel("POST", "/api/compte/bulletin", {"questionnaire": q, "aveugle": av.hex()}, cookie=cookie)
         if s != 200:
@@ -297,23 +298,33 @@ class Parcours(unittest.TestCase):
         return valeurs(a) & valeurs(b)
 
     def test_carte_de_votant(self):
+        os.makedirs(os.path.join(config.public(), "aveugle"), exist_ok=True)
+        with open(os.path.join(config.public(), "aveugle", "lots.json"), "w", encoding="utf-8") as f:
+            json.dump({"lots": [{"id": i, "titres": ["Un titre"]} for i in (7, 8, 9)]}, f)
         cookie = self.membre("votant@exemple.fr")
         etat = self.appel("GET", "/api/compte/panel", cookie=cookie)[2]
         carte = etat["carte"]
         self.assertEqual((carte["id"], carte["retiree"]), (urne.carte_id(ceremonie.trimestre()), False))
         pk = signature.de_hex(carte["cle"])
-        s, prep, sig = self.bulletin(cookie, carte["id"], pk)
+        s, prep, sig = self.bulletin(cookie, carte["id"], pk, extra=b"\x02")                # bord 0, inscrit dans la carte
         self.assertEqual(s, 200)
-        self.assertEqual(self.bulletin(cookie, carte["id"], pk)[0], 409)                    # une carte par trimestre
-        avis = lambda lot, note=1: self.appel("POST", "/api/urne/avis", {"trimestre": carte["trimestre"], "carte": prep.hex(),
-                                                                         "signature": sig.hex(), "lot": lot, "note": note, "bord": 0}, hote="urne.cadrages.test")
+        self.assertEqual(self.bulletin(cookie, carte["id"], pk, extra=b"\x02")[0], 409)     # une carte par trimestre
+        avis = lambda lot, note=1, bord=0: self.appel("POST", "/api/urne/avis", {"trimestre": carte["trimestre"], "carte": prep.hex(),
+                                                                                  "signature": sig.hex(), "lot": lot, "note": note, "bord": bord},
+                                                      hote="urne.cadrages.test", entetes={"Origin": "https://compte.cadrages.test"})
         self.assertEqual(avis(7)[0], 201)
-        self.assertEqual(avis(7)[0], 409)                                                    # un avis par lot et par carte
+        s, e, _ = avis(7)
+        self.assertEqual(s, 409)                                                             # un avis par lot et par carte
+        self.assertEqual(e["Access-Control-Allow-Origin"], "https://compte.cadrages.test")  # un refus se lit dans la page
         self.assertEqual(avis(8, note=3)[0], 400)
+        for lot in (6, 10, 999999, 2 ** 70, True):                                           # seulement les lots proposés
+            self.assertEqual(avis(lot)[0], 400, lot)
+        self.assertEqual(avis(9, bord=-2)[0], 201)                                           # le bord de la requête est ignoré
         s, _, r = self.appel("POST", "/api/urne/lots-juges", {"trimestre": carte["trimestre"], "carte": prep.hex()}, hote="urne.cadrages.test")
-        self.assertEqual(r["lots"], [7])
+        self.assertEqual(r["lots"], [7, 9])
         agg = ceremonie.clore_trimestre(carte["trimestre"])
         self.assertEqual(agg["lots"]["7"]["c"], [1, 1])
+        self.assertEqual(agg["lots"]["9"], {"g": [0, 0], "c": [1, 1], "d": [0, 0]})
         self.assertEqual(agg["cartes_delivrees"], 1)
         self.assertNotIn(urne.empreinte(prep), json.dumps(agg))                              # jamais une carte publiée
 
@@ -387,9 +398,11 @@ class PagePanel(unittest.TestCase):
             self.assertNotRegex(a.lower(), r"bord", a)
         self.assertIn("{ code: code, consentement: true }", self.script)
         self.assertIn("'cadrages.bord'", self.script)
-        # le bord ne quitte l'appareil que vers l'urne, avec une réponse ou un avis
+        # le bord ne quitte l'appareil que vers l'urne avec les réponses, ou aveuglé dans la carte du trimestre
         envois_du_bord = [a for a in self.appels(self.script, "urne") if "bord" in a]
-        self.assertEqual(sorted(a.split("'")[1] for a in envois_du_bord), ["/api/urne/avis", "/api/urne/depot"])
+        self.assertEqual(sorted(a.split("'")[1] for a in envois_du_bord), ["/api/urne/depot"])
+        self.assertIn("retirer(e.id, e.cle, bord + 2)", self.script)
+        self.assertIn("message[nom.length + 1] = octet", self.script)
 
     def test_le_retrait_comme_le_test_python(self):
         """Message : identifiant, octet nul, 32 octets au hasard ; préparé, aveuglé, finalisé ; gardé avant toute question."""
@@ -531,6 +544,16 @@ class MigrationDuVote(unittest.TestCase):
         self.assertEqual(self.db.execute("SELECT COUNT(*) FROM votants").fetchone()[0], 5)
         self.assertEqual(migrations.verser_votes(self.db)["versees"], 1)
 
+        # la publication perdue : l'oubli refuse (les accords et le nombre de votants n'existent que là et dans l'urne)
+        with open(migrations.chemin_historique(), encoding="utf-8") as f:
+            sauve = f.read()
+        os.remove(migrations.chemin_historique())
+        self.assertEqual(migrations.oublier_votes(self.db)["manquants"], 1)
+        with open(migrations.chemin_historique(), "w", encoding="utf-8") as f:
+            f.write(sauve.replace('"cartes_delivrees":5', '"cartes_delivrees":4'))
+        self.assertEqual(migrations.oublier_votes(self.db)["manquants"], 1)
+        migrations.verser_votes(self.db)
+
         fait = migrations.oublier_votes(self.db)
         self.assertEqual((fait["retrouves"], fait["manquants"]), (n, 0))
         self.assertEqual(fait["effaces"], {"avis_note": 5, "avis_aveugle": n, "votants": 5, "invitations": 1})
@@ -544,11 +567,33 @@ class MigrationDuVote(unittest.TestCase):
                 for v in list(self.VOTANTS) + ["temoin-invitation-01"]:
                     self.assertNotIn(v.encode(), brut, nom)
 
-        # après l'oubli : rien à verser, le fichier publié reste tel quel, et la lecture aussi
-        self.assertEqual(migrations.verser_votes(self.db)["publie"], False)
+        self.assertIs(fait["journal_vide"], True)
+
+        # après l'oubli : une copie d'avant de la base ne retrouve plus les avis d'un votant
+        u = urne.ouvrir_aveugle(urne.HISTORIQUE)
+        try:
+            cartes = {r[0] for r in u.execute("SELECT carte FROM avis")}
+        finally:
+            u.close()
+        self.assertEqual(len(cartes), 5)                                 # un tirage par ancien votant
+        self.assertFalse(cartes & {migrations.pseudonyme(v) for v in self.VOTANTS})
+        # le fichier publié se refait depuis l'urne seule, à l'identique, même perdu
+        os.remove(migrations.chemin_historique())
+        self.assertEqual(migrations.verser_votes(self.db)["publie"], True)
         with open(migrations.chemin_historique(), encoding="utf-8") as f:
             self.assertEqual(f.read(), texte)
         self.assertEqual(aveugle.resultats(self.db), lecture)
+        self.assertEqual(migrations.oublier_votes(self.db)["manquants"], 0)   # relancée : rien à faire
+
+    def test_un_avis_hors_lecture_bloque_l_oubli(self):
+        """Un avis sur un lot disparu échappe à la jointure : l'oubli refuse plutôt que de l'effacer sans l'avoir compté."""
+        self.db.execute("PRAGMA foreign_keys=OFF")
+        self.db.execute("INSERT INTO avis_aveugle (votant_id, lot_id, note, cree) VALUES (?, 99999, 1, '2026-05-03')",
+                        (next(iter(self.VOTANTS)),))
+        self.db.commit()
+        migrations.verser_votes(self.db)
+        self.assertEqual(migrations.oublier_votes(self.db)["manquants"], 1)
+        self.assertGreater(self.db.execute("SELECT COUNT(*) FROM avis_aveugle").fetchone()[0], 0)
 
     def test_un_trimestre_clos_s_ajoute_a_l_historique(self):
         migrations.verser_votes(self.db)
@@ -678,7 +723,8 @@ class Separation(unittest.TestCase):
         for interdit in ("config.base", "identites", "comptes", "base.connexion", "abonnes", "ATTACH"):
             self.assertNotIn(interdit, s)
         ouvertures = re.findall(r"\bopen\((.+?), encoding", s) + re.findall(r"sqlite3\.connect\((\w+)", s)
-        self.assertEqual(sorted(ouvertures), sorted(['os.path.join(config.public(), "panel", "cles", questionnaire + ".json")', "c"]))
+        self.assertEqual(sorted(ouvertures), sorted(['os.path.join(config.public(), "panel", "cles", questionnaire + ".json")', "c",
+                                                     'os.path.join(config.public(), "aveugle", "lots.json")']))
 
     def test_les_mots_de_l_ecran(self):
         for nom in os.listdir(os.path.join(config.ICI, "compte")):

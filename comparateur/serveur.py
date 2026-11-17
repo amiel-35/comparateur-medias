@@ -177,6 +177,9 @@ class Guichet(BaseHTTPRequestHandler):
     disable_nagle_algorithm = True   # en-têtes puis corps en deux envois : sans cela, 40 ms d'attente par réponse en connexion gardée
 
     def log_message(self, fmt, *args):  # journal sans adresse du visiteur, et sans paramètres d'adresse (jetons)
+        # Rien de l'urne : l'heure d'un dépôt, à côté de celle d'un retrait ou d'une connexion, les rapprocherait.
+        if getattr(self, "cote", "") == "urne":
+            return
         args = tuple(re.sub(r"\?\S*", "?…", a) if isinstance(a, str) else a for a in args)
         print("%s %s" % (time.strftime("%H:%M:%S"), fmt % args), flush=True)
 
@@ -526,8 +529,18 @@ class Guichet(BaseHTTPRequestHandler):
         return {"Vary": "Origin"}
 
     def urne(self, chemin):
+        """Toute réponse de l'urne, refus compris, porte l'en-tête CORS : sans lui, la page ne lirait ni un 409 ni un
+        410, et croirait à une panne du réseau."""
+        try:
+            return self.urne_api(chemin)
+        except urne.Refus as e:
+            return self.envoyer(e.code, {"erreur": e.message}, plus=self.cors())
+        except Erreur as e:
+            return self.envoyer(e.code, {"erreur": e.message}, plus=self.cors())
+
+    def urne_api(self, chemin):
         """L'urne refuse l'identité : un Cookie ou un Authorization donne 400, avant toute lecture du corps
-        (premier cadrage, règle 4). Elle ne lit que ses fichiers et les clés publiques."""
+        (premier cadrage, règle 4). Elle ne lit que ses fichiers, les clés publiques et la liste publique des lots."""
         if not config.mail() or not chemin.startswith("/api/urne/"):
             raise Erreur(404, "introuvable")
         if self.command == "OPTIONS":
@@ -552,7 +565,7 @@ class Guichet(BaseHTTPRequestHandler):
                 ok = urne.effacer(d.get("questionnaire"), d.get("bulletin"))
                 return self.envoyer(200, {"efface": ok}, plus=self.cors())
             if chemin == "/api/urne/avis":
-                urne.donner_avis(d.get("trimestre"), d.get("carte"), d.get("signature"), d.get("lot"), d.get("note"), d.get("bord"))
+                urne.donner_avis(d.get("trimestre"), d.get("carte"), d.get("signature"), d.get("lot"), d.get("note"))
                 return self.envoyer(201, {"ok": True}, plus=self.cors())
             if chemin == "/api/urne/lots-juges":
                 return self.envoyer(200, {"lots": urne.lots_juges(d.get("trimestre"), d.get("carte"))}, plus=self.cors())

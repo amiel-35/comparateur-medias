@@ -30,7 +30,7 @@ dans comparateur.db : ce sont des titres publics.
 
 À essayer d'abord sur une copie de la vraie base, jamais directement sur elle.
 """
-import json, os
+import json, os, secrets
 from collections import Counter
 
 from . import base, comptes, config, urne
@@ -141,9 +141,25 @@ def chemin_historique():
     return os.path.join(config.public(), "panel", "aveugle", "historique.json")
 
 
+def _publier_historique(u):
+    """Écrit historique.json depuis l'urne seule : les sommes par lot et par bord, et les deux chiffres gardés dans sa
+    meta (votants d'alors, accords par média). Rend le contenu publié."""
+    meta = urne._meta(u)
+    agg = {"v": 1, "mesure": "aveugle", "trimestre": "historique", "etiquette": urne.ETIQUETTE,
+           "lots": urne.agregats_aveugle(urne.HISTORIQUE), "cartes_delivrees": int(meta.get("votants", "0")),
+           "accords": json.loads(meta.get("accords", "{}"))}
+    c = chemin_historique()
+    os.makedirs(os.path.dirname(c), exist_ok=True)
+    with open(c + ".tmp", "w", encoding="utf-8") as f:
+        f.write(json.dumps(agg, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
+    os.replace(c + ".tmp", c)
+    return agg
+
+
 def verser_votes(public=None):
-    """Copie les avis du vieux vote dans l'urne historique, puis en publie les sommes (historique.json). Rend
-    {lues, versees, deja, accords, publie}. Se relance sans rien doubler. Ne touche pas à comparateur.db."""
+    """Copie les avis du vieux vote dans l'urne historique, garde dans sa meta le nombre de votants et les accords
+    comptés par média, puis publie (historique.json, réécrit depuis l'urne seule : il se refait même après l'oubli).
+    Rend {lues, versees, deja, accords, publie}. Se relance sans rien doubler. Ne touche pas à comparateur.db."""
     propre = public is None
     public = public or base.connexion()
     try:
@@ -155,44 +171,43 @@ def verser_votes(public=None):
                 versees += u.execute("INSERT OR IGNORE INTO avis (carte, lot, note, bord) VALUES (?, ?, ?, ?)",
                                      (pseudonyme(r["votant"]), r["lot"], r["note"], r["bord"])).rowcount
             # close : aucune route ne mène à cette urne (urne.donner_avis n'ouvre que celle d'un trimestre)
-            u.executemany("INSERT OR REPLACE INTO meta (cle, valeur) VALUES (?, ?)",
-                          [("etat", "clos"), ("origine", "avis d'avant la carte de votant (comparateur.db)")])
+            meta = [("etat", "clos"), ("origine", "avis d'avant la carte de votant (comparateur.db)")]
+            if lignes or accords:   # une base déjà oubliée n'a plus rien à dire : la meta garde ce qu'elle savait
+                votants = public.execute("SELECT COUNT(*) FROM votants").fetchone()[0] if _existe(public, "votants") else 0
+                meta += [("votants", str(votants)), ("accords", json.dumps(accords, ensure_ascii=False, sort_keys=True))]
+            u.executemany("INSERT OR REPLACE INTO meta (cle, valeur) VALUES (?, ?)", meta)
             u.commit()
+            publie = "votants" in urne._meta(u)
+            if publie:
+                _publier_historique(u)
         finally:
             u.close()
-        bilan = {"lues": len(lignes), "versees": versees, "deja": len(lignes) - versees,
-                 "accords": sum(a["votes"] for a in accords.values()), "publie": False}
-        # Une base déjà oubliée n'a plus rien à dire : le fichier publié n'est pas réécrit, ses accords restent.
-        if lignes or accords:
-            votants = public.execute("SELECT COUNT(*) FROM votants").fetchone()[0] if _existe(public, "votants") else 0
-            agg = {"v": 1, "mesure": "aveugle", "trimestre": "historique", "etiquette": urne.ETIQUETTE,
-                   "lots": urne.agregats_aveugle(urne.HISTORIQUE), "cartes_delivrees": votants, "accords": accords}
-            c = chemin_historique()
-            os.makedirs(os.path.dirname(c), exist_ok=True)
-            with open(c + ".tmp", "w", encoding="utf-8") as f:
-                f.write(json.dumps(agg, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
-            os.replace(c + ".tmp", c)
-            bilan["publie"] = True
-        return bilan
+        return {"lues": len(lignes), "versees": versees, "deja": len(lignes) - versees,
+                "accords": sum(a["votes"] for a in accords.values()), "publie": publie}
     finally:
         if propre:
             public.close()
 
 
 def oublier_votes(public=None):
-    """Vide votants, avis_aveugle, avis_note et invitations, seulement si chaque avis est retrouvé dans l'urne
-    historique (même note, même bord, et les mêmes comptes par lot et par bord) et si les accords publiés sont ceux de
-    avis_note. Sinon ne touche à rien. Puis compacte la base, journal compris : les pages libérées ne gardent rien.
-    Rend {retrouves, manquants, effaces: {table: lignes}}."""
+    """Vide votants, avis_aveugle, avis_note et invitations, seulement si tout est retrouvé : chaque avis dans l'urne
+    historique (même note, même bord, mêmes comptes par lot et par bord, aucun avis hors du compte), le nombre de
+    votants et les accords dans sa meta, et historique.json publié avec ces mêmes chiffres. Sinon ne touche à rien.
+
+    Puis compacte la base et vide son journal (la fabrique arrêtée : un lecteur le retient), et remplace dans l'urne
+    chaque empreinte d'ancien votant par un tirage au hasard : une copie d'avant de comparateur.db ne permet plus de
+    retrouver les avis d'un votant. Rend {retrouves, manquants, effaces: {table: lignes}, journal_vide}."""
     propre = public is None
     public = public or base.connexion()
     try:
         lignes, accords = _avis(public), _accords(public)
+        total = public.execute("SELECT COUNT(*) FROM avis_aveugle").fetchone()[0] if _existe(public, "avis_aveugle") else 0
+        votants = public.execute("SELECT COUNT(*) FROM votants").fetchone()[0] if _existe(public, "votants") else 0
         try:
             u = urne.ouvrir_aveugle(urne.HISTORIQUE)
         except urne.Refus:   # jamais versé
             u = None
-        trouves, comptes_urne = 0, Counter()
+        trouves, comptes_urne, meta, lots_urne = 0, Counter(), {}, None
         if u is not None:
             try:
                 for r in lignes:
@@ -200,24 +215,48 @@ def oublier_votes(public=None):
                     trouves += 1 if x and (x["note"], x["bord"]) == (r["note"], r["bord"]) else 0
                 comptes_urne = Counter({(r["lot"], r["bord"]): r["n"] for r in u.execute(
                     "SELECT lot, bord, COUNT(*) AS n FROM avis GROUP BY lot, bord")})
+                meta = urne._meta(u)
             finally:
                 u.close()
+            lots_urne = urne.agregats_aveugle(urne.HISTORIQUE)
         attendus = Counter((r["lot"], r["bord"]) for r in lignes)
         manquants = len(lignes) - trouves + sum(1 for k, n in attendus.items() if comptes_urne[k] != n)
-        if accords:
-            try:
-                with open(chemin_historique(), encoding="utf-8") as f:
-                    publies = json.load(f).get("accords")
-            except (OSError, ValueError, AttributeError):
-                publies = None
-            manquants += 0 if publies == accords else sum(a["votes"] for a in accords.values())
+        manquants += total - len(lignes)                    # un avis que la lecture n'a pas vu (lot disparu)
+        if lignes or accords or votants:                    # ce que seule la meta garde, une fois la base vidée
+            manquants += 0 if meta.get("votants") == str(votants) else 1
+            manquants += 0 if json.loads(meta.get("accords", "null")) == accords else 1
+        try:
+            with open(chemin_historique(), encoding="utf-8") as f:
+                publie = json.load(f)
+        except (OSError, ValueError):
+            publie = None
+        if lignes or u is not None:                         # ce qui est publié est ce que l'urne dit
+            ok = isinstance(publie, dict) and publie.get("lots") == lots_urne \
+                and publie.get("cartes_delivrees") == int(meta.get("votants", "-1")) \
+                and publie.get("accords") == json.loads(meta.get("accords", "null"))
+            manquants += 0 if ok else 1
         if manquants:
-            return {"retrouves": trouves, "manquants": manquants, "effaces": {}}
+            return {"retrouves": trouves, "manquants": manquants, "effaces": {}, "journal_vide": None}
         effaces = {t: public.execute(f"DELETE FROM {t}").rowcount for t in TABLES_DU_VOTE if _existe(public, t)}
         public.commit()
         public.execute("VACUUM")                            # les pages libérées ne gardent pas les pseudonymes effacés
-        public.execute("PRAGMA wal_checkpoint(TRUNCATE)")   # ni le journal (la base est en WAL)
-        return {"retrouves": trouves, "manquants": 0, "effaces": effaces}
+        vide = comptes.vider_journal(public)                # ni le journal (la base est en WAL)
+        if u is not None:
+            _brouiller_historique()
+        return {"retrouves": trouves, "manquants": 0, "effaces": effaces, "journal_vide": vide}
     finally:
         if propre:
             public.close()
+
+
+def _brouiller_historique():
+    """Chaque empreinte d'ancien votant devient un tirage au hasard (une par votant : ses avis restent liés entre eux,
+    comme sous une carte). Plus rien ne se recalcule depuis une copie de l'ancienne base."""
+    u = urne.ouvrir_aveugle(urne.HISTORIQUE)
+    try:
+        for (carte,) in u.execute("SELECT DISTINCT carte FROM avis").fetchall():
+            u.execute("UPDATE avis SET carte = ? WHERE carte = ?", (secrets.token_hex(32), carte))
+        u.commit()
+        u.execute("VACUUM")
+    finally:
+        u.close()

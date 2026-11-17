@@ -58,7 +58,9 @@ def main(argv):
         from . import migrations
         bilan = migrations.verser_votes() if cmd == "verser-votes" else migrations.oublier_votes()
         print(bilan)
-        return 1 if bilan.get("manquants") else 0
+        if bilan.get("journal_vide") is False:
+            print("le journal de comparateur.db n'a pas pu être vidé : arrêter la fabrique, puis relancer oublier-votes")
+        return 1 if bilan.get("manquants") or bilan.get("journal_vide") is False else 0
     if cmd == "panel-inviter":
         if not config.compte_url():
             print("mail éteint : sans réglages SMTP, ni compte ni panel (COMPARATEUR_SMTP_UTILISATEUR, COMPARATEUR_SMTP_MOT_DE_PASSE)")
@@ -183,8 +185,8 @@ def questionnaire(args):
     if geste == "fermer":
         ident = comptes.connexion()
         try:
-            ouvert = any(r["questionnaire"] == x for r in comptes.cles_ouvertes(ident))
-            if not ouvert:   # rien à détruire : un questionnaire inconnu, ou déjà clos
+            ouvert = any(r["questionnaire"] == x for r in comptes.cles_ouvertes(ident)) or x in ceremonie.a_reprendre(ident)
+            if not ouvert:   # un questionnaire inconnu, ou déjà clos ; une clôture interrompue, elle, se reprend
                 print(f"aucun questionnaire ouvert sous ce nom : {x}")
                 return 1
             res = ceremonie.fermer(x, ident)

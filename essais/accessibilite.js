@@ -48,7 +48,7 @@ const PANEL = { membre: true, membre_depuis: '2026-10-01', urne: URNE, etiquette
 const APPAREIL = { 'cadrages.bord': '0',
   'cadrages.bulletins': JSON.stringify({ 'essai-confiance': { bulletin: 'ab', signature: 'cd', titre: 'Trois questions', fermeture: '2026-11-30' } }),
   'cadrages.recus': JSON.stringify([{ questionnaire: 'essai-ancien', titre: 'Un questionnaire déjà rendu', fermeture: '2026-11-01', bulletin: 'ef' }]),
-  'cadrages.carte': JSON.stringify({ id: 'carte-2026t4', trimestre: '2026T4', carte: 'ab', signature: 'cd' }) };
+  'cadrages.carte': JSON.stringify({ id: 'carte-2026t4', trimestre: '2026T4', bord: 0, carte: 'ab', signature: 'cd' }) };
 const LOTS = { lots: [1, 2].map(id => ({ id, titres: Array.from({ length: 10 }, (_, i) => `Un titre d’essai numéro ${i + 1}, assez long pour une ligne`) })) };
 const ECRANS_PANEL = ['hors', 'accueil', 'membre', 'quitter', 'bord', 'question', 'envoi', 'envoye', 'lot', 'lots-fini'];
 // Les gestes qui mènent à chaque écran du panel, depuis l'écran du membre.
@@ -59,7 +59,7 @@ async function gestesPanel(page, e) {
   if (['question', 'envoi', 'envoye'].includes(e)) await page.click('#bord-suivant');
   if (e === 'envoi' || e === 'envoye') for (const i of [0, 1]) { await page.check('#q-choix input[value="0"]'); await page.click('#q-suivant'); }
   if (e === 'envoye') await page.click('#envoyer');
-  if (e === 'lot' || e === 'lots-fini') { await page.click('#voter'); await page.click('#bord-suivant'); }
+  if (e === 'lot' || e === 'lots-fini') await page.click('#voter');   // la carte et son bord sont sur l'appareil
   await page.waitForFunction(id => !document.getElementById(id).hidden, e);
 }
 if (!B) { console.error('usage : node essais/accessibilite.js <adresse du site>'); process.exit(2); }

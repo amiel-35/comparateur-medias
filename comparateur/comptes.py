@@ -37,7 +37,8 @@ CREATE TABLE IF NOT EXISTS retraits (
   questionnaire TEXT NOT NULL, compte INTEGER NOT NULL REFERENCES comptes(id) ON DELETE CASCADE,
   PRIMARY KEY (questionnaire, compte)) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS cles (
-  questionnaire TEXT PRIMARY KEY, n TEXT NOT NULL, e INTEGER NOT NULL, d TEXT NOT NULL, ouverte_jour TEXT NOT NULL);
+  questionnaire TEXT PRIMARY KEY, n TEXT NOT NULL, e INTEGER NOT NULL, d TEXT NOT NULL, ouverte_jour TEXT NOT NULL,
+  delivres INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS invitations_panel (empreinte TEXT PRIMARY KEY, cree_jour TEXT NOT NULL) WITHOUT ROWID;
 """
 
@@ -60,6 +61,9 @@ def connexion():
     db.execute("PRAGMA journal_mode=WAL")
     db.execute("PRAGMA foreign_keys=ON")
     db.executescript(SCHEMA)
+    if "delivres" not in [c[1] for c in db.execute("PRAGMA table_info(cles)")]:   # une base de la phase 2
+        db.execute("ALTER TABLE cles ADD COLUMN delivres INTEGER NOT NULL DEFAULT 0")
+        db.commit()
     return db
 
 
@@ -390,6 +394,8 @@ def retirer(db, compte, questionnaire, aveugle):
         raise RetraitRefuse(403, "réservé aux membres du panel inscrits avant l'ouverture")
     try:
         db.execute("INSERT INTO retraits (questionnaire, compte) VALUES (?, ?)", (questionnaire, compte))
+        # compté à part : un compte supprimé emporte son retrait, pas le bulletin qu'il a reçu
+        db.execute("UPDATE cles SET delivres = delivres + 1 WHERE questionnaire = ?", (questionnaire,))
     except sqlite3.IntegrityError:
         db.rollback()
         raise RetraitRefuse(409, "déjà retiré")
@@ -402,13 +408,33 @@ def retirer(db, compte, questionnaire, aveugle):
     return sig
 
 
+def delivres(db, questionnaire):
+    """Le nombre de bulletins (ou de cartes) délivrés sous cette clé, ou None si elle est déjà détruite."""
+    r = db.execute("SELECT delivres FROM cles WHERE questionnaire = ?", (questionnaire,)).fetchone()
+    return r[0] if r else None
+
+
 def fermer_cle(db, questionnaire):
     """La clôture, côté guichet : la clé privée est détruite, la liste des retraits est effacée. Rend le nombre de
-    bulletins délivrés, le seul chiffre qui en reste. Après cela, plus personne ne peut fabriquer un bulletin, ni
-    savoir qui a participé."""
-    n = db.execute("SELECT COUNT(*) FROM retraits WHERE questionnaire = ?", (questionnaire,)).fetchone()[0]
+    bulletins délivrés, le seul chiffre qui en reste (0 si la clé n'existait plus). Après cela, plus personne ne peut
+    fabriquer un bulletin, ni savoir qui a participé. Les pages libérées et le journal (WAL) ne gardent ni la clé ni
+    les retraits ; si un lecteur tient le journal, un avertissement le dit et le prochain point de contrôle le vide."""
+    n = delivres(db, questionnaire) or 0
     db.execute("DELETE FROM retraits WHERE questionnaire = ?", (questionnaire,))
     db.execute("DELETE FROM cles WHERE questionnaire = ?", (questionnaire,))
     db.commit()
-    db.execute("VACUUM")   # les pages libérées ne gardent ni la clé ni les retraits
+    db.execute("VACUUM")
+    if not vider_journal(db):
+        print("avertissement : le journal d'identites.db n'a pas pu être vidé tout de suite", flush=True)
     return n
+
+
+def vider_journal(db, essais=20):
+    """Ramène le journal WAL à zéro octet : ce qui vient d'être effacé n'y reste pas. Réessaie tant qu'un lecteur le
+    tient. Rend True si le journal est vide."""
+    import time
+    for i in range(essais):
+        if not db.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()[0]:
+            return True
+        time.sleep(.1)
+    return False
