@@ -1,6 +1,6 @@
 /* Le socle : couleurs, thèmes, typographie, en-tête, étiquettes, pied de page. */
 :root{
-  --bg:#f1ede4;--paper:#fbf9f4;--ink:#16140f;--mute:#5b564b;--line:#cfc8b6;--hl:#f2c230;--hl-on:#16140f;
+  --bg:#f1ede4;--paper:#fbf9f4;--ink:#16140f;--mute:#5b564b;--line:#cfc8b6;--hl:#f2c230;--hl-on:#16140f;--focus:#16140f;
   --eg:#6b0f22;--on-eg:#fff;--g:#b8203b;--on-g:#fff;--cg:#e8879c;--on-cg:#16140f;--c:#666a76;--on-c:#fff;--cd:#8fb0ea;--on-cd:#16140f;--d:#1d4fb3;--on-d:#fff;--ed:#0c2460;--on-ed:#fff;
   --ko:#9a2a1a;
   --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
@@ -9,13 +9,13 @@
 }
 @media (prefers-color-scheme:dark){
   :root:not([data-theme="light"]){
-    --bg:#14130f;--paper:#1d1b16;--ink:#efe9da;--mute:#aaa392;--line:#403b2f;--hl:#f2c230;--hl-on:#16140f;
+    --bg:#14130f;--paper:#1d1b16;--ink:#efe9da;--mute:#aaa392;--line:#403b2f;--hl:#f2c230;--hl-on:#16140f;--focus:#f2c230;
     --eg:#d1173f;--on-eg:#fff;--g:#ff4d70;--on-g:#14130f;--cg:#f2a3b5;--on-cg:#14130f;--c:#a7abb8;--on-c:#14130f;--cd:#8db3ff;--on-cd:#14130f;--d:#6f9bff;--on-d:#14130f;--ed:#3157d6;--on-ed:#fff;
     --ko:#ff9c8a;
   }
 }
 :root[data-theme="dark"]{
-  --bg:#14130f;--paper:#1d1b16;--ink:#efe9da;--mute:#aaa392;--line:#403b2f;--hl:#f2c230;--hl-on:#16140f;
+  --bg:#14130f;--paper:#1d1b16;--ink:#efe9da;--mute:#aaa392;--line:#403b2f;--hl:#f2c230;--hl-on:#16140f;--focus:#f2c230;
   --eg:#d1173f;--on-eg:#fff;--g:#ff4d70;--on-g:#14130f;--cg:#f2a3b5;--on-cg:#14130f;--c:#a7abb8;--on-c:#14130f;--cd:#8db3ff;--on-cd:#14130f;--d:#6f9bff;--on-d:#14130f;--ed:#3157d6;--on-ed:#fff;
   --ko:#ff9c8a;
 }
@@ -25,7 +25,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 var(--sans);ov
 a{color:inherit;text-underline-offset:.18em;text-decoration-thickness:1px}
 a:hover{text-decoration-thickness:2px}
 button{font:inherit;color:inherit;cursor:pointer}
-:focus-visible{outline:3px solid var(--hl);outline-offset:2px}
+:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
 h1,h2,h3{font-family:var(--serif);font-weight:700;line-height:1.15;margin:0;overflow-wrap:anywhere}
 h1{font-size:clamp(1.9rem,6vw,3.4rem);letter-spacing:-.01em}
 h2{font-size:clamp(1.3rem,3.4vw,1.8rem);margin:2.2rem 0 .8rem}

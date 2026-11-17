@@ -9,7 +9,8 @@ VERSION = "1.0"
 DATE = "2026-11-17"   # jour où cette version est entrée en vigueur
 
 # Du plus récent au plus ancien. Chaque ligne : (version, jour, ce qui a changé). Les éditions d'avant la
-# version 1.0 n'ont pas de numéro : elles suivent les règles en vigueur le jour où elles ont été faites.
+# version 1.0 n'ont pas de numéro. Une édition garde ses sujets, sa fenêtre et ses rubriques écartées du jour où
+# elle a été faite ; seuls le bord des médias (relu dans le score) et les silences sont refaits à l'affichage.
 HISTORIQUE = (
     ("1.0", "2026-11-17", "Première version numérotée. Elle reprend les règles du 15/11/2026, sans changement de calcul."),
     ("", "2026-11-15", "Les bords deviennent les sept bandes de FrIdéo, avec ses noms et ses seuils. Les silences se jugent "

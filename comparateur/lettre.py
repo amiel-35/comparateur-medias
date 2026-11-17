@@ -18,6 +18,8 @@ from email.utils import formataddr, formatdate, make_msgid
 
 from . import base, config, syntheses
 
+M = config.MARQUE   # le nom du site, dans chaque mail
+
 ADRESSE = re.compile(r"^[^@\s<>\"',;()\[\]\\]+@[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$")
 JOURS_SANS_CONFIRMATION = 7
 TOP = 10                 # sujets dans le mail
@@ -107,7 +109,7 @@ def _page(corps):
             '<body style="margin:0;padding:0;background:#f1ede4;color:#16140f">'
             '<div style="max-width:600px;margin:0 auto;padding:20px 16px;font:16px/1.5 Georgia,serif;color:#16140f;background:#f1ede4">'
             '<p style="margin:0 0 16px;font:700 13px/1 Arial,sans-serif;letter-spacing:.08em;text-transform:uppercase;'
-            'border-bottom:2px solid #16140f;padding-bottom:8px">Cadrages</p>' + corps + '</div></body></html>')
+            'border-bottom:2px solid #16140f;padding-bottom:8px">' + M + '</p>' + corps + '</div></body></html>')
 
 
 def lien_page(cfg, action, jeton):
@@ -118,17 +120,17 @@ def lien_page(cfg, action, jeton):
 
 def message_confirmation(cfg, adresse, jeton):
     lien = lien_page(cfg, "confirmer", jeton)
-    texte = ("Bonjour,\n\nCette adresse a été inscrite à la synthèse de la semaine de Cadrages.\n\n"
+    texte = (f"Bonjour,\n\nCette adresse a été inscrite à la synthèse de la semaine de {M}.\n\n"
              f"Pour la recevoir, ouvrez ce lien et cliquez sur « Confirmer » :\n{lien}\n\n"
              f"Sans confirmation sous {JOURS_SANS_CONFIRMATION} jours, l'adresse est effacée.\n"
              "Si vous n'avez rien demandé, ignorez ce mail : rien ne sera envoyé.\n\n"
-             f"Cadrages, {cfg['site']}\n")
-    page = _page('<p>Bonjour,</p><p>Cette adresse a été inscrite à la synthèse de la semaine de Cadrages.</p>'
+             f"{M}, {cfg['site']}\n")
+    page = _page(f'<p>Bonjour,</p><p>Cette adresse a été inscrite à la synthèse de la semaine de {M}.</p>'
                  f'<p><a href="{html.escape(lien)}" style="display:inline-block;padding:10px 16px;border:2px solid #16140f;'
                  'background:#16140f;color:#f1ede4;text-decoration:none;font:700 15px Arial,sans-serif">Confirmer l’inscription</a></p>'
-                 f'<p style="font-size:14px">Le lien ouvre une page de Cadrages où un bouton finit l’inscription. Sans confirmation sous '
+                 f'<p style="font-size:14px">Le lien ouvre une page de {M} où un bouton finit l’inscription. Sans confirmation sous '
                  f'{JOURS_SANS_CONFIRMATION} jours, l’adresse est effacée. Si vous n’avez rien demandé, ignorez ce mail : rien ne sera envoyé.</p>')
-    return _message(cfg, adresse, "Cadrages : confirmez l'inscription à la synthèse de la semaine", texte, page)
+    return _message(cfg, adresse, f"{M} : confirmez l'inscription à la synthèse de la semaine", texte, page)
 
 
 BL = {"extreme-gauche": "Extrême gauche", "gauche": "Gauche", "centre-gauche": "Centre gauche", "centre": "Centre",
@@ -183,7 +185,7 @@ def message_semaine(cfg, adresse, jeton, p):
         t.append(f"{BL[c]} : {_pl(b['silences'], 'silence', 'silences')} sur {b['sur']} grands sujets.")
         t += [f"   - {x['titre']} ({MDL}), {x['medias']} médias ailleurs" for x in b["tus"]]
     t += ["", f"La synthèse complète : {lien}", "", "--",
-          "Ce mail part chaque lundi vers les adresses inscrites sur Cadrages. Il ne sert à rien d'autre.",
+          f"Ce mail part chaque lundi vers les adresses inscrites sur {M}. Il ne sert à rien d'autre.",
           f"Se désinscrire : {sortie}", ""]
 
     e = html.escape
@@ -215,10 +217,10 @@ def message_semaine(cfg, adresse, jeton, p):
     h.append(f'<p style="margin:24px 0"><a href="{e(lien)}" style="display:inline-block;padding:10px 16px;border:2px solid #16140f;'
              'background:#16140f;color:#f1ede4;text-decoration:none;font:700 15px Arial,sans-serif">La synthèse complète</a></p>')
     h.append('<p style="font:13px/1.5 Arial,sans-serif;color:#5b564b;border-top:1px solid #cfc8b6;padding-top:12px">'
-             'Ce mail part chaque lundi vers les adresses inscrites sur Cadrages. Il ne sert à rien d’autre. '
+             f'Ce mail part chaque lundi vers les adresses inscrites sur {M}. Il ne sert à rien d’autre. '
              f'<a href="{e(sortie)}" style="color:#5b564b">Se désinscrire</a>.</p>')
 
-    m = _message(cfg, adresse, "Cadrages : " + titre[0].lower() + titre[1:], "\n".join(t), _page("".join(h)))
+    m = _message(cfg, adresse, M + " : " + titre[0].lower() + titre[1:], "\n".join(t), _page("".join(h)))
     # Désinscription en un clic (RFC 8058) : le logiciel de messagerie POSTe « List-Unsubscribe=One-Click » à
     # cette adresse, sans cookie ni page intermédiaire.
     m["List-Unsubscribe"] = f"<{cfg['site']}/api/mail/desinscription?jeton={jeton}>"

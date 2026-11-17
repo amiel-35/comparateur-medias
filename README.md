@@ -56,7 +56,8 @@ référence, Base Directory et emplacement du compose réglables. Coolify peut r
 dans Persistent Storage avant toute migration de données.
 
 Créer des invitations : terminal du conteneur dans Coolify, `python -m comparateur inviter 5`. Le lien à
-envoyer est `https://<domaine>/aveugle.html?code=<code>`.
+envoyer est `https://<domaine>/aveugle.html#code=<code>` : dans le fragment, le code n'arrive ni au serveur ni au
+journal du proxy. L'ancienne forme `?code=` marche encore.
 
 ## Les éditions
 
@@ -76,7 +77,7 @@ publie **l'édition du jour**, qui ne bouge plus ensuite.
 ## La méthode, versionnée
 
 La page Démarche (`#/demarche`) est le document de référence de la méthode. Elle porte une ligne de version
-(`comparateur/methode.py` : version 1.0, en vigueur depuis le 17/11/2026) et l'historique des changements de
+(`comparateur/methode.py`) et l'historique des changements de
 règle, relevé dans l'historique du dépôt. Une version change quand une règle de comptage change.
 
 ## L'application
@@ -230,7 +231,7 @@ change plus la description qu'un simple second tirage.
 
 `essais/accessibilite.js` est la mesure d'accessibilité : titres, contrastes, noms des liens, boutons et champs,
 contour de focus, sur chaque vue et sur les pages à part. Écrite à la main, sans bibliothèque d'audit. Un test
-(`Assise`) tient les contrastes des couleurs du site, sans navigateur. Mode d'emploi et
+(`Assise`) tient, sans navigateur, les contrastes des couples de couleurs qu'il liste (texte et fond, focus). Mode d'emploi et
 règles du site : [DOCTRINE.md](DOCTRINE.md).
 
 `essais/editions_essai.py` fabrique quatre éditions factices (dont une au format d'avant les rubriques et le

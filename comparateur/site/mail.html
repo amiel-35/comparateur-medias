@@ -14,8 +14,8 @@
 <title>La synthèse de la semaine par mail · Cadrages</title>
 <style>
 /* Les couleurs de styles/base.css. Cette page est à part : elle confirme ou supprime une inscription au mail. */
-:root { --bg: #f1ede4; --paper: #fbf9f4; --ink: #16140f; --mute: #5b564b; --ko: #9a2a1a; }
-@media (prefers-color-scheme: dark) { :root { --bg: #14130f; --paper: #1d1b16; --ink: #efe9da; --mute: #aaa392; --ko: #ff9c8a; } }
+:root { --bg: #f1ede4; --paper: #fbf9f4; --ink: #16140f; --mute: #5b564b; --ko: #9a2a1a; --focus: #16140f; }
+@media (prefers-color-scheme: dark) { :root { --bg: #14130f; --paper: #1d1b16; --ink: #efe9da; --mute: #aaa392; --ko: #ff9c8a; --focus: #f2c230; } }
 * { box-sizing: border-box; } [hidden] { display: none !important; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
 header { border-bottom: 2px solid var(--ink); }
@@ -29,7 +29,7 @@ button:disabled { opacity: .5; cursor: default; }
 #message { min-height: 1.5em; font-weight: 600; }
 #message.ko { color: var(--ko); }
 a { color: inherit; }
-:focus-visible { outline: 3px solid #f2c230; outline-offset: 2px; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 </style>
 </head>
 <body>

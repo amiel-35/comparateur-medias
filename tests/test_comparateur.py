@@ -917,7 +917,8 @@ class Assise(unittest.TestCase):
         return dict(re.findall(r"--([\w-]+)\s*:\s*(#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?)\b", bloc))
 
     def test_contrastes_des_couleurs_du_site(self):
-        # WCAG 2.2, niveau AA : 4,5:1 pour le texte. Chaque couple texte/fond écrit dans les feuilles, clair et sombre.
+        # WCAG 2.2, niveau AA : 4,5:1 pour le texte, 3:1 pour le contour de focus. Les couples listés ici, clair et
+        # sombre ; essais/accessibilite.js mesure, lui, chaque texte de chaque vue contre son fond réel.
         css = self.lire("styles", "base.css")
         clair, sombre = self.jetons(css, ":root{"), self.jetons(css, ':root[data-theme="dark"]{')
         self.assertEqual(sombre, {**sombre, **self.jetons(css, "@media (prefers-color-scheme:dark){")})
@@ -926,12 +927,16 @@ class Assise(unittest.TestCase):
         for nom, t in (("clair", clair), ("sombre", sombre)):
             for texte, fond in couples:
                 self.assertGreaterEqual(self.contraste(t[texte], t[fond]), 4.5, f"{nom} : --{texte} sur --{fond}")
+            for fond in ("bg", "paper"):   # le contour est dessiné hors de l’élément (outline-offset), sur le fond
+                self.assertGreaterEqual(self.contraste(t["focus"], t[fond]), 3, f"{nom} : focus sur --{fond}")
         for page, couples in (("aveugle.html", [("encre", "fond"), ("encre", "carte"), ("doux", "fond"), ("doux", "carte"), ("ko", "fond")]),
                               ("mail.html", [("ink", "bg"), ("mute", "bg"), ("ko", "bg"), ("bg", "ink")])):
             p = self.lire(page)
             for nom, t in (("clair", self.jetons(p, ":root {")), ("sombre", self.jetons(p, "@media (prefers-color-scheme: dark)"))):
                 for texte, fond in couples:
                     self.assertGreaterEqual(self.contraste(t[texte], t[fond]), 4.5, f"{page}, {nom} : --{texte} sur --{fond}")
+                for fond in couples[0][1:]:
+                    self.assertGreaterEqual(self.contraste(t["focus"], t[fond]), 3, f"{page}, {nom} : focus")
 
     def test_titres_focus_et_libelles(self):
         import re
@@ -942,11 +947,11 @@ class Assise(unittest.TestCase):
         self.assertIn('<html lang="fr">', gabarit)
         self.assertEqual(re.findall(r"<nav\b(?![^>]*aria-label)", gabarit), [])           # chaque menu est nommé
         self.assertEqual(re.findall(r"<button\b(?![^>]*\btype=)", gabarit), [])
-        self.assertIn(":focus-visible{outline:3px solid var(--hl)", self.lire("styles", "base.css"))
+        self.assertIn(":focus-visible{outline:3px solid var(--focus)", self.lire("styles", "base.css"))
         for page in ("aveugle.html", "mail.html"):
             p = self.lire(page)
             self.assertIn('<html lang="fr">', p)
-            self.assertRegex(p, r":focus-visible\s*\{\s*outline:\s*3px solid")
+            self.assertRegex(p, r":focus-visible\s*\{\s*outline:\s*3px solid var\(--focus\)")
             self.assertEqual(re.findall(r"<button\b(?![^>]*\btype=)", p), [], page)
             self.assertEqual(re.findall(r"<label>", p), [], page)                          # chaque étiquette vise un champ
             for champ in re.findall(r'<input[^>]*\bid="([\w-]+)"', p):
@@ -960,6 +965,7 @@ class Assise(unittest.TestCase):
             self.assertIn("pseudonyme", texte)
             self.assertNotIn("anonyme", texte.replace("pseudonyme", ""))
             self.assertNotIn("aucun lien", texte.lower())
+        self.assertIn("#code=", self.lire("aveugle.html"))   # le code d'invitation n'arrive pas au serveur
         with open(os.path.join(base.config.ICI, "..", "README.md"), encoding="utf-8") as f:
             readme = f.read()
         self.assertFalse("aucun lien entre une invitation" in readme.lower())
@@ -986,23 +992,60 @@ class Assise(unittest.TestCase):
         self.assertIn(marque, msg.get_body(("plain",)).get_content())
 
     def test_un_export_n_est_jamais_une_copie_de_la_base(self):
-        # DOCTRINE, règle 10. Rien de ce qui est publié n'est un fichier SQLite, et seul base.py ouvre la base.
+        # DOCTRINE, règle 10. Des valeurs témoins sont semées là où la base garde du personnel (un abonné, un votant,
+        # une invitation) : aucune ne doit se retrouver dans ce qui est publié, sous aucune forme.
+        import gzip
+        temoins = {"adresse": "temoin-abonne@exemple.fr", "jeton": "temoin-jeton-abonne-0123", "votant": "temoin-votant-4567",
+                   "code": "temoin-invitation-89"}
         db = base.connexion()
         try:
+            db.execute("INSERT INTO abonnes (adresse, jeton, cree) VALUES (?, ?, ?)", (temoins["adresse"], temoins["jeton"], base.iso()))
+            db.execute("INSERT INTO votants (id, bord, cree) VALUES (?, 1, ?)", (temoins["votant"], base.iso()[:10]))
+            db.execute("INSERT INTO invitations (code, cree) VALUES (?, ?)", (temoins["code"], base.iso()))
+            db.commit()
             publier.pages(db)
         finally:
+            db.execute("DELETE FROM abonnes WHERE adresse = ?", (temoins["adresse"],))
+            db.execute("DELETE FROM votants WHERE id = ?", (temoins["votant"],))
+            db.execute("DELETE FROM invitations WHERE code = ?", (temoins["code"],))
+            db.commit()
             db.close()
         for dossier, _, fichiers in os.walk(publier.config.public()):
             for nom in fichiers:
                 self.assertFalse(nom.endswith((".db", ".sqlite", ".db-wal", ".db-shm")), nom)
                 with open(os.path.join(dossier, nom), "rb") as f:
-                    self.assertNotEqual(f.read(16), b"SQLite format 3\x00", nom)
+                    brut = f.read()
+                self.assertNotEqual(brut[:16], b"SQLite format 3\x00", nom)
+                if brut[:2] == b"\x1f\x8b":
+                    brut = gzip.decompress(brut)
+                for t in temoins.values():
+                    self.assertFalse(t.encode() in brut, f"{nom} contient {t}")
+        # Seul base.py ouvre la base ; aucun module ne la copie ni ne la déverse (une sauvegarde, si elle vient,
+        # vit dans sauvegarde.py et n'écrit jamais dans public/).
         paquet = base.config.ICI
         for nom in os.listdir(paquet):
-            if nom.endswith(".py") and nom != "base.py":
+            if nom.endswith(".py") and nom not in ("base.py", "sauvegarde.py"):
                 with open(os.path.join(paquet, nom), encoding="utf-8") as f:
                     source = f.read()
-                self.assertFalse("sqlite3.connect" in source, nom)                 # seul base.py ouvre la base
-                self.assertFalse("shutil" in source and "config.base()" in source, nom)   # personne ne la copie
+                self.assertFalse("sqlite3.connect" in source, nom)
+                for motif in (".backup(", "VACUUM INTO", "iterdump", "open(config.base()"):
+                    self.assertFalse(motif in source, f"{nom} : {motif}")
+                self.assertFalse("shutil" in source and "config.base()" in source, nom)
         with open(os.path.join(paquet, "..", "DOCTRINE.md"), encoding="utf-8") as f:
             self.assertTrue("Un export n'est jamais une copie de `comparateur.db`" in f.read())
+
+
+class Oubli(unittest.TestCase):
+    def test_une_adresse_ip_est_oubliee_sans_trafic(self):
+        d = serveur.Debit()
+        self.assertTrue(d.autorise("ip:1.2.3.4", 300, 60))
+        self.assertTrue(d.autorise("mailadr:abc", 2, 86400))
+        t = d.vus["ip:1.2.3.4"][-1]
+        d.purger(t + 59)
+        self.assertIn("ip:1.2.3.4", d.vus)                    # encore dans sa fenêtre
+        d.purger(t + 3600)
+        self.assertNotIn("ip:1.2.3.4", d.vus)                 # au-delà : oubliée, sans nouvelle requête
+        self.assertIn("mailadr:abc", d.vus)                   # une fenêtre d'un jour garde sa clé un jour
+        d.purger(t + 86401)
+        self.assertEqual(d.vus, {})
+        self.assertEqual(d.fenetres, {})
