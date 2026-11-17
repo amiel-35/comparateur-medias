@@ -148,7 +148,25 @@ def donnees_du_jour(db):
             # Les médias lus hors de FrIdéo : comptés dans la couverture d'un sujet, dans aucun bord ni aucun silence.
             "non_classes": sorted(m["nom"] for m in medias if m["statut"] == "non-classe"),
             "sujets": sujets, "seuls": seuls,
+            # La lecture à l'aveugle du panel : une seconde mesure, versionnée, lue dans ce que l'urne a publié
+            # (trimestres clos). None s'il n'y a rien. Elle s'affiche à côté du classement, jamais fondue en lui.
             "aveugle": aveugle.resultats(db)}
+
+
+def resultats_panel(pub):
+    """Les résultats publiés des questionnaires du panel (public/panel/resultats/<id>.json, écrits par la cérémonie
+    de clôture), champ par champ, rangés par identifiant. Liste vide s'il n'y en a pas."""
+    dossier, out = os.path.join(pub, "panel", "resultats"), []
+    for nom in sorted(os.listdir(dossier)) if os.path.isdir(dossier) else []:
+        try:
+            with open(os.path.join(dossier, nom), encoding="utf-8") as f:
+                r = json.load(f)
+        except (OSError, ValueError):
+            continue
+        if nom.endswith(".json") and isinstance(r, dict) and r.get("mesure") == "panel" and isinstance(r.get("questions"), list):
+            out.append({k: r.get(k) for k in ("v", "mesure", "questionnaire", "titre", "etiquette", "delivres", "recues",
+                                              "effectifs", "scellement", "questions")})
+    return out
 
 
 def enregistrer_edition(db, jour=None):
@@ -192,6 +210,7 @@ def ecrire_pages(db):
             if m.get("ic") is None and m["nom"] in fiche:
                 m.update({k: fiche[m["nom"]].get(k) for k in ("ic", "sources")},
                          peu_documente=bool(fiche[m["nom"]].get("peu_documente")))
+    panel = resultats_panel(pub)
     semaines, mois = syntheses.toutes(charges)
     # pour passer d'une période à l'autre : la dernière édition de chacune porte sa synthèse
     liste_s = [{"cle": k, "jour": v["jours"][-1]} for k, v in sorted(semaines.items())]
@@ -209,6 +228,11 @@ def ecrire_pages(db):
         charge["mail"] = {"prestataire": "Brevo"} if config.mail_en_service() else None
         # La page du compte (compte.<domaine>), seulement si le mail est réglé : sans mail, aucun code à envoyer.
         charge["compte"] = config.compte_url()
+        # Les résultats des questionnaires du panel, les mêmes dans toutes les pages ; absents s'il n'y en a pas.
+        if panel:
+            charge["panel"] = panel
+        else:
+            charge.pop("panel", None)
         charge["periodes"] = {"semaine": semaines[syntheses.cle_semaine(r["jour"])], "mois": mois[r["jour"][:7]],
                               "semaines": liste_s, "mois_liste": liste_m}
         charge["edition"] = {"jour": r["jour"], "precedent": jours[i - 1] if i else None,
@@ -222,6 +246,11 @@ def ecrire_pages(db):
             _ecrire(os.path.join(pub, "data", "jour.json"), texte)
     _ecrire(os.path.join(pub, "data", "editions.json"), json.dumps(jours))
     index.ecrire(pub, charges)   # l'index public : les éditions des sept derniers jours (public/index.json)
+    # Les lots à juger à l'aveugle, sans leur média : les mêmes octets pour tous. Le guichet les sert au panel
+    # (compte.<domaine>/api/compte/lots).
+    os.makedirs(os.path.join(pub, "aveugle"), exist_ok=True)
+    _ecrire(os.path.join(pub, "aveugle", "lots.json"),
+            json.dumps(aveugle.lots_publics(db), ensure_ascii=False, sort_keys=True, separators=(",", ":")))
     retirer_anciens_actifs(pub, actifs)   # les pages citent les nouveaux : les anciens ne servent plus
     for nom in os.listdir(SITE):   # les autres pages (aveugle.html) ; les morceaux du gabarit ne sont pas publiés
         if nom != "gabarit.html" and os.path.isfile(os.path.join(SITE, nom)):

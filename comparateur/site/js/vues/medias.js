@@ -35,6 +35,19 @@ function vMedia(nom){
   h+='<div><dt>Propriétaire</dt><dd><span class="soon">à venir</span> <span class="mute">(absent des données)</span></dd></div>'+
   (m.note?'<div><dt>Note sur le flux</dt><dd>'+esc(m.note)+'</dd></div>':'')+
   '<div><dt>Flux du jour</dt><dd>'+(m.lu?'Lu.':'Flux illisible aujourd’hui. Rien à dire de ses titres.')+'</dd></div></dl>';
+  /* À côté du classement, jamais fondue : la lecture à l'aveugle du panel (AV, facultatif), si ce média en a une */
+  var av=AV&&AV.medias[m.nom];
+  if(av){
+    var e=av.effectifs||{},pb=av.par_bord||{};
+    var bd=function(k,lib){return lib+' : '+pl(e[k]||0,'avis','avis')+(pb[k]!=null?', moyenne '+fs(pb[k]):'');};
+    h+='<h2>'+AVT+'</h2><p class="etq">'+esc(AV.etiquette||'Panel de volontaires. Ce n’est pas un sondage.')+'</p>'+avPiste(m.nom,av)+
+    '<p class="note" style="display:flex;justify-content:space-between"><span>← −2, gauche</span><span>+2, droite →</span></p>'+
+    '<dl class="kv"><div><dt>Note du panel</dt><dd>'+fs(av.note)+', sur une échelle de −2 (gauche) à +2 (droite).</dd></div>'+
+    '<div><dt>Avis par bord des lecteurs</dt><dd>'+[bd('g','Gauche'),bd('c','Centre'),bd('d','Droite')].join(' ; ')+'.</dd></div>'+
+    '<div><dt>Statut</dt><dd>'+(av.statut==='publiable'?'Publiable : chaque bord compte au moins '+(AV.min_par_bord||5)+' avis.':'Indicatif : un bord compte moins de '+(AV.min_par_bord||5)+' avis.')+'</dd></div>'+
+    '<div><dt>Ce que c’est</dt><dd>Une seconde mesure, à côté du classement. '+(m.nc?'Elle ne classe pas ce média : il reste non classé.':'Elle ne change ni le score ni la bande FrIdéo de ce média.')+' '+avRegle()+'</dd></div>'+
+    '<div><dt>Version</dt><dd>'+avSource()+'</dd></div></dl>';
+  }
   /* titres du jour */
   var its=[];rounds.forEach(function(r){r.arts.forEach(function(a){if(a.media===m.nom)its.push({r:r,a:a});});});
   h+='<h2>Ses titres du jour</h2><p class="note">Seulement ceux rangés sous un sujet ou parmi les titres sans jumeau, pas les '+D.total+' récoltés.</p>';

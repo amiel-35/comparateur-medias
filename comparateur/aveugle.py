@@ -1,15 +1,25 @@
-"""Jugement à l'aveugle : fabrication des lots et comptage des votes.
+"""Jugement à l'aveugle : fabrication des lots, et lecture des résultats publiés par l'urne.
 
 Un lot = 10 titres d'un même média, nom et indices retirés. Le votant place le lot sur l'échelle
 gauche-droite (-2 à +2). Le comptage fait la moyenne par bord déclaré du votant, puis la moyenne
 entre bords : mille votes d'un seul bord ne pèsent pas plus que cent.
+
+Les avis ne sont pas ici. Ils se donnent avec la carte de votant et vivent dans l'urne (urnes/aveugle-<trimestre>.db).
+Ce module ne lit que ce que l'urne publie à la clôture d'un trimestre, des sommes par lot et par bord
+(public/panel/aveugle/<trimestre>.json, et historique.json pour les avis d'avant la carte), et la table publique
+lots_aveugle, qui dit de quel média est chaque lot. Le résultat est une mesure à part, versionnée : elle s'affiche à
+côté du classement FrIdéo, jamais fondue en lui.
 """
-import json, re
+import glob, json, os, re, secrets
+from datetime import date, timedelta
 
 from . import base, config
 from .fabrique import norm
 
 TAILLE_LOT = 10
+VERSION = "lecture à l'aveugle v1"   # change si la règle de comptage change (comme methode.VERSION)
+ETIQUETTE = "Panel de volontaires. Ce n'est pas un sondage."
+FENETRE_LOTS = 7                      # jours : les lots proposés au panel (public/aveugle/lots.json)
 # Autres noms sous lesquels un média se cite lui-même ou cite son groupe dans un titre.
 ALIAS = {
     "TF1 INFO": ["tf1", "lci", "tf1info"], "BFMTV": ["bfm", "bfm tv", "rmc"], "CNews": ["cnews", "europe 1"],
@@ -71,7 +81,11 @@ def fabriquer_lots(db):
     jour, faits = base.iso()[:10], 0
     with base.Etape(db, "lots aveugle") as etape:
         en_sujet = {r["article_id"] for r in db.execute("SELECT article_id FROM sujet_articles")}
-        for m in db.execute("SELECT id, nom FROM medias WHERE actif = 1").fetchall():
+        medias = db.execute("SELECT id, nom FROM medias WHERE actif = 1").fetchall()
+        # Dans un ordre tiré au hasard : sinon les numéros des lots d'un jour suivraient l'ordre des médias, et le
+        # numéro d'un lot dirait son média.
+        secrets.SystemRandom().shuffle(medias)
+        for m in medias:
             if db.execute("SELECT 1 FROM lots_aveugle WHERE media_id = ? AND jour = ?", (m["id"], jour)).fetchone():
                 continue
             arts = db.execute(
@@ -113,20 +127,85 @@ def compter(avis, minimum):
             "statut": "publiable" if all(len(v) >= minimum for v in par.values()) else "indicatif"}
 
 
-def resultats(db):
-    """Note à l'aveugle par média (échelle -2 à +2), avec effectifs par bord, et désaccords sur la note affichée."""
+def compter_agreges(par, minimum):
+    """La même règle que compter, sur des sommes : par = {g: [n, somme], c: [...], d: [...]}, ce que l'urne publie.
+    Rend exactement ce que compter rendrait sur les avis dont viennent ces sommes."""
+    par = {k: (list(par.get(k) or [0, 0]) + [0, 0])[:2] for k in "gcd"}
+    moyennes = {k: s / n for k, (n, s) in par.items() if n}
+    if not moyennes:
+        return None
+    return {"note": round(sum(moyennes.values()) / len(moyennes), 2),
+            "par_bord": {k: round(v, 2) for k, v in moyennes.items()},
+            "effectifs": {k: n for k, (n, _) in par.items()},
+            "statut": "publiable" if all(n >= minimum for n, _ in par.values()) else "indicatif"}
+
+
+def _entiers(v):
+    """[n, somme] : deux entiers, n positif."""
+    return isinstance(v, list) and len(v) == 2 and all(isinstance(e, int) and not isinstance(e, bool) for e in v) and v[0] >= 0
+
+
+def publies(dossier=None):
+    """Les agrégats publiés par l'urne, rangés par nom de fichier : {« historique » ou « 2026T3 »: contenu}. Un
+    fichier illisible, ou qui n'est pas une lecture à l'aveugle, est sauté."""
+    dossier = dossier or os.path.join(config.public(), "panel", "aveugle")
     out = {}
-    for m in db.execute("SELECT id, nom FROM medias ORDER BY nom").fetchall():
-        avis = [(r["bord"], r["note"]) for r in db.execute(
-            """SELECT v.bord, a.note FROM avis_aveugle a JOIN votants v ON v.id = a.votant_id
-               JOIN lots_aveugle l ON l.id = a.lot_id WHERE l.media_id = ?""", (m["id"],))]
-        accord = db.execute("SELECT SUM(accord) AS oui, COUNT(*) AS n FROM avis_note WHERE media_id = ?", (m["id"],)).fetchone()
-        ligne = {}
-        compte = compter(avis, config.min_par_bord())
-        if compte:
-            ligne["aveugle"] = compte
-        if accord["n"]:
-            ligne["accord"] = {"oui": accord["oui"] or 0, "votes": accord["n"]}
-        if ligne:
-            out[m["nom"]] = ligne
+    for chemin in sorted(glob.glob(os.path.join(dossier, "*.json"))):
+        try:
+            with open(chemin, encoding="utf-8") as f:
+                x = json.load(f)
+        except (OSError, ValueError):
+            continue
+        if isinstance(x, dict) and x.get("mesure") == "aveugle" and isinstance(x.get("lots"), dict):
+            out[os.path.basename(chemin)[:-5]] = x
     return out
+
+
+def resultats(db, dossier=None):
+    """La lecture à l'aveugle du panel, par média : une mesure à part, versionnée. Rend None s'il n'y a rien.
+
+    Pour chaque fichier publié par l'urne (l'historique et les trimestres clos), chaque lot est rapporté à son média
+    par lots_aveugle (base publique) ; les sommes s'additionnent par média et par bord déclaré ; puis la règle de
+    compter (moyenne par bord, moyenne des bords ; « publiable » si chaque bord atteint COMPARATEUR_MIN_PAR_BORD
+    avis). Aucune table de votants n'est lue. Aucune formule ne mêle cette note au score FrIdéo, et aucune bande
+    n'en est déduite."""
+    fichiers = publies(dossier)
+    if not fichiers:
+        return None
+    media_du_lot = {r["id"]: r["nom"] for r in db.execute(
+        "SELECT l.id, m.nom FROM lots_aveugle l JOIN medias m ON m.id = l.media_id")}
+    sommes, inclus = {}, []
+    for nom, x in fichiers.items():
+        compte = False
+        for lot, par in x["lots"].items():
+            media = media_du_lot.get(int(lot)) if str(lot).isdigit() else None
+            if media is None or not isinstance(par, dict):
+                continue
+            cumul = sommes.setdefault(media, {k: [0, 0] for k in "gcd"})
+            for k in "gcd":
+                if _entiers(par.get(k)):
+                    cumul[k][0] += par[k][0]
+                    cumul[k][1] += par[k][1]
+                    compte = compte or par[k][0] > 0
+        if compte:
+            inclus.append(str(x.get("trimestre") or nom))
+    minimum = config.min_par_bord()
+    medias = {}
+    for media, par in sorted(sommes.items()):
+        c = compter_agreges(par, minimum)
+        if c:
+            medias[media] = c
+    if not medias:
+        return None
+    inclus.sort(key=lambda t: (t != "historique", t))   # l'historique d'abord, puis les trimestres dans l'ordre
+    return {"v": 1, "mesure": "aveugle", "version": VERSION, "etiquette": ETIQUETTE, "trimestres": inclus,
+            "min_par_bord": minimum, "echelle": [-2, 2], "medias": medias}
+
+
+def lots_publics(db, jour=None):
+    """Les lots des sept derniers jours, pour public/aveugle/lots.json : {lots: [{id, titres}]}, sans le média. Les
+    mêmes octets pour tous : aucune heure, aucun paramètre, les lots rangés par numéro."""
+    jour = jour or base.iso()[:10]
+    debut = (date.fromisoformat(jour) - timedelta(days=FENETRE_LOTS - 1)).isoformat()
+    return {"lots": [{"id": r["id"], "titres": json.loads(r["titres"])} for r in db.execute(
+        "SELECT id, titres FROM lots_aveugle WHERE jour >= ? AND jour <= ? ORDER BY id", (debut, jour))]}
