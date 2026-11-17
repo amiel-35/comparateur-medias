@@ -1,7 +1,7 @@
 """La chaîne complète de la fabrique, lancée par la tâche planifiée ou par le serveur lui-même."""
-import json, threading
+import json, threading, time
 
-from . import aveugle, base, fabrique, llm, publier
+from . import aveugle, base, config, fabrique, llm, publier
 
 VERROU = threading.Lock()
 
@@ -42,3 +42,37 @@ def _lancer(etapes, db, afficher):
         if propre:
             db.close()
         VERROU.release()
+
+
+def edition_faite(jour):
+    db = base.connexion()
+    try:
+        return db.execute("SELECT 1 FROM editions WHERE jour = ?", (jour,)).fetchone() is not None
+    finally:
+        db.close()
+
+
+def boucle(minutes, tours=None):
+    """La fabrique : la récolte des flux toutes les `minutes`, et l'édition une fois par jour, à l'heure réglée
+    (heure de Paris). Un redémarrage après l'heure la rattrape. Elle n'écoute aucun port, n'ouvre pas le tiroir
+    identité et n'envoie aucun mail : elle écrit le tiroir public, le guichet le lit."""
+    def dire(m):
+        print("fabrique |", m, flush=True)
+
+    derniere, n = 0.0, 0
+    while tours is None or n < tours:
+        n += 1
+        try:
+            ici = base.paris()
+            if ici.hour >= config.edition_heure() and not edition_faite(ici.strftime("%Y-%m-%d")):
+                dire("édition du " + ici.strftime("%Y-%m-%d"))
+                tout(afficher=dire)                  # l'édition commence par une récolte
+                derniere = time.time()
+            elif time.time() - derniere >= minutes * 60:
+                recolte(afficher=dire)
+                derniere = time.time()
+        except Exception as e:
+            dire(f"arrêt inattendu : {type(e).__name__} {e}")
+            derniere = time.time()                   # pas de boucle serrée sur une panne
+        if tours is None or n < tours:
+            time.sleep(60)

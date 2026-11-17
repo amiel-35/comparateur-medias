@@ -14,14 +14,14 @@
 Pseudonyme, pas anonymat : la base garde l'empreinte du jeton, le bord déclaré et les avis, sans nom ni adresse (ni
 courriel ni IP). Le jeton relie entre eux les avis d'un même votant. L'éditeur sait à qui il a remis chaque code, et
 invitations.utilisee_le et votants.cree portent le même jour : avec peu d'inscrits, le rapprochement se fait à la main. Les abonnés au mail de la semaine
-sont à part (table abonnes, voir lettre.py) : leur adresse n'est écrite dans aucun journal.
+sont dans un autre fichier (identites.db, voir comptes.py) : leur adresse n'est écrite dans aucun journal.
 """
 import gzip, hashlib, json, mimetypes, os, re, secrets, sys, threading, time
 from collections import OrderedDict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
-from . import aveugle, base, config, lettre
+from . import abonnements, aveugle, base, comptes, config, lettre
 
 CORPS_MAX = 4096
 # Le manifest de l'application : type exigé par certains navigateurs, absent des vieilles tables de Python.
@@ -38,6 +38,16 @@ def politique():
             "connect-src 'self'" + ext + "; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'self'; "
             "frame-ancestors 'none'")
 
+
+def politique_compte():
+    """Les pages de compte.<domaine> et urne.<domaine> : rien d'extérieur, aucune mesure d'audience (premier cadrage,
+    règle 11), aucun appel ailleurs qu'à leur propre origine."""
+    return ("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+            "connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
+
+
+COOKIE = "__Host-cadrages"   # préfixe __Host- : Secure, Path=/, sans Domain ; renvoyé à compte.<domaine> seul
+COMPTE = os.path.join(config.ICI, "compte")   # les pages servies sur compte.<domaine>, hors du tiroir public
 
 ENTETES = {
     "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer", "X-Frame-Options": "DENY",
@@ -196,7 +206,8 @@ class Guichet(BaseHTTPRequestHandler):
         for k, v in (plus or {}).items():
             self.send_header(k, v)
         for k, v in ENTETES.items():
-            self.send_header(k, v)
+            self.send_header(k, v if k != "Content-Security-Policy" or getattr(self, "cote", "site") == "site"
+                             else politique_compte())
         self.end_headers()
         if self.command != "HEAD" and code != 304:
             self.wfile.write(corps)
@@ -242,13 +253,30 @@ class Guichet(BaseHTTPRequestHandler):
     def do_POST(self):
         self.router()
 
+    def hote(self):
+        """L'hôte demandé, en minuscules, sans port. Derrière Traefik, l'en-tête Host est celui du visiteur."""
+        h = (self.headers.get("Host") or "").strip().lower()
+        if h.startswith("["):   # une adresse IPv6 : le site
+            return ""
+        return h.rsplit(":", 1)[0] if ":" in h else h
+
     def router(self):
         chemin = urlsplit(self.path).path
+        h = config.hotes()
+        # Trois noms d'hôte, un processus (docs/cadrage-long-terme.md, 5.2) : le site, le compte, l'urne. Un hôte
+        # inconnu (une adresse IP, le contrôle de santé du conteneur) est le site.
+        self.cote = "compte" if self.hote() == h["compte"] else "urne" if self.hote() == h["urne"] else "site"
         try:
-            if chemin == "/sante":   # ouvre la base : limité, comme l'API
+            if chemin == "/sante" and self.cote == "site":   # ouvre la base : limité, comme l'API
                 if not DEBIT.autorise("sante:" + self.adresse(), 120, 60):
                     raise Erreur(429, "trop de requêtes")
                 return self.sante()
+            if self.cote == "compte":
+                return self.compte(chemin)
+            if self.cote == "urne":   # muette jusqu'au panel (phase 3)
+                raise Erreur(404, "introuvable")
+            if chemin.startswith("/api/compte/") or chemin == "/api/compte":
+                raise Erreur(404, "route inconnue")   # le compte ne répond que sur son hôte, où vit son cookie
             if chemin.startswith("/api/"):
                 # La limite de débit ne vaut que pour l'API : les fichiers publics (cachés, compressés) ne sont pas limités.
                 if not DEBIT.autorise("ip:" + self.adresse(), 300, 60):
@@ -336,34 +364,40 @@ class Guichet(BaseHTTPRequestHandler):
             return self.envoyer(201, {"ok": True})
 
         if chemin.startswith("/api/mail/") and config.mail():
-            return self.mail(route, db)
+            ident = comptes.connexion()
+            try:
+                return self.mail(route, ident)
+            finally:
+                ident.close()
 
         raise Erreur(404, "route inconnue")
 
-    def mail(self, route, db):
-        """La synthèse de la semaine par mail. Routes absentes (404) quand le mail est éteint."""
+    def mail(self, route, ident):
+        """La synthèse de la semaine par mail, sans connexion : une adresse suffit. Le tiroir identité garde un
+        compte et une ligne d'abonnement (comptes.inscrire_lettre). Routes absentes (404) quand le mail est éteint."""
         if route == ("POST", "/api/mail/inscription"):
             if not DEBIT.autorise("mail:" + self.adresse(), 5, 3600):
                 raise Erreur(429, "trop d'essais, réessayez plus tard")
             d = self.corps_json()
             # Champ caché : un humain ne le voit pas, un robot le remplit. Même réponse, rien n'est fait.
             if not str(d.get("site", "")).strip():
-                a = lettre.inscrire(db, d.get("adresse"))
+                a = comptes.inscrire_lettre(ident, d.get("adresse"))
                 # une adresse en attente ne reçoit pas plus de deux liens par jour, d'où qu'ils soient demandés
                 if a and DEBIT.autorise("mailadr:" + empreinte(a[0]), 2, 86400):
-                    lettre.confirmation_plus_tard(*a)
+                    lettre.plus_tard(lettre.envoyer_confirmation, *a)
             # La même réponse, que l'adresse soit nouvelle, déjà inscrite ou invalide : rien n'est révélé.
             return self.envoyer(202, {"ok": True})
 
         if route == ("POST", "/api/mail/confirmation"):
             if not DEBIT.autorise("mailj:" + self.adresse(), 20, 3600):
                 raise Erreur(429, "trop d'essais, réessayez plus tard")
-            if not lettre.confirmer(db, str(self.corps_json().get("jeton", ""))):
+            if not comptes.confirmer(ident, str(self.corps_json().get("jeton", ""))):
                 raise Erreur(404, "lien inconnu ou expiré")
             return self.envoyer(200, {"ok": True})
 
         if route[1] == "/api/mail/desinscription":
-            jeton = (parse_qs(urlsplit(self.path).query).get("jeton") or [""])[0]
+            jetons = parse_qs(urlsplit(self.path).query).get("jeton") or []   # plusieurs : un mail, plusieurs abonnements
+            jeton = jetons[0] if jetons else ""
             if route[0] == "GET":   # un lien ouvert ne désinscrit pas : il mène à la page et à son bouton
                 self.send_response(303)
                 self.send_header("Location", "/mail.html#desinscrire=" + re.sub(r"[^\w-]", "", jeton))
@@ -375,13 +409,121 @@ class Guichet(BaseHTTPRequestHandler):
                 return
             if route[0] == "POST":
                 brut = self.corps_brut()
-                if not jeton:   # depuis la page : {jeton} en JSON ; en un clic (RFC 8058) : ?jeton= dans l'adresse
-                    jeton = str(self.corps_json(brut).get("jeton", ""))
+                if not jetons:   # depuis la page : {jeton} en JSON ; en un clic (RFC 8058) : ?jeton= dans l'adresse
+                    jetons = [str(self.corps_json(brut).get("jeton", ""))]
                 if not DEBIT.autorise("mailj:" + self.adresse(), 20, 3600):
                     raise Erreur(429, "trop d'essais, réessayez plus tard")
-                lettre.desinscrire(db, jeton)
+                for j in jetons[:10]:
+                    comptes.sortir(ident, j)
                 return self.envoyer(200, {"ok": True})   # déjà désinscrit : même réponse
 
+        raise Erreur(404, "route inconnue")
+
+    # ---- compte.<domaine>
+
+    def jeton_session(self):
+        for morceau in (self.headers.get("Cookie") or "").split(";"):
+            nom, _, valeur = morceau.strip().partition("=")
+            if nom == COOKIE:
+                return valeur
+        return None
+
+    def poser_cookie(self, jeton):
+        """Un seul cookie, strictement nécessaire : il garde la connexion. Sans Domain, il n'est renvoyé qu'à
+        compte.<domaine> ; l'urne et le site ne le reçoivent jamais."""
+        if jeton:
+            return {"Set-Cookie": f"{COOKIE}={jeton}; Path=/; Max-Age={comptes.SESSION_JOURS * 86400}; Secure; HttpOnly; SameSite=Strict"}
+        return {"Set-Cookie": f"{COOKIE}=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=Strict"}
+
+    def meme_origine(self):
+        """Contre une requête forgée depuis un autre site : JSON seulement (un formulaire ne peut pas en envoyer sans
+        demande préalable du navigateur), et, quand le navigateur les donne, Origin et Sec-Fetch-Site du compte."""
+        if (self.headers.get("Content-Type") or "").split(";")[0].strip() != "application/json":
+            raise Erreur(415, "JSON attendu")
+        origine = self.headers.get("Origin")
+        if origine and origine != config.compte_url():   # l'origine exacte : schéma, hôte et port
+            raise Erreur(403, "origine refusée")
+        if self.headers.get("Sec-Fetch-Site") not in (None, "same-origin"):
+            raise Erreur(403, "origine refusée")
+
+    def compte(self, chemin):
+        """compte.<domaine> : la page du compte et son API. Éteint (404) sans mail : pas de code à envoyer."""
+        if not config.mail():
+            raise Erreur(404, "introuvable")
+        if not chemin.startswith("/api/"):
+            if self.command == "POST":
+                raise Erreur(405, "méthode non permise")
+            nom = {"/": "compte.html"}.get(chemin, chemin.lstrip("/"))
+            if nom not in ("compte.html",):
+                raise Erreur(404, "introuvable")
+            with open(os.path.join(COMPTE, nom), "rb") as f:
+                page = f.read().replace(b"__SITE_URL__", config.site_url().encode())   # le lien vers le site
+                return self.envoyer(200, page, "text/html; charset=utf-8", cache="no-store")
+        if not DEBIT.autorise("ip:" + self.adresse(), 300, 60):
+            raise Erreur(429, "trop de requêtes")
+        ident = comptes.connexion()
+        try:
+            return self.compte_api(chemin, ident)
+        finally:
+            ident.close()
+
+    def compte_api(self, chemin, ident):
+        route = (self.command, chemin)
+        if route == ("GET", "/api/compte/registre"):
+            return self.envoyer(200, {"registre": abonnements.ecran()})
+        if self.command == "POST":
+            self.meme_origine()
+
+        if route == ("POST", "/api/compte/code"):
+            if not DEBIT.autorise("code:" + self.adresse(), 5, 3600):
+                raise Erreur(429, "trop d'essais, réessayez dans une heure")
+            d = self.corps_json()
+            if not str(d.get("site", "")).strip():          # champ caché contre les robots
+                a = comptes.normaliser(d.get("adresse"))
+                # trois codes par heure et par adresse, d'où qu'ils soient demandés
+                if a and DEBIT.autorise("codeadr:" + empreinte(a), 3, 3600):
+                    _, code = comptes.demander_code(ident, a)
+                    lettre.plus_tard(lettre.envoyer_code, a, code)
+            return self.envoyer(202, {"ok": True})        # la même réponse, adresse connue ou non
+
+        if route == ("POST", "/api/compte/connexion"):
+            if not DEBIT.autorise("cnx:" + self.adresse(), 20, 3600):
+                raise Erreur(429, "trop d'essais, réessayez dans une heure")
+            d = self.corps_json()
+            a = comptes.normaliser(d.get("adresse"))
+            # dix essais par jour et par adresse, d'où qu'ils viennent : plusieurs adresses IP ne multiplient pas les essais
+            if a and not DEBIT.autorise("cnxadr:" + empreinte(a), 10, 86400):
+                raise Erreur(429, "trop d'essais pour cette adresse, réessayez demain")
+            compte = comptes.verifier_code(ident, d.get("adresse"), d.get("code"))
+            if not compte:
+                raise Erreur(403, "code faux ou expiré")
+            jeton = comptes.ouvrir_session(ident, compte)
+            return self.envoyer(200, {"ok": True}, plus=self.poser_cookie(jeton))
+
+        compte = comptes.session(ident, self.jeton_session())
+        if compte is None:
+            raise Erreur(401, "non connecté")
+        if route == ("GET", "/api/compte"):
+            return self.envoyer(200, {"sait": comptes.lire(ident, compte), "registre": abonnements.ecran()})
+        if route == ("POST", "/api/compte/abonnement"):
+            d = self.corps_json()
+            type_, cible, actif = d.get("type"), d.get("cible") or "", d.get("actif")
+            if not isinstance(type_, str) or not isinstance(cible, str) or not isinstance(actif, bool):
+                raise Erreur(400, "attendu : type, cible, actif")
+            try:
+                if actif:   # l'adresse est prouvée par le code : l'abonnement est actif tout de suite
+                    comptes.abonner(ident, compte, type_, cible)
+                else:
+                    comptes.desabonner(ident, compte, type_, cible)
+            except abonnements.Refus as e:
+                raise Erreur(400, str(e))
+            return self.envoyer(200, {"sait": comptes.lire(ident, compte), "registre": abonnements.ecran()})
+        if route == ("POST", "/api/compte/deconnexion"):
+            comptes.fermer_session(ident, self.jeton_session())
+            return self.envoyer(200, {"ok": True}, plus=self.poser_cookie(None))
+        if route == ("POST", "/api/compte/suppression"):
+            comptes.supprimer(ident, compte)
+            return self.envoyer(200, {"ok": True}, plus=self.poser_cookie(None))
         raise Erreur(404, "route inconnue")
 
     def fichier(self, chemin):
@@ -430,66 +572,75 @@ def creer(port=None, hote="0.0.0.0"):
     return Serveur((hote, config.port() if port is None else port), Guichet)
 
 
-def _planifier(minutes):
-    """Dans un fil à part (une visite n'attend jamais la fabrique) : la récolte des flux toutes les `minutes`,
-    et l'édition une fois par jour, à l'heure réglée (heure de Paris). Un redémarrage après l'heure la rattrape."""
-    from . import chaine
+def envois():
+    """Un passage de la boucle du guichet : le ménage du tiroir identité, puis les mails dus. L'alerte du matin part
+    dès que la fabrique a écrit public/alertes/<jour>.json ; la synthèse de la semaine finie, dès que l'édition du
+    jour est faite, et une seule fois par abonné (abonnements.dernier_envoi)."""
+    if not config.mail():
+        return None
+    ident = comptes.connexion()
+    try:
+        comptes.purger(ident)
+        jour = base.paris().strftime("%Y-%m-%d")
+        if lettre.alerte(jour) is None:   # l'édition du jour n'est pas encore là
+            return {"jour": jour, "edition": False}
+        return {"alertes": lettre.envoyer_alertes(ident, jour), "semaine": lettre.envoyer_semaine(ident, jour)}
+    finally:
+        ident.close()
 
-    def dire(m):
-        print("fabrique |", m, flush=True)
 
-    def edition_faite(jour):
-        db = base.connexion()
-        try:
-            return db.execute("SELECT 1 FROM editions WHERE jour = ?", (jour,)).fetchone() is not None
-        finally:
-            db.close()
-
+def boucle_envois(pause=60):
+    """Dans un fil à part du guichet : envois() chaque minute. La fabrique n'envoie plus rien : elle écrit, le
+    guichet envoie (docs/cadrage-long-terme.md, phase 2)."""
     def boucle():
-        derniere = 0.0
         while True:
             try:
-                ici = base.paris()
-                if ici.hour >= config.edition_heure() and not edition_faite(ici.strftime("%Y-%m-%d")):
-                    dire("édition du " + ici.strftime("%Y-%m-%d"))
-                    chaine.tout(afficher=dire)       # l'édition commence par une récolte
-                    derniere = time.time()
-                elif time.time() - derniere >= minutes * 60:
-                    chaine.recolte(afficher=dire)
-                    derniere = time.time()
+                envois()
             except Exception as e:
-                dire(f"arrêt inattendu : {type(e).__name__} {e}")
-                derniere = time.time()               # pas de boucle serrée sur une panne
-            try:
-                # Le lundi, une fois l'édition du jour faite : la synthèse de la semaine finie, par mail.
-                # envoyer_semaine ne renvoie rien à qui l'a déjà reçue (abonnes.dernier_envoi).
-                ici = base.paris()
-                if config.mail():
-                    db = base.connexion()
-                    try:
-                        lettre.purger(db)            # inscriptions non confirmées sous 7 jours
-                        if ici.weekday() == 0 and edition_faite(ici.strftime("%Y-%m-%d")):
-                            lettre.envoyer_semaine(db, ici.strftime("%Y-%m-%d"))
-                    finally:
-                        db.close()
-            except Exception as e:
-                dire(f"mail de la semaine : arrêt inattendu {type(e).__name__}")
-            time.sleep(60)
+                print(f"mails : arrêt inattendu {type(e).__name__}", flush=True)
+            time.sleep(pause)
 
-    threading.Thread(target=boucle, daemon=True, name="fabrique").start()
+    threading.Thread(target=boucle, daemon=True, name="envois").start()
 
 
-def servir():
+def demarrage():
+    """Au démarrage du guichet : déplacer les abonnés de l'ancienne table abonnes, s'il en reste (ligne par ligne,
+    écrits dans identites.db puis retirés d'abonnes : il n'y a pas de fenêtre où une désinscription se perd),
+    puis dire à la fabrique, par le tiroir public, si le mail est en service."""
+    if config.mail():
+        from . import migrations
+        bilan = migrations.verser_abonnes()
+        if bilan["retirees"]:
+            print(f"guichet : {bilan['retirees']} ligne(s) déplacée(s) depuis la table abonnes", flush=True)
+    etat = {"mail": config.mail() is not None, "compte": config.compte_url() if config.mail() else None}
+    chemin = os.path.join(config.public(), "guichet.json")
+    with open(chemin + ".tmp", "w", encoding="utf-8") as f:
+        json.dump(etat, f)
+    os.replace(chemin + ".tmp", chemin)
+
+
+def guichet():
+    """Le guichet seul : sert le site, le compte et l'urne ; envoie les mails. Il tient la clé d'envoi, pas celle
+    des modèles. Du tiroir public, il n'écrit que guichet.json (le mail est-il en service ?)."""
     srv = creer()
+    demarrage()
     oublier()
-    print(f"comparateur : écoute sur le port {srv.server_address[1]}", flush=True)
-    if config.fabrique_minutes() > 0:
-        print(f"comparateur : récolte toutes les {config.fabrique_minutes()} min, édition chaque jour à "
-              f"{config.edition_heure()} h (Paris)", flush=True)
-        _planifier(config.fabrique_minutes())
+    print(f"guichet : écoute sur le port {srv.server_address[1]}", flush=True)
+    boucle_envois()
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
         srv.server_close()
+
+
+def servir():
+    """Guichet et fabrique dans un seul processus : pour un poste de développement, ou un déploiement d'avant la
+    phase 2. En production, deux services du compose : `guichet` et `fabrique`."""
+    if config.fabrique_minutes() > 0:
+        from . import chaine
+        print(f"comparateur : récolte toutes les {config.fabrique_minutes()} min, édition chaque jour à "
+              f"{config.edition_heure()} h (Paris)", flush=True)
+        threading.Thread(target=chaine.boucle, args=(config.fabrique_minutes(),), daemon=True, name="fabrique").start()
+    guichet()

@@ -1,4 +1,5 @@
-# Comparateur de cadrages : une image, deux usages (le serveur, et la fabrique lancée par tâche planifiée).
+# Cadrages : une image, deux services du compose (« fabrique » et « guichet », voir docker-compose.yml). Lancée seule,
+# sans commande, elle fait les deux dans un processus, comme avant la phase 2.
 FROM python:3.13-slim
 
 # curl : lecture des flux RSS et contrôle de santé. tzdata : les éditions sont datées en heure de Paris.
@@ -13,7 +14,8 @@ COPY comparateur /app/comparateur
 WORKDIR /app
 
 # Utilisateur sans privilège ; /data est le volume persistant (base, cache, site généré).
-RUN useradd --system --uid 10001 --home /app comparateur && mkdir -p /data && chown comparateur /data
+RUN useradd --system --uid 10001 --home /app comparateur && mkdir -p /data /identites /urnes \
+    && chown comparateur /data /identites /urnes
 USER comparateur
 VOLUME /data
 

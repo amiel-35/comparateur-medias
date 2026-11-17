@@ -1,16 +1,18 @@
-# Déploiement Coolify (type « Docker Compose »). Coolify fournit le domaine et le HTTPS (Traefik) :
-# on n'expose aucun port sur l'hôte, on déclare seulement le port interne du service.
+# Déploiement Coolify (type « Docker Compose »). Coolify fournit les domaines et le HTTPS (Traefik) : aucun port
+# n'est exposé sur l'hôte. Deux services, la même image, deux commandes (docs/cadrage-long-terme.md, phase 2) :
+#   fabrique  récolte les flux, fait l'édition, écrit le tiroir public. N'écoute aucun port. Tient la clé des modèles.
+#   guichet   sert le site, compte.<domaine> et urne.<domaine> ; envoie les mails. Tient la clé d'envoi.
+# Le volume comparateur-donnees (tiroir public) est partagé : la fabrique écrit, le guichet lit. Le volume
+# comparateur-identites (identites.db) n'est monté que sur le guichet : la fabrique ne peut pas l'ouvrir.
 services:
-  comparateur:
+  fabrique:
     build: .
     restart: unless-stopped
-    expose:
-      - "8080"
+    command: ["sh", "-c", "python -m comparateur init && python -m comparateur pages && exec python -m comparateur fabrique"]
     environment:
       # Secret : à saisir dans Coolify (Environment Variables), jamais dans ce fichier.
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?clé API Anthropic requise pour la fabrique}
-      # La fabrique tourne dans le même conteneur : récolte des flux toutes les N minutes (0 = fabrique coupée),
-      # et une édition par jour à l'heure indiquée (heure de Paris).
+      # Récolte des flux toutes les N minutes, et une édition par jour à l'heure indiquée (heure de Paris).
       COMPARATEUR_FABRIQUE_MINUTES: ${COMPARATEUR_FABRIQUE_MINUTES:-180}
       COMPARATEUR_EDITION_HEURE: ${COMPARATEUR_EDITION_HEURE:-6}
       COMPARATEUR_BUDGET_JOUR_USD: ${COMPARATEUR_BUDGET_JOUR_USD:-2}
@@ -18,18 +20,40 @@ services:
       # Rubriques écartées des sujets, lues dans l'adresse de l'article (« aucune » pour ne rien écarter).
       COMPARATEUR_RUBRIQUES_ECARTEES: ${COMPARATEUR_RUBRIQUES_ECARTEES:-sport,culture}
       COMPARATEUR_MIN_PAR_BORD: ${COMPARATEUR_MIN_PAR_BORD:-5}
-      # Mesure de fréquentation par Umami, sans cookie : le data-website-id du site dans Umami. Vide : aucune mesure.
       COMPARATEUR_UMAMI_ID: ${COMPARATEUR_UMAMI_ID:-}
-      # La synthèse de la semaine par mail (Brevo, SMTP). Sans utilisateur ou sans mot de passe : fonction éteinte.
+      COMPARATEUR_SITE_URL: ${COMPARATEUR_SITE_URL:-}
+      # La fabrique ne lit pas les secrets SMTP. Elle sait si le mail est en service par public/guichet.json, que le
+      # guichet écrit à son démarrage ; ce réglage ne sert qu'à forcer ce choix.
+      COMPARATEUR_MAIL_EN_SERVICE: ${COMPARATEUR_MAIL_EN_SERVICE:-}
+    volumes:
+      - comparateur-donnees:/data
+    healthcheck:
+      disable: true
+
+  guichet:
+    build: .
+    restart: unless-stopped
+    command: ["python", "-m", "comparateur", "guichet"]
+    expose:
+      - "8080"
+    environment:
+      COMPARATEUR_MIN_PAR_BORD: ${COMPARATEUR_MIN_PAR_BORD:-5}
+      COMPARATEUR_UMAMI_ID: ${COMPARATEUR_UMAMI_ID:-}
+      COMPARATEUR_SITE_URL: ${COMPARATEUR_SITE_URL:-}
+      # Le mail (Brevo, SMTP) et le compte. Sans utilisateur ou sans mot de passe : ni formulaire, ni compte, ni envoi.
       # Le mot de passe (clé SMTP de Brevo) est un secret : à saisir dans Coolify, jamais dans ce fichier.
       COMPARATEUR_SMTP_UTILISATEUR: ${COMPARATEUR_SMTP_UTILISATEUR:-}
       COMPARATEUR_SMTP_MOT_DE_PASSE: ${COMPARATEUR_SMTP_MOT_DE_PASSE:-}
       COMPARATEUR_SMTP_HOTE: ${COMPARATEUR_SMTP_HOTE:-}
       COMPARATEUR_SMTP_PORT: ${COMPARATEUR_SMTP_PORT:-}
       COMPARATEUR_MAIL_EXPEDITEUR: ${COMPARATEUR_MAIL_EXPEDITEUR:-}
-      COMPARATEUR_SITE_URL: ${COMPARATEUR_SITE_URL:-}
+      # Les noms d'hôte du compte et de l'urne. Par défaut : compte.<hôte du site> et urne.<hôte du site>.
+      COMPARATEUR_HOTE_COMPTE: ${COMPARATEUR_HOTE_COMPTE:-}
+      COMPARATEUR_HOTE_URNE: ${COMPARATEUR_HOTE_URNE:-}
+      COMPARATEUR_IDENTITES: /identites
     volumes:
       - comparateur-donnees:/data
+      - comparateur-identites:/identites
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/sante"]
       interval: 30s
@@ -39,3 +63,4 @@ services:
 
 volumes:
   comparateur-donnees:
+  comparateur-identites:

@@ -694,7 +694,7 @@ class MailEteint(unittest.TestCase):
         db = base.connexion()
         try:
             publier.pages(db)
-            self.assertIsNone(lettre.envoyer_semaine(db, "2026-11-16"))
+            self.assertIsNone(lettre.envoyer_semaine(None, "2026-11-16"))
         finally:
             db.close()
         with open(os.path.join(publier.config.public(), "data", "jour.json"), encoding="utf-8") as f:
@@ -737,18 +737,26 @@ class Mail(unittest.TestCase):
         cls.srv.server_close()
 
     def setUp(self):
+        from comparateur import comptes
         FauxSMTP.envoyes.clear()
         serveur.DEBIT.vus.clear()
         self.lettre._echecs.clear()
         self.db = base.connexion()
-        self.db.execute("DELETE FROM abonnes")
-        self.db.commit()
+        self.ident = comptes.connexion()
+        self.ident.execute("DELETE FROM comptes")
+        self.ident.commit()
 
     def tearDown(self):
-        self.db.execute("DELETE FROM abonnes")
+        self.ident.execute("DELETE FROM comptes")
+        self.ident.commit()
+        self.ident.close()
         self.db.execute("DELETE FROM editions WHERE jour IN (?, ?, ?)", self.SEMAINE)
         self.db.commit()
         self.db.close()
+
+    def lignes(self):
+        return self.ident.execute("""SELECT c.adresse, a.etat, a.sortie, a.dernier_envoi FROM abonnements a
+                                     JOIN comptes c ON c.id = a.compte ORDER BY c.id""").fetchall()
 
     def appel(self, methode, chemin, corps=None, brut=None, entetes=None):
         data = brut if brut is not None else (json.dumps(corps).encode() if corps is not None else None)
@@ -781,6 +789,7 @@ class Mail(unittest.TestCase):
                  + [{"media": "Le Milieu", "titre": "bis", "lien": f"https://x.test/{jour}/bis"}]}]}
             self.db.execute("INSERT OR REPLACE INTO editions (jour, cree, donnees) VALUES (?, ?, ?)", (jour, base.iso(), json.dumps(charge)))
         self.db.commit()
+        publier.ecrire_pages(self.db)   # la fabrique écrit la synthèse dans le tiroir public ; le guichet l'envoie
 
     def test_inscription_confirmation_desinscription(self):
         import contextlib, io
@@ -791,20 +800,21 @@ class Mail(unittest.TestCase):
             msg = FauxSMTP.envoyes[0]
             self.assertEqual(msg["To"], "lea@exemple.fr")                 # en minuscules
             self.assertIn("Cadrages", msg["From"])
-            r = self.db.execute("SELECT * FROM abonnes").fetchone()
-            self.assertEqual((r["adresse"], r["confirme_le"]), ("lea@exemple.fr", None))
+            r = self.lignes()[0]
+            self.assertEqual((r["adresse"], r["etat"]), ("lea@exemple.fr", "attente"))
             jeton = self.jeton_du_dernier_mail()
-            self.assertEqual(jeton, r["jeton"])
+            self.assertEqual(jeton, r["sortie"])
             # ouvrir le lien (GET) ne confirme rien ni ne désinscrit : seul le bouton (POST) agit
             self.assertEqual(self.appel("GET", "/mail.html")[0], 200)
-            self.assertIsNone(self.db.execute("SELECT confirme_le FROM abonnes").fetchone()["confirme_le"])
+            self.assertEqual(self.lignes()[0]["etat"], "attente")
             self.assertEqual(self.appel("POST", "/api/mail/confirmation", {"jeton": "inconnu-inconnu"})[0], 404)
             self.assertEqual(self.appel("POST", "/api/mail/confirmation", {"jeton": jeton})[0], 200)
-            self.assertIsNotNone(self.db.execute("SELECT confirme_le FROM abonnes").fetchone()["confirme_le"])
+            self.assertEqual(self.lignes()[0]["etat"], "actif")
             self.appel("GET", "/api/mail/desinscription?jeton=" + jeton)
-            self.assertEqual(self.db.execute("SELECT COUNT(*) AS n FROM abonnes").fetchone()["n"], 1)
+            self.assertEqual(len(self.lignes()), 1)
             self.assertEqual(self.appel("POST", "/api/mail/desinscription", {"jeton": jeton})[0], 200)
-            self.assertEqual(self.db.execute("SELECT COUNT(*) AS n FROM abonnes").fetchone()["n"], 0)   # la ligne est supprimée
+            self.assertEqual(len(self.lignes()), 0)                                     # la ligne est supprimée
+            self.assertEqual(self.ident.execute("SELECT COUNT(*) AS n FROM comptes").fetchone()["n"], 0)   # et l'adresse
             self.assertEqual(self.appel("POST", "/api/mail/desinscription", {"jeton": jeton})[0], 200)
         self.assertNotIn("exemple.fr", journal.getvalue().lower())          # aucune adresse dans les journaux
         self.assertNotIn(jeton, journal.getvalue())                          # ni jeton
@@ -823,10 +833,13 @@ class Mail(unittest.TestCase):
         self.assertEqual(self.appel("POST", "/api/mail/inscription", {"adresse": "x@exemple.fr"})[0], 429)   # 5 par heure
 
     def test_inscription_non_confirmee_effacee_apres_7_jours(self):
+        from comparateur import comptes
         self.appel("POST", "/api/mail/inscription", {"adresse": "lente@exemple.fr"})
-        self.db.execute("UPDATE abonnes SET cree = '2026-01-01T00:00:00+00:00'")
-        self.db.commit()
-        self.assertEqual(self.lettre.purger(self.db), 1)
+        self.ident.execute("UPDATE abonnements SET cree_jour = '2026-01-01'")
+        self.ident.execute("UPDATE comptes SET cree_jour = '2026-01-01'")   # un compte du jour est épargné
+        self.ident.commit()
+        self.assertEqual(comptes.purger(self.ident), 1)
+        self.assertEqual(self.lignes(), [])
 
     def test_envoi_de_la_semaine_sans_double_envoi(self):
         self.semaine()
@@ -834,7 +847,7 @@ class Mail(unittest.TestCase):
         self.inscrit("c@exemple.fr")
         self.appel("POST", "/api/mail/inscription", {"adresse": "pas-confirme@exemple.fr"})
         FauxSMTP.envoyes.clear()
-        rendu = self.lettre.envoyer_semaine(self.db, "2026-03-09")   # lundi : la semaine du 2 au 8 mars
+        rendu = self.lettre.envoyer_semaine(self.ident, "2026-03-09")   # lundi : la semaine du 2 au 8 mars
         self.assertEqual(rendu, {"semaine": "2026-S10", "envoyes": 2, "echecs": 1, "editions": 3})
         self.assertEqual(sorted(m["To"] for m in FauxSMTP.envoyes), ["a@exemple.fr", "c@exemple.fr"])   # l'échec ne bloque pas
         msg = FauxSMTP.envoyes[0]
@@ -853,17 +866,17 @@ class Mail(unittest.TestCase):
         # le même lundi, et après un redémarrage (l'état est en base) : rien ne repart vers qui l'a reçu
         FauxSMTP.envoyes.clear()
         self.lettre._echecs.clear()
-        rendu = self.lettre.envoyer_semaine(self.db, "2026-03-09")
+        rendu = self.lettre.envoyer_semaine(self.ident, "2026-03-09")
         self.assertEqual([m["To"] for m in FauxSMTP.envoyes], [])          # « refus » échoue de nouveau, rien n'est accepté
         self.assertEqual(rendu["envoyes"], 0)
-        self.assertEqual({r["adresse"]: r["dernier_envoi"] for r in self.db.execute("SELECT * FROM abonnes")},
+        self.assertEqual({r["adresse"]: r["dernier_envoi"] for r in self.lignes()},
                          {"a@exemple.fr": "2026-S10", "refus@exemple.fr": None, "c@exemple.fr": "2026-S10", "pas-confirme@exemple.fr": None})
         # désinscription en un clic (RFC 8058) : le POST du logiciel de messagerie, sans JSON
         statut, _ = self.appel("POST", "/api/mail/desinscription?jeton=" + a, brut=b"List-Unsubscribe=One-Click",
                                entetes={"Content-Type": "application/x-www-form-urlencoded"})
         self.assertEqual(statut, 200)
-        self.assertIsNone(self.db.execute("SELECT 1 FROM abonnes WHERE jeton = ?", (a,)).fetchone())
-        self.assertIsNotNone(self.db.execute("SELECT 1 FROM abonnes WHERE jeton = ?", (b,)).fetchone())
+        self.assertIsNone(self.ident.execute("SELECT 1 FROM abonnements WHERE sortie = ?", (a,)).fetchone())
+        self.assertIsNotNone(self.ident.execute("SELECT 1 FROM abonnements WHERE sortie = ?", (b,)).fetchone())
 
     def test_le_site_montre_le_formulaire_seulement_si_le_mail_est_regle(self):
         publier.pages(self.db)
@@ -1031,7 +1044,7 @@ class Assise(unittest.TestCase):
         # vit dans sauvegarde.py et n'écrit jamais dans public/).
         paquet = base.config.ICI
         for nom in os.listdir(paquet):
-            if nom.endswith(".py") and nom not in ("base.py", "sauvegarde.py"):
+            if nom.endswith(".py") and nom not in ("base.py", "sauvegarde.py", "comptes.py"):   # comptes.py : identites.db
                 with open(os.path.join(paquet, nom), encoding="utf-8") as f:
                     source = f.read()
                 self.assertFalse("sqlite3.connect" in source, nom)

@@ -12,12 +12,17 @@
   inviter [n]          crée n codes d'invitation et les affiche (défaut : 1)
   jetons               bilan des appels aux modèles (jetons, coût)
   journal              dernières étapes de la fabrique
-  servir               lance le site et le guichet des votes
+  servir               le guichet et la fabrique dans un seul processus (poste de développement)
+  guichet              le guichet seul : site, compte, urne, mails (service « guichet » du compose)
+  fabrique             la fabrique seule : récolte et édition, sans port (service « fabrique » du compose)
+  verser-abonnes       déplace la table abonnes de comparateur.db dans identites.db (le guichet le fait au démarrage)
   mail-essai <adresse> envoie à cette seule adresse la synthèse de la dernière semaine (SMTP réglé)
 """
 import secrets, sys
 
-from . import aveugle, base, chaine, config, fabrique, lettre, llm, publier, serveur
+from . import aveugle, base, chaine, config, fabrique, llm, publier
+# Le guichet (serveur, lettre, comptes) n'est importé que par ses commandes : le processus de la fabrique ne
+# charge même pas le code du tiroir identité.
 
 
 def main(argv):
@@ -26,7 +31,21 @@ def main(argv):
         return 0
     cmd = argv[1]
     if cmd == "servir":
+        from . import serveur
         serveur.servir()
+        return 0
+    if cmd == "guichet":
+        from . import serveur
+        serveur.guichet()
+        return 0
+    if cmd == "fabrique":
+        print(f"fabrique : récolte toutes les {config.fabrique_minutes() or 180} min, édition chaque jour à "
+              f"{config.edition_heure()} h (Paris)", flush=True)
+        chaine.boucle(config.fabrique_minutes() or 180)
+        return 0
+    if cmd == "verser-abonnes":
+        from . import migrations
+        print(migrations.verser_abonnes())
         return 0
     db = base.connexion()
     try:
@@ -72,7 +91,8 @@ def main(argv):
             if not config.mail():
                 print("mail éteint : COMPARATEUR_SMTP_UTILISATEUR et COMPARATEUR_SMTP_MOT_DE_PASSE manquent")
                 return 1
-            cle = lettre.essai(db, argv[2])
+            from . import lettre
+            cle = lettre.essai(argv[2])
             print(f"synthèse {cle} envoyée" if cle else "rien envoyé : adresse invalide, aucune édition, ou échec SMTP")
             return 0 if cle else 1
         elif cmd == "journal":

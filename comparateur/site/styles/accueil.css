@@ -18,3 +18,5 @@
 .card h3{font-size:1.15rem}
 .card .pbar{margin-top:auto;max-width:none}
 .card.sil{border-left-width:10px;border-left-color:var(--ko)}
+.mes{background:var(--paper);border:2px solid var(--ink);padding:4px 14px 10px;margin:14px 0}
+.mes h2{margin:.6rem 0 .2rem}

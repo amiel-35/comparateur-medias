@@ -49,6 +49,12 @@ app.addEventListener('submit',function(e){
     },function(){msg.textContent='Pas de réseau. Réessayez plus tard.';})
     .then(function(){b.disabled=false;});
 });
+/* « Suivre ce sujet » : la liste reste dans ce navigateur (js/mes-sujets.js) */
+app.addEventListener('click',function(e){
+  var b=e.target.closest&&e.target.closest('#btnSuivre');if(!b)return;
+  var r=RB[b.getAttribute('data-id')];if(!r)return;
+  basculerSujet(r.id,r.titre);route({keep:true,focus:'#btnSuivre'});
+});
 app.addEventListener('click',function(e){
   var b=e.target.closest&&e.target.closest('#btnInstaller');if(!b||!INVITE)return;
   var inv=INVITE;INVITE=null;inv.prompt();
@@ -61,5 +67,5 @@ function applyTheme(){var d=document.documentElement;if(S.theme)d.setAttribute('
 document.getElementById('btnTheme').addEventListener('click',function(){S.theme=effDark()?'light':'dark';save();applyTheme();});
 try{window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',applyTheme);}catch(_){}
 
-document.getElementById('foot').innerHTML='<p><span class="mdl" style="margin:0">écrit par un modèle</span> signale tout texte rédigé par un modèle de langage (sujets, faits, angles, mots). Les scores viennent de FrIdéo v1.0 (French News Lab, CC BY 4.0), les comptages d’une formule fixe. Données du '+esc(new Date(D.recolte).toLocaleDateString('fr-FR',{timeZone:'Europe/Paris'}))+'. '+(D.mesure==='umami'?'Aucun cookie. La fréquentation est mesurée sans cookie ni donnée personnelle.':'Aucun cookie. Le choix du thème et une copie des pages déjà ouvertes restent dans votre navigateur.')+(D.mail?' <a href="#/semaine/mail">La synthèse de la semaine par mail</a>.':'')+' <a href="#/mentions">Mentions légales et données personnelles</a>. <a href="#/installer">Installer Cadrages comme une application</a>.</p>';
+document.getElementById('foot').innerHTML='<p><span class="mdl" style="margin:0">écrit par un modèle</span> signale tout texte rédigé par un modèle de langage (sujets, faits, angles, mots). Les scores viennent de FrIdéo v1.0 (French News Lab, CC BY 4.0), les comptages d’une formule fixe. Données du '+esc(new Date(D.recolte).toLocaleDateString('fr-FR',{timeZone:'Europe/Paris'}))+'. '+(D.compte?'Aucun cookie sur ces pages ; la page du compte en pose un seul, pour rester connecté.':'Aucun cookie.')+(D.mesure==='umami'?' La fréquentation est mesurée sans cookie ni donnée personnelle.':' Le choix du thème, « Mes sujets » et une copie des pages déjà ouvertes restent dans votre navigateur.')+(D.mail?' <a href="#/semaine/mail">La synthèse de la semaine par mail</a>.':'')+(D.compte?' <a href="'+url(D.compte)+'/">Gérer ses mails</a>.':'')+' <a href="#/mentions">Mentions légales et données personnelles</a>. <a href="#/installer">Installer Cadrages comme une application</a>.</p>';
 applyTheme();route();

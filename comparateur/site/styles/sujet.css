@@ -31,3 +31,5 @@
 .pn{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:34px}
 .nc-col{margin-top:16px}
 .nc-col>header{border-bottom:1px dashed var(--mute)}
+.suivre{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin:12px 0 0}
+.suivre .btn[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
