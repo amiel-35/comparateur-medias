@@ -15,7 +15,7 @@ function vPanel(){
     (q.questions||[]).forEach(function(x){
       var par=x.par_bord||{};
       h+='<h3 class="pn-q">'+esc(x.texte)+(x.profil?' <span class="mute">(question de profil)</span>':'')+'</h3>';
-      h+='<table class="pn"><thead><tr><th scope="col">Réponse</th>'+COTES.map(function(g){
+      h+='<table class="pnt"><thead><tr><th scope="col">Réponse</th>'+COTES.map(function(g){
         var p=par[g]||{};
         return '<th scope="col">'+GL[g]+'<small>'+(p.reponses?pl(p.reponses,'réponse','réponses')+', '+(p.statut==='publiable'?'publiable':'indicatif'):'moins de 5 réponses')+'</small></th>';
       }).join('')+'</tr></thead><tbody>'+(x.choix||[]).map(function(c,i){

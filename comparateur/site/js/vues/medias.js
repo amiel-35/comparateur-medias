@@ -46,7 +46,7 @@ function vMedia(nom){
     '<div><dt>Avis par bord des lecteurs</dt><dd>'+[bd('g','Gauche'),bd('c','Centre'),bd('d','Droite')].join(' ; ')+'.</dd></div>'+
     '<div><dt>Statut</dt><dd>'+(av.statut==='publiable'?'Publiable : chaque bord compte au moins '+(AV.min_par_bord||5)+' avis.':'Indicatif : un bord compte moins de '+(AV.min_par_bord||5)+' avis.')+'</dd></div>'+
     '<div><dt>Ce que c’est</dt><dd>Une seconde mesure, à côté du classement. '+(m.nc?'Elle ne classe pas ce média : il reste non classé.':'Elle ne change ni le score ni la bande FrIdéo de ce média.')+' '+avRegle()+'</dd></div>'+
-    '<div><dt>Version</dt><dd>'+avSource()+'</dd></div></dl>';
+    '<div><dt>D’où elle vient</dt><dd>'+avSource()+'</dd></div></dl>';
   }
   /* titres du jour */
   var its=[];rounds.forEach(function(r){r.arts.forEach(function(a){if(a.media===m.nom)its.push({r:r,a:a});});});

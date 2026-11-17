@@ -99,10 +99,10 @@ def panel_factice(db):
         lots[str(lot)] = {"g": [n, round(n * (i - 4) / 3)], "c": [6, round(6 * (i - 3.5) / 3)], "d": [6, round(6 * (i - 3) / 3)]}
     db.commit()
     ecrire_json("panel", "aveugle", "2026T3.json", x={"v": 1, "mesure": "aveugle", "trimestre": "2026T3", "cartes_delivrees": 21,
-                                                       "etiquette": "Panel de volontaires. Ce n'est pas un sondage.", "lots": lots})
+                                                       "etiquette": "Panel de volontaires. Ce n’est pas un sondage.", "lots": lots})
     ecrire_json("panel", "resultats", "essai-confiance.json", x={
         "v": 1, "mesure": "panel", "questionnaire": "essai-confiance", "titre": "La confiance dans les médias (essai)",
-        "etiquette": "Panel de volontaires. Ce n'est pas un sondage.", "delivres": 31, "recues": 29,
+        "etiquette": "Panel de volontaires. Ce n’est pas un sondage.", "delivres": 31, "recues": 29,
         "effectifs": {"g": 12, "c": None, "d": 13}, "scellement": "9f2c" * 16, "questions": [
             {"id": "q1", "texte": "Faites-vous confiance aux médias pour vous informer ?", "choix": ["Oui", "Plutôt", "Plutôt pas", "Non"], "profil": False,
              "par_bord": {"g": {"statut": "publiable", "reponses": 12, "par_choix": [2, 5, 3, 2]}, "c": {"statut": "moins de 5"},

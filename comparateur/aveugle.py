@@ -17,8 +17,8 @@ from . import base, config
 from .fabrique import norm
 
 TAILLE_LOT = 10
-VERSION = "lecture à l'aveugle v1"   # change si la règle de comptage change (comme methode.VERSION)
-ETIQUETTE = "Panel de volontaires. Ce n'est pas un sondage."
+VERSION = "lecture à l’aveugle v1"   # change si la règle de comptage change (comme methode.VERSION)
+ETIQUETTE = "Panel de volontaires. Ce n’est pas un sondage."
 FENETRE_LOTS = 7                      # jours : les lots proposés au panel (public/aveugle/lots.json)
 # Autres noms sous lesquels un média se cite lui-même ou cite son groupe dans un titre.
 ALIAS = {

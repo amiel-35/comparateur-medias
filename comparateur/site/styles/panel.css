@@ -1,9 +1,10 @@
 /* panel : les résultats des questionnaires, un tableau par question (réponses en lignes, bords en colonnes) */
 .pn-q{font-size:1.1rem;margin:1.4rem 0 .5rem}
-.pn{width:100%;table-layout:fixed;border-collapse:collapse;font-size:.88rem;margin:0 0 6px}
-.pn th,.pn td{text-align:left;vertical-align:top;padding:6px 6px 6px 0;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
-.pn thead th{border-bottom:2px solid var(--ink);font-weight:700}
-.pn thead th small{display:block;font-weight:400;font-size:.76rem;color:var(--mute)}
-.pn tbody th{font-weight:400}
-.pn td{font-variant-numeric:tabular-nums}
+.pnt{width:100%;table-layout:fixed;border-collapse:collapse;font-size:.88rem;margin:0 0 6px}
+.pnt th,.pnt td{text-align:left;vertical-align:top;padding:6px 6px 6px 0;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
+.pnt thead th{border-bottom:2px solid var(--ink);font-weight:700}
+.pnt thead th:first-child{width:31%}
+.pnt thead th small{display:block;font-weight:400;font-size:.76rem;color:var(--mute)}
+.pnt tbody th{font-weight:400}
+.pnt td{font-variant-numeric:tabular-nums}
 .pn-s{font-family:var(--mono);font-size:.78rem;overflow-wrap:anywhere;word-break:break-all}
