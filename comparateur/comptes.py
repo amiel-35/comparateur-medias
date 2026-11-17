@@ -39,7 +39,9 @@ CREATE TABLE IF NOT EXISTS cles (
   questionnaire TEXT PRIMARY KEY, n TEXT NOT NULL, e INTEGER NOT NULL, d TEXT NOT NULL, ouverte_jour TEXT NOT NULL);
 """
 
-ADRESSE = re.compile(r"^[^@\s<>\"',;()\[\]\\]+@[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$")
+# Une adresse simple : pas de « : » (un groupe d'adresses), pas de « =? » (un mot encodé), pas d'espace ni de
+# guillemet. Ce que l'en-tête To affiche est exactement la boîte qui reçoit.
+ADRESSE = re.compile(r"^[a-z0-9!#$%&'*+/^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/^_`{|}~-]+)*@[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$")
 CODE_SECONDES = 600          # un code vaut dix minutes
 CODE_ESSAIS = 5              # puis il est effacé
 SESSION_JOURS = 365          # douze mois : moins de codes à envoyer (quota de Brevo)
@@ -109,7 +111,11 @@ def lire(db, compte):
 
 
 def supprimer(db, compte):
-    """Efface le compte et tout ce qui en dépend (abonnements, sessions, retraits)."""
+    """Efface le compte et tout ce qui en dépend (abonnements, sessions, retraits), et un code en cours pour son
+    adresse."""
+    r = db.execute("SELECT adresse FROM comptes WHERE id = ?", (compte,)).fetchone()
+    if r:
+        db.execute("DELETE FROM codes WHERE adresse = ?", (r["adresse"],))
     n = db.execute("DELETE FROM comptes WHERE id = ?", (compte,)).rowcount
     db.commit()
     return n > 0
@@ -142,22 +148,26 @@ def demander_code(db, adresse):
 
 def verifier_code(db, adresse, code):
     """Rend l'identifiant du compte (créé à la première connexion) si le code est bon et frais, sinon None. Cinq
-    essais par code, puis il est effacé : deviner six chiffres en cinq essais ne réussit qu'une fois sur 200 000."""
+    essais par code, puis il est effacé. Chaque essai est compté avant la comparaison, d'un seul UPDATE : des
+    requêtes simultanées ne passent pas la limite. Deviner six chiffres en cinq essais ne réussit qu'une fois sur
+    200 000 ; le guichet borne en plus les codes par adresse (trois par heure) et les essais par adresse."""
     a = normaliser(adresse)
     code = str(code or "").strip()
     if not a or not re.fullmatch(r"\d{6}", code):
         return None
-    r = db.execute("SELECT sel, empreinte, expire, essais FROM codes WHERE adresse = ?", (a,)).fetchone()
-    if not r or r["expire"] < time.time() or r["essais"] >= CODE_ESSAIS:
-        if r:
-            db.execute("DELETE FROM codes WHERE adresse = ?", (a,))
-            db.commit()
-        return None
-    if not hmac.compare_digest(r["empreinte"], empreinte(r["sel"] + code)):
-        db.execute("UPDATE codes SET essais = essais + 1 WHERE adresse = ?", (a,))
+    if db.execute("UPDATE codes SET essais = essais + 1 WHERE adresse = ? AND essais < ? AND expire >= ?",
+                  (a, CODE_ESSAIS, int(time.time()))).rowcount != 1:
+        db.execute("DELETE FROM codes WHERE adresse = ? AND (essais >= ? OR expire < ?)", (a, CODE_ESSAIS, int(time.time())))
         db.commit()
         return None
-    db.execute("DELETE FROM codes WHERE adresse = ?", (a,))   # un code ne sert qu'une fois
+    db.commit()
+    r = db.execute("SELECT sel, empreinte FROM codes WHERE adresse = ?", (a,)).fetchone()
+    if not r or not hmac.compare_digest(r["empreinte"], empreinte(r["sel"] + code)):
+        return None
+    # un code ne sert qu'une fois : seule la requête qui l'efface entre
+    if db.execute("DELETE FROM codes WHERE adresse = ? AND empreinte = ?", (a, r["empreinte"])).rowcount != 1:
+        db.rollback()
+        return None
     compte = compte_de(db, a, creer=True)
     db.commit()
     return compte
@@ -200,15 +210,24 @@ def abonner(db, compte, type_, cible="", etat="actif", registre=None):
     Refus : type inconnu ou fermé, cible hors liste, plafond atteint."""
     cible = abonnements.verifier(type_, cible, registre)
     t = abonnements.type_de(type_, registre)
-    deja = db.execute("SELECT sortie FROM abonnements WHERE compte = ? AND type = ? AND cible = ?", (compte, type_, cible)).fetchone()
+    deja = db.execute("SELECT sortie, etat FROM abonnements WHERE compte = ? AND type = ? AND cible = ?", (compte, type_, cible)).fetchone()
     if deja:
+        if etat == "actif" and deja["etat"] != "actif":   # depuis le compte, l'adresse est prouvée : on active
+            db.execute("UPDATE abonnements SET etat = 'actif' WHERE sortie = ?", (deja["sortie"],))
+            db.commit()
         return deja["sortie"]
-    n = db.execute("SELECT COUNT(*) AS n FROM abonnements WHERE compte = ? AND type = ?", (compte, type_)).fetchone()["n"]
-    if n >= t.plafond:
-        raise abonnements.Refus(f"{t.plafond} au plus")
     sortie = secrets.token_urlsafe(24)
-    db.execute("""INSERT INTO abonnements (compte, type, cible, etat, cree_jour, sortie) VALUES (?, ?, ?, ?, ?, ?)""",
-               (compte, type_, cible, etat, jour(), sortie))
+    # Le plafond se vérifie dans la même instruction que l'insertion : deux requêtes simultanées ne le dépassent pas.
+    try:
+        n = db.execute("""INSERT INTO abonnements (compte, type, cible, etat, cree_jour, sortie)
+                          SELECT ?, ?, ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM abonnements WHERE compte = ? AND type = ?) < ?""",
+                       (compte, type_, cible, etat, jour(), sortie, compte, type_, t.plafond)).rowcount
+    except sqlite3.IntegrityError:   # la même ligne, ajoutée entre-temps
+        db.rollback()
+        return db.execute("SELECT sortie FROM abonnements WHERE compte = ? AND type = ? AND cible = ?", (compte, type_, cible)).fetchone()["sortie"]
+    if n != 1:
+        db.rollback()
+        raise abonnements.Refus(f"{t.plafond} au plus")
     db.commit()
     return sortie
 
@@ -247,8 +266,8 @@ def confirmer(db, sortie):
 
 
 def sortir(db, sortie):
-    """La désinscription en un clic : supprime cet abonnement. Si le compte n'a plus rien, l'adresse est effacée,
-    comme la page des mentions le promet. Rend True si une ligne a été supprimée."""
+    """La désinscription en un clic : supprime cet abonnement. Si le compte n'a plus rien (ni abonnement, ni appareil
+    connecté), l'adresse est effacée. Rend True si une ligne a été supprimée."""
     if not sortie or len(sortie) > 100:
         return False
     r = db.execute("SELECT id, compte FROM abonnements WHERE sortie = ?", (sortie,)).fetchone()
@@ -258,6 +277,14 @@ def sortir(db, sortie):
     _effacer_si_vide(db, r["compte"])
     db.commit()
     return True
+
+
+def deja_servis(db, types, cle):
+    """Les comptes qui ont déjà reçu l'envoi `cle` pour l'un de ces types : un abonnement ajouté après l'envoi du
+    jour attend le lendemain, il ne fait pas partir un second mail."""
+    marques = ",".join("?" * len(types))
+    return {r[0] for r in db.execute(f"SELECT DISTINCT compte FROM abonnements WHERE type IN ({marques}) AND dernier_envoi = ?",
+                                     (*types, cle))}
 
 
 def destinataires(db, types, cle):
@@ -284,7 +311,8 @@ def purger(db):
     borne = jour(datetime.now(timezone.utc) - timedelta(days=JOURS_SANS_CONFIRMATION))
     db.execute("DELETE FROM abonnements WHERE etat = 'attente' AND cree_jour < ?", (borne,))
     db.execute("DELETE FROM abonnements WHERE fin_jour IS NOT NULL AND fin_jour < ?", (jour(),))
+    # un compte créé aujourd'hui est épargné : sa session peut être en train de s'ouvrir
     n = db.execute("""DELETE FROM comptes WHERE id NOT IN (SELECT compte FROM abonnements)
-                      AND id NOT IN (SELECT compte FROM sessions)""").rowcount
+                      AND id NOT IN (SELECT compte FROM sessions) AND cree_jour < ?""", (jour(),)).rowcount
     db.commit()
     return n

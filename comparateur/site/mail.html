@@ -41,8 +41,8 @@ a { color: inherit; }
     <button type="button" data-action="confirmation">Confirmer l’inscription</button>
   </section>
   <section id="desinscrire" hidden>
-    <h1>Un clic supprime l’adresse de la liste</h1>
-    <p>L’adresse est effacée de la base, pas mise de côté. Plus aucun mail ne partira vers elle.</p>
+    <h1>Un clic arrête ce mail</h1>
+    <p>L’abonnement est effacé de la base, pas mis de côté. Si l’adresse ne sert plus à aucun autre mail ni à un appareil connecté au compte, elle est effacée aussi.</p>
     <button type="button" data-action="desinscription">Se désinscrire</button>
   </section>
   <section id="sans" hidden>
@@ -67,7 +67,7 @@ a { color: inherit; }
           if (r.ok) {
             msg.textContent = b.getAttribute('data-action') === 'confirmation'
               ? 'C’est fait. La synthèse de la semaine arrivera lundi.'
-              : 'C’est fait. L’adresse est supprimée.';
+              : 'C’est fait. Ce mail ne partira plus vers cette adresse.';
             return;
           }
           msg.className = 'ko'; b.disabled = r.status === 404;

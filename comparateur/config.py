@@ -126,14 +126,41 @@ def hotes():
 
 def mail_en_service():
     """Le mail est-il en service ? Le guichet le sait par ses réglages SMTP. La fabrique, qui ne tient pas la clé
-    d'envoi, le sait par COMPARATEUR_MAIL_EN_SERVICE=1 : elle s'en sert pour montrer ou non le formulaire et le lien
-    du compte dans les pages."""
-    return mail() is not None or env("COMPARATEUR_MAIL_EN_SERVICE", "0") == "1"
+    d'envoi, le lit dans public/guichet.json, que le guichet écrit à son démarrage ; COMPARATEUR_MAIL_EN_SERVICE=1
+    le force. Elle s'en sert pour montrer ou non le formulaire, le lien du compte et la ligne du cookie."""
+    if mail() is not None or env("COMPARATEUR_MAIL_EN_SERVICE", "0") == "1":
+        return True
+    try:
+        import json
+        with open(os.path.join(public(), "guichet.json"), encoding="utf-8") as f:
+            return json.load(f).get("mail") is True
+    except (OSError, ValueError, AttributeError):
+        return False
 
 
 def compte_url():
-    """Adresse de la page du compte, ou None si le mail est éteint (sans mail, pas de compte : aucun code à envoyer)."""
+    """Adresse de la page du compte, ou None si le mail est éteint (sans mail, pas de compte : aucun code à envoyer).
+    La fabrique la lit dans public/guichet.json, écrit par le guichet : les deux services disent la même adresse."""
     if not mail_en_service():
         return None
-    schema = "http" if site_url().startswith("http://") else "https"
-    return env("COMPARATEUR_COMPTE_URL", f"{schema}://{hotes()['compte']}").rstrip("/")
+    if env("COMPARATEUR_COMPTE_URL", ""):
+        return env("COMPARATEUR_COMPTE_URL", "").rstrip("/")
+    if mail() is None:
+        try:
+            import json
+            with open(os.path.join(public(), "guichet.json"), encoding="utf-8") as f:
+                url = json.load(f).get("compte")
+            if isinstance(url, str) and url.startswith(("http://", "https://")):
+                return url.rstrip("/")
+        except (OSError, ValueError, AttributeError):
+            pass
+    return _origine("compte")
+
+
+def _origine(nom):
+    """L'origine d'un des trois hôtes, avec le schéma et le port du site (en local : http://compte.localhost:8765)."""
+    s = site_url()
+    schema = "http" if s.startswith("http://") else "https"
+    hote_port = s.split("://", 1)[-1].split("/")[0]
+    port = ":" + hote_port.rsplit(":", 1)[1] if ":" in hote_port else ""
+    return f"{schema}://{hotes()[nom]}{port}"

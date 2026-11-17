@@ -46,7 +46,7 @@ h1:focus { outline: none; }
 </style>
 </head>
 <body>
-<header><a href="/">Cadrages</a></header>
+<header><a href="__SITE_URL__/">Cadrages</a></header>
 <main>
   <section id="adresse" hidden>
     <h1 tabindex="-1">Une adresse mail suffit, sans mot de passe</h1>
@@ -60,7 +60,7 @@ h1:focus { outline: none; }
   </section>
 
   <section id="code-ecran" hidden>
-    <h1 tabindex="-1">Un code vient de partir à cette adresse</h1>
+    <h1 tabindex="-1">Si l’adresse est juste, un code vient de partir</h1>
     <p>Tapez-le ici. <span class="note" id="rappel-adresse"></span></p>
     <form id="f-code">
       <label for="code">Le code à six chiffres</label>
@@ -87,7 +87,7 @@ h1:focus { outline: none; }
     </div>
     <button type="button" class="second" id="deconnexion">Se déconnecter</button>
     <button type="button" class="second" id="supprimer">Supprimer mon compte</button>
-    <p id="confirmer-suppression" hidden>L’adresse et tout ce qui la suit sont effacés de la base. Rien n’est gardé de côté.
+    <p id="confirmer-suppression" hidden>L’adresse, ses abonnements et ses connexions sont effacés de la base, avec un code de connexion en cours. Rien n’est gardé de côté.
       <button type="button" id="supprimer-oui">Supprimer pour de bon</button></p>
   </section>
 
@@ -99,8 +99,8 @@ h1:focus { outline: none; }
   'use strict';
   var $ = function (id) { return document.getElementById(id); };
   var msg = $('message'), adresse = '', etat = null;
-  /* le site public : compte.<domaine> sans « compte. » */
-  var site = location.protocol + '//' + location.host.replace(/^compte\./, '');
+  /* le site public : son adresse est écrite dans la page par le guichet */
+  var site = '__SITE_URL__';
   $('lien-site').href = site + '/'; $('lien-mentions').href = site + '/#/mentions';
   function dire(t, ko) { msg.textContent = t || ''; msg.className = ko ? 'ko' : ''; }
   function montrer(id) {
@@ -199,7 +199,7 @@ h1:focus { outline: none; }
   $('supprimer').addEventListener('click', function () { $('confirmer-suppression').hidden = false; $('supprimer-oui').focus(); });
   $('supprimer-oui').addEventListener('click', function () {
     appel('POST', '/api/compte/suppression', {}).then(function (x) {
-      if (x.statut === 200) { $('confirmer-suppression').hidden = true; dire('C’est fait. L’adresse est effacée.'); montrer('adresse'); }
+      if (x.statut === 200) { $('confirmer-suppression').hidden = true; dire('C’est fait. Le compte est effacé.'); montrer('adresse'); }
       else dire('La suppression n’a pas abouti. Réessayez plus tard.', true);
     });
   });

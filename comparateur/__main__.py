@@ -15,8 +15,7 @@
   servir               le guichet et la fabrique dans un seul processus (poste de développement)
   guichet              le guichet seul : site, compte, urne, mails (service « guichet » du compose)
   fabrique             la fabrique seule : récolte et édition, sans port (service « fabrique » du compose)
-  verser-abonnes       copie la table abonnes de comparateur.db dans identites.db (migration de la phase 2)
-  oublier-abonnes      vide la table abonnes de comparateur.db, une fois chaque ligne retrouvée dans identites.db
+  verser-abonnes       déplace la table abonnes de comparateur.db dans identites.db (le guichet le fait au démarrage)
   mail-essai <adresse> envoie à cette seule adresse la synthèse de la dernière semaine (SMTP réglé)
 """
 import secrets, sys
@@ -44,9 +43,9 @@ def main(argv):
               f"{config.edition_heure()} h (Paris)", flush=True)
         chaine.boucle(config.fabrique_minutes() or 180)
         return 0
-    if cmd in ("verser-abonnes", "oublier-abonnes"):
+    if cmd == "verser-abonnes":
         from . import migrations
-        print(migrations.verser_abonnes() if cmd == "verser-abonnes" else migrations.oublier_abonnes())
+        print(migrations.verser_abonnes())
         return 0
     db = base.connexion()
     try:

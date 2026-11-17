@@ -147,9 +147,10 @@ Allumés par les deux réglages SMTP du guichet, éteints sans eux : ni formulai
   laisse le compte vide efface l'adresse.
 - **Les envois** : la fabrique écrit `public/lettre/<semaine>.json` et `public/alertes/<jour>.json` (sujets du jour et
   rubriques lues dans l'adresse des articles) ; le guichet envoie la lettre le lundi et l'alerte chaque matin, un mail
-  par compte, une fois (`abonnements.dernier_envoi`).
-- **La migration d'`abonnes`** : `python -m comparateur verser-abonnes` puis `oublier-abonnes` (voir le document de
-  déploiement). Écrite et testée sur des données d'essai, jamais lancée sur une vraie base.
+  par compte et par jour (`abonnements.dernier_envoi`). La lettre ne part que le lundi.
+- **La migration d'`abonnes`** : le guichet déplace, à son démarrage, chaque abonné de la table `abonnes` vers
+  `identites.db`, puis le retire d'`abonnes` (`python -m comparateur verser-abonnes` fait la même chose à la main).
+  Écrite et testée sur des données d'essai, jamais lancée sur une vraie base : à essayer sur une copie d'abord.
 - **« Mes sujets » et les flux** : suivre un sujet le garde dans le navigateur (`localStorage`, clé
   `cadrages.sujets`) ; l'accueil compare la liste à l'édition. Chaque sujet a un flux Atom,
   `/flux/sujets/<id>.xml`, le même pour tous. Pas de suivi par mail (décision 3).

@@ -836,6 +836,7 @@ class Mail(unittest.TestCase):
         from comparateur import comptes
         self.appel("POST", "/api/mail/inscription", {"adresse": "lente@exemple.fr"})
         self.ident.execute("UPDATE abonnements SET cree_jour = '2026-01-01'")
+        self.ident.execute("UPDATE comptes SET cree_jour = '2026-01-01'")   # un compte du jour est épargné
         self.ident.commit()
         self.assertEqual(comptes.purger(self.ident), 1)
         self.assertEqual(self.lignes(), [])
