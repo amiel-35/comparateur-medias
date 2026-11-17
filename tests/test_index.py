@@ -42,6 +42,7 @@ class Adresses(unittest.TestCase):
             with self.subTest(x["entree"]):
                 self.assertEqual(index.normaliser(x["entree"]), x["normalisee"])
                 self.assertEqual(index.cle(x["entree"]), x["cle"])
+                self.assertEqual(index.domaine(x["entree"]), x["domaine"])
 
     def test_la_cle_est_16_caracteres_hexadecimaux(self):
         for x in vecteurs():
@@ -67,12 +68,12 @@ class Adresses(unittest.TestCase):
 const fs = require('fs'), vm = require('vm');
 const [adresse, vecteurs] = process.argv.slice(1);
 const ctx = vm.createContext({ crypto: globalThis.crypto, TextEncoder, Uint8Array, Promise, Array });
-vm.runInContext(fs.readFileSync(adresse, 'utf8') + '\nthis.n = normaliserAdresse; this.c = cleAdresse;', ctx);
+vm.runInContext(fs.readFileSync(adresse, 'utf8') + '\nthis.n = normaliserAdresse; this.c = cleAdresse; this.d = domaineAdresse;', ctx);
 (async () => {
   const mauvais = [];
   for (const v of JSON.parse(fs.readFileSync(vecteurs, 'utf8'))) {
-    const n = ctx.n(v.entree), c = await ctx.c(v.entree);
-    if (n !== v.normalisee || c !== v.cle) mauvais.push({ entree: v.entree, n, c, attendu: [v.normalisee, v.cle] });
+    const n = ctx.n(v.entree), c = await ctx.c(v.entree), d = ctx.d(v.entree);
+    if (n !== v.normalisee || c !== v.cle || d !== v.domaine) mauvais.push({ entree: v.entree, n, c, d, attendu: [v.normalisee, v.cle, v.domaine] });
   }
   console.log(JSON.stringify(mauvais));
 })();
@@ -130,9 +131,13 @@ class Contenu(unittest.TestCase):
         m = self.ix["medias"]
         self.assertEqual(m["a.test"], {"nom": "Journal A", "statut": "classe", "bande": "extreme-gauche", "score": -1.9, "ic": [-2.4, -1.4]})
         self.assertEqual(m["b.test"]["nom"], "Journal B")      # www. retiré
-        self.assertEqual(m["d.test"]["bande"], "droite")   # vu seulement dans les titres sans jumeau
+        self.assertNotIn("d.test", m)                            # vu une seule fois : moins de deux liens, pas de flux
+        ref = [{"nom": "Journal D", "score": 0.9, "flux": ["https://flux.d.test/rss"]}, {"nom": "Journal E", "score": -0.3, "flux": ["https://e.test/rss"]}]
+        m2 = index.construire(charges_d_essai(), ref=ref)["medias"]
+        self.assertEqual(m2["d.test"]["bande"], "droite")       # le domaine de son flux suffit
+        self.assertEqual(m2["e.test"]["nom"], "Journal E")      # un média de la liste, sans article dans la fenêtre
         self.assertEqual(m["fictif.test"], {"nom": "Journal fictif", "statut": "non-classe"})
-        self.assertEqual(set(m), {"a.test", "b.test", "c.test", "d.test", "fictif.test"})
+        self.assertEqual(set(m), {"a.test", "b.test", "c.test", "fictif.test"})
 
     def test_sujets_et_articles(self):
         s = self.ix["sujets"]["s1"]
@@ -140,7 +145,7 @@ class Contenu(unittest.TestCase):
         self.assertEqual(s["page"], "/editions/2026-11-15.html#/sujet/s1")
         self.assertEqual(sum(s["par"].values()), 3)             # le non classé n'est dans aucun bord
         self.assertEqual(set(s["par"]), set(base.BANDES))
-        self.assertEqual(s["silences"], ["d"])                  # 4 médias, aucun titre de la droite, un média lu à droite
+        self.assertEqual((s["medias"], s["silences"]), (3, []))   # 3 classés + 1 non classé : sous le seuil, pas de silence
         self.assertEqual(self.ix["articles"][index.cle("https://b.test/2026-11-16/s3")], "s3")
         self.assertEqual(self.ix["articles"][index.cle("https://www.b.test/2026-11-16/s3?utm=1#x")], "s3")
         self.assertEqual(len(self.ix["articles"]), 16)           # 4 liens dans chacun des 4 sujets de la fenêtre
@@ -157,26 +162,28 @@ class Contenu(unittest.TestCase):
 
     def test_hote_ambigu_ecarte(self):
         a = edition("2026-11-16", [sujet("s1", "t", [("Journal A", "https://commun.test/a"), ("Journal B", "https://commun.test/b"),
-                                                       ("Journal A", "https://a.test/x"), ("Journal C", "https://c.test/x")])])
+                                                       ("Journal A", "https://commun.test/a2"), ("Journal B", "https://commun.test/b2"),
+                                                       ("Journal A", "https://a.test/x"), ("Journal A", "https://a.test/y"),
+                                                       ("Journal C", "https://c.test/x")])])
         ix = index.construire([a])
         self.assertNotIn("commun.test", ix["medias"])
         self.assertIn("a.test", ix["medias"])
         self.assertIn(index.cle("https://commun.test/a"), ix["articles"])   # l'article reste cherchable
 
     def test_domaines_declares(self):
-        a = edition("2026-11-16", [sujet("s1", "t", [("Journal A", "https://a.test/x")])])
+        a = edition("2026-11-16", [sujet("s1", "t", [("Journal A", "https://a.test/x"), ("Journal A", "https://a.test/y")])])
         ix = index.construire([a], {"Journal A": ["www.autre.test", "A.TEST"]})
         self.assertEqual(ix["medias"]["autre.test"]["nom"], "Journal A")
         ix = index.construire([a], {"Journal B": ["a.test"]})   # un domaine déclaré chez deux médias : ambigu
         self.assertNotIn("a.test", ix["medias"])
 
     def test_aucune_donnee_personnelle(self):
-        champs = {"v", "genere_le", "methode", "classement", "medias", "sujets", "articles"}
+        champs = {"v", "genere_le", "methode", "classement", "ecrit_par_un_modele", "medias", "sujets", "articles"}
         self.assertEqual(set(self.ix), champs)
         for m in self.ix["medias"].values():
             self.assertLessEqual(set(m), {"nom", "statut", "bande", "score", "ic"})
         for s in self.ix["sujets"].values():
-            self.assertEqual(set(s), {"titre", "jour", "par", "silences", "page"})
+            self.assertEqual(set(s), {"titre", "jour", "par", "medias", "silences", "page"})
         for k, v in self.ix["articles"].items():
             self.assertRegex(k, r"^[0-9a-f]{16}$")            # des empreintes, pas des adresses
         brut = json.dumps(self.ix, ensure_ascii=False)
@@ -188,7 +195,7 @@ class Contenu(unittest.TestCase):
         """Sans `versions`, sans `statut`, sans `classement` ni `non_classes`, sans `seuls`."""
         c = {"medias": [{"nom": "Journal A", "score": -1.9}, {"nom": "Journal B", "score": -0.5}],
              "sujets": [sujet("s1", "t", [("Journal A", "https://a.test/x"), ("Journal B", "https://b.test/x")])]}
-        ix = index.construire([("2026-11-16", c)])
+        ix = index.construire([("2026-11-16", c)], ref=[{"nom": "Journal A", "score": -1.9, "flux": ["https://a.test/rss"]}])
         self.assertEqual((ix["methode"], ix["classement"]), ("", ""))
         self.assertEqual(ix["medias"]["a.test"], {"nom": "Journal A", "statut": "classe", "bande": "extreme-gauche", "score": -1.9, "ic": None})
         self.assertEqual(index.construire([])["genere_le"], "")

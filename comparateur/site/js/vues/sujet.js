@@ -34,7 +34,7 @@ function sujetView(r){
   if(r.fait)h+='<div class="fait"><span class="mono">Le fait commun'+mdl()+'</span><p>'+esc(r.fait)+'</p></div>';
   /* qui en parle */
   h+='<h2>Qui en parle</h2><p class="note">Les titres, comptés sur les sept bandes de FrIdéo. Par formule, sans modèle.</p>'+brows(r);
-  if(r.kind==='sujet')h+='<div class="chips">'+(r.sil.length?silChip(r)+'<span class="note">Aucun média de '+(r.sil.length>1?'ces côtés':'ce côté')+' n’a de titre rangé sous ce sujet, repris par '+r.nmed+' médias. <a href="#/silences">Tous les silences de l’édition</a>.</span>':r.large?'<span class="note">Gauche, centre et droite ont chacun au moins un titre sur ce sujet.</span>':'<span class="note">Sujet repris par moins de '+MIN+' médias : les silences n’y sont pas relevés.</span>')+'</div>';
+  if(r.kind==='sujet')h+='<div class="chips">'+(r.sil.length?silChip(r)+'<span class="note">Aucun média de '+(r.sil.length>1?'ces côtés':'ce côté')+' n’a de titre rangé sous ce sujet, repris par '+r.nmed+' médias. <a href="#/silences">Tous les silences de l’édition</a>.</span>':r.large?'<span class="note">Gauche, centre et droite ont chacun au moins un titre sur ce sujet.</span>':'<span class="note">Sujet repris par moins de '+MIN+' médias classés : les silences n’y sont pas relevés.</span>')+'</div>';
   if(r.div!=null){h+='<p><span class="mono">Écart de cadrage</span> <span class="dots" aria-label="'+r.div+' sur 5">'+'●'.repeat(r.div)+'○'.repeat(5-r.div)+'</span> '+r.div+' sur 5'+mdl()+'</p>';}
   /* face à face */
   h+='<h2>'+(r.kind==='sujet'?'Le même fait, trois formulations':'Les titres, côté par côté')+'</h2>';

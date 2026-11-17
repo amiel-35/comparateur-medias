@@ -29,12 +29,14 @@ rounds.forEach(function(r,i){
   r.arts.forEach(function(a){tous[a.media]=1;if(!a.grp)return;r.count[a.grp]++;r.med[a.grp][a.media]=1;r.par[a.bord]++;r.medb[a.bord][a.media]=1;});
   /* la couverture compte tous les médias lus, classés ou non ; les bords et les silences, les classés seulement */
   r.nmed=Object.keys(tous).length;
+  /* le seuil des silences se juge sur les médias classés seuls : un non classé n'en fait naître aucun */
+  r.nmedc=Object.keys(Object.assign({},r.med.g,r.med.c,r.med.d)).length;
   r.nc=r.arts.filter(function(a){return !a.grp;});
   /* bord sans titre : un bord qui a au moins un média lu et aucun titre sous ce sujet (détail, sur sept bords).
      Un silence : tout un côté (g, c ou d) sans aucun titre, sur un sujet repris par MIN médias ou plus.
      Sur sept bords, presque chaque sujet aurait un absent : le repère ne dirait plus rien. */
   r.mortes=BORDS.filter(function(b){return LUS[b]>0&&r.par[b]===0;});
-  r.large=r.kind==='sujet'&&r.nmed>=MIN;
+  r.large=r.kind==='sujet'&&r.nmedc>=MIN;
   r.sil=r.large?COTES.filter(function(x){return LUSC[x]>0&&r.count[x]===0;}):[];
 });
 var LARGES=rounds.filter(function(r){return r.large;});

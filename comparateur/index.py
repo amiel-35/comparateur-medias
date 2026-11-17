@@ -14,7 +14,7 @@ VERSION = 1
 FENETRE_JOURS = 7
 PREFIXES = ("www", "m", "mobile", "amp")
 _BORDS = " \t\n\r\f\v"
-_ADRESSE = re.compile(r"^(https?)://([^/?#]*)([^?#]*)", re.IGNORECASE)
+_ADRESSE = re.compile(r"^(https?)://([^/?#]*)([^?#]*)", re.IGNORECASE | re.ASCII)   # ASCII : « ſ » n'est pas un s
 _PORT = re.compile(r":[0-9]*\Z")
 
 
@@ -69,6 +69,18 @@ def hote(adresse):
     return None if n is None else n.split("/", 1)[0]
 
 
+def domaine(adresse):
+    """Le domaine d'une adresse : les deux dernières étiquettes de son hôte normalisé (lemonde.fr pour
+    abonnes.lemonde.fr). C'est sur lui que se reconnaît un média. Un hôte numérique (une adresse IP) reste entier.
+    Limite écrite : un suffixe à deux étiquettes (gouv.fr, co.uk) donnerait un domaine trop large ; aucun média du
+    panel n'en a. Même règle en JavaScript (domaineAdresse), mêmes vecteurs."""
+    h = hote(adresse)
+    if h is None:
+        return None
+    et = h.split(".")
+    return h if et[-1].isdigit() else ".".join(et[-2:])
+
+
 def _fenetre(charges):
     """Les éditions des sept derniers jours, la dernière édition gardée comprise."""
     charges = sorted(charges, key=lambda c: c[0])
@@ -78,65 +90,85 @@ def _fenetre(charges):
     return [c for c in charges if c[0] >= debut]
 
 
-def construire(charges, domaines_declares=None):
-    """L'index (format v 1) à partir des éditions gardées [(jour, charge)]. domaines_declares : {nom du média:
-    [domaines]}, facultatif, ajouté aux hôtes vus dans les liens des articles."""
+VUS_MINI = 2   # un domaine vu dans les liens d'un média compte à partir de deux articles de la fenêtre
+
+
+def construire(charges, domaines_declares=None, ref=None):
+    """L'index (format v 1) à partir des éditions gardées [(jour, charge)].
+
+    Les médias sont rangés par domaine (index.domaine). Le domaine d'un média vient de trois sources, toutes déjà
+    publiques : ses flux (ref, la liste de medias.json), les liens de ses articles dans la fenêtre (deux au moins),
+    et les domaines déclarés (domaines_declares, facultatif). Un domaine revendiqué par deux médias est ambigu et
+    n'entre pas : un agrégateur ou une plateforme vidéo ne reçoit la bande de personne. Tous les médias de ref y
+    sont, lus ou non dans la fenêtre."""
     fen = _fenetre(charges)
-    vus, medias_lus, sujets, articles = {}, {}, {}, {}   # vus : hôte -> noms de médias
+    candidats, vus, connus, sujets, articles = {}, {}, {}, {}, {}   # domaine -> noms ; (nom, domaine) -> nombre
+    for m in ref or []:
+        connus[m["nom"]] = {"nom": m["nom"], "score": m.get("score"), "ic": m.get("ic"), "statut": base.statut(m.get("score"))}
+        for f in m.get("flux", []):
+            d = domaine(f)
+            if d:
+                candidats.setdefault(d, set()).add(m["nom"])
     for jour, charge in fen:
         bord = syntheses.bords_des_medias(charge)
         lus = syntheses.medias_lus(bord)
         ic = {m["nom"]: m.get("ic") for m in charge.get("classement", {}).get("medias", [])}
         for m in charge.get("medias", []):
             note = m.get("score")
-            medias_lus[m["nom"]] = {"nom": m["nom"], "score": note, "ic": ic.get(m["nom"]),
-                                    "statut": m.get("statut") or base.statut(note)}
+            connus.setdefault(m["nom"], {"nom": m["nom"], "score": note, "ic": ic.get(m["nom"]),
+                                         "statut": m.get("statut") or base.statut(note)})
         for nom in charge.get("non_classes", []):
-            medias_lus.setdefault(nom, {"nom": nom, "score": None, "ic": None, "statut": "non-classe"})
+            connus.setdefault(nom, {"nom": nom, "score": None, "ic": None, "statut": "non-classe"})
         for s in charge.get("sujets", []):
             noms = [a["media"] for a in s["articles"]]
             par = syntheses.repartition(noms, bord)
-            sujets[s["id"]] = {"titre": s["titre"], "jour": jour, "par": par,
-                               "silences": syntheses.silencieux(par, lus, len(set(noms))),
+            n = syntheses.classes(noms, bord)
+            sujets[s["id"]] = {"titre": s["titre"], "jour": jour, "par": par, "medias": n,
+                               "silences": syntheses.silencieux(par, lus, n),
                                "page": f"/editions/{jour}.html#/sujet/{s['id']}"}
             for a in s["articles"]:
                 k = cle(a.get("lien"))
                 if k:
                     articles[k] = s["id"]
         for a in [a for s in charge.get("sujets", []) for a in s["articles"]] + charge.get("seuls", []):
-            h = hote(a.get("lien"))
-            if h:
-                vus.setdefault(h, set()).add(a["media"])
+            d = domaine(a.get("lien"))
+            if d:
+                vus[(a["media"], d)] = vus.get((a["media"], d), 0) + 1
+    for (nom, d), n in vus.items():
+        if n >= VUS_MINI:
+            candidats.setdefault(d, set()).add(nom)
     for nom, doms in (domaines_declares or {}).items():
-        for d in doms:
-            h = hote("https://" + d)
-            if h:
-                vus.setdefault(h, set()).add(nom)
+        for x in doms:
+            d = domaine("https://" + x)
+            if d:
+                candidats.setdefault(d, set()).add(nom)
     medias = {}
-    for h, noms in sorted(vus.items()):
+    for d, noms in sorted(candidats.items()):
         if len(noms) != 1:
-            continue   # un hôte partagé entre deux médias est ambigu : il n'entre pas
-        m = medias_lus.get(next(iter(noms)))
+            continue   # un domaine revendiqué par deux médias est ambigu : il n'entre pas
+        m = connus.get(next(iter(noms)))
         if not m:
             continue
         if m["statut"] == "classe" and m["score"] is not None:
-            medias[h] = {"nom": m["nom"], "statut": "classe", "bande": base.bord(m["score"]), "score": m["score"],
+            medias[d] = {"nom": m["nom"], "statut": "classe", "bande": base.bord(m["score"]), "score": m["score"],
                          "ic": m["ic"]}
         else:
-            medias[h] = {"nom": m["nom"], "statut": "non-classe"}
+            medias[d] = {"nom": m["nom"], "statut": "non-classe"}
     v = fen[-1][1].get("versions", {}) if fen else {}
     return {"v": VERSION, "genere_le": fen[-1][0] if fen else "", "methode": v.get("methode") or "",
-            "classement": v.get("classement") or "", "medias": medias, "sujets": sujets, "articles": articles}
+            "classement": v.get("classement") or "", "ecrit_par_un_modele": ["sujets.*.titre"],
+            "medias": medias, "sujets": sujets, "articles": articles}
 
 
-def _domaines_declares():
+def _ref():
     with open(os.path.join(config.ICI, "medias.json"), encoding="utf-8") as f:
-        return {m["nom"]: m["domaines"] for m in json.load(f)["medias"] if m.get("domaines")}
+        return json.load(f)["medias"]
 
 
 def ecrire(pub, charges):
     """Écrit public/index.json : une seule adresse, les mêmes octets pour tous, écriture atomique."""
-    texte = json.dumps(construire(charges, _domaines_declares()), sort_keys=True, separators=(",", ":"),
+    ref = _ref()
+    texte = json.dumps(construire(charges, {m["nom"]: m["domaines"] for m in ref if m.get("domaines")}, ref), sort_keys=True, separators=(",", ":"),
                        ensure_ascii=False)
     chemin = os.path.join(pub, "index.json")
     with open(chemin + ".tmp", "w", encoding="utf-8") as f:

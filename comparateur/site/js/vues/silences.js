@@ -16,7 +16,7 @@ function vSilences(){
     if(!LUSC[x])h+='<p class="vide">Aucun journal de ce côté n’a été lu ce jour-là. Ses silences ne sont pas comptés.</p>';
     else if(!l.length)h+='<p class="vide">Aucun silence : ce côté a au moins un titre sur chaque sujet repris par '+MIN+' médias ou plus.</p>';
     else h+='<ul class="pl">'+l.map(function(r){
-      return '<li><a href="#/sujet/'+r.id+'">'+esc(r.titre)+'</a>'+mdl()+'<span class="pm mono mute" style="display:block;margin:4px 0 6px;font-size:.72rem">'+pl(r.nmed,'média en parle','médias en parlent')+' ailleurs · '+pl(r.arts.length,'titre','titres')+'</span>'+bar5(r.par)+'</li>';
+      return '<li><a href="#/sujet/'+r.id+'">'+esc(r.titre)+'</a>'+mdl()+'<span class="pm mono mute" style="display:block;margin:4px 0 6px;font-size:.72rem">'+pl(r.nmed,'média en parle','médias en parlent')+' · '+pl(r.arts.length,'titre','titres')+'</span>'+bar5(r.par)+'</li>';
     }).join('')+'</ul>';
     h+='</div></section>';
   });

@@ -79,7 +79,7 @@ class Export(unittest.TestCase):
         self.assertEqual({m["statut"] for m in doc["medias"]}, {"classe"})
         for m in doc["medias"]:                                   # le bord se relit dans le score
             self.assertEqual(m["bande"], base.bord(m["score"]))
-        self.assertEqual(doc["versions"], {"methode": "", "classement": ""})   # base d'essai sans versions
+        self.assertEqual(doc["versions"], {"methode": "", "classement": "FrIdéo v1.0"})   # avant la méthode 1.0
         self.assertEqual(export.edition("2026-11-01", {}, None)["sujets"], [])  # même une charge vide
         schema.verifier(export.edition("2026-11-01", {}, None), self.schema)
 

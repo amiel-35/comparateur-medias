@@ -98,17 +98,21 @@ def migrer(db):
 
 def migrer_versions(db):
     """Les colonnes editions.methode et editions.classement. Une édition déjà gardée reçoit les versions qui l'ont
-    produite, sans que ses données soient réécrites : méthode '' (elle précède la version 1.0, première numérotée),
+    produite, sans que ses données soient réécrites : méthode '' si elle précède la version 1.0 (première numérotée),
+    la version 1.0 si elle est de son jour ou d'après,
     classement relu dans la source citée par l'édition elle-même (« FrIdéo v1.0 »), '' s'il n'y figure pas."""
+    from . import methode
     colonnes = {c[1] for c in db.execute("PRAGMA table_info(editions)")}
-    if {"methode", "classement"} <= colonnes:
+    if not colonnes:   # pas de table editions (une base partielle, dans un essai)
         return False
     try:
         for c in ("methode", "classement"):
             if c not in colonnes:
                 db.execute(f"ALTER TABLE editions ADD COLUMN {c} TEXT")
     except sqlite3.OperationalError:   # une autre connexion vient de les ajouter
-        return False
+        pass
+    # Les lignes encore sans version : celles d'avant les colonnes, et celles qu'un arrêt entre l'ALTER et l'UPDATE
+    # aurait laissées. Une édition faite le jour de la version 1.0 ou après en suit les règles.
     maj = []
     for jour, donnees in db.execute("SELECT jour, donnees FROM editions WHERE methode IS NULL").fetchall():
         try:
@@ -116,7 +120,9 @@ def migrer_versions(db):
         except ValueError:
             source = ""
         m = re.search(r"FrIdéo v[\d.]+\d", source)
-        maj.append(("", m.group(0) if m else "", jour))
+        maj.append((methode.VERSION if jour >= methode.DATE else "", m.group(0) if m else "", jour))
+    if not maj:
+        return False
     db.executemany("UPDATE editions SET methode = ?, classement = ? WHERE jour = ?", maj)
     db.commit()
     return True

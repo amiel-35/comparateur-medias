@@ -102,8 +102,8 @@ règle, relevé dans l'historique du dépôt. Une version change quand une règl
 ## Le service des fichiers
 
 Les pages d'édition ne portent que leur HTML et leurs données. Le CSS et le JavaScript sont écrits dans
-`public/actifs/site-<empreinte>.css` et `.js` (12 caractères du SHA-256 du contenu) ; les anciens sont retirés à
-chaque écriture. Le serveur envoie les pages et les données avec `Cache-Control: public, max-age=300`, `sw.js` avec
+`public/actifs/site-<empreinte>.css` et `.js` (12 caractères du SHA-256 du contenu) ; un ancien actif reste un jour après
+la dernière publication qui le citait (`actifs/retires.json`), pour les pages encore en cache. Le serveur envoie les pages et les données avec `Cache-Control: public, max-age=300`, `sw.js` avec
 `no-cache`, les actifs avec `public, max-age=31536000, immutable`, et l'API avec `no-store`. Chaque fichier a un
 `ETag` et répond `304` à un `If-None-Match` qui correspond. Si le navigateur accepte `gzip`, le texte (HTML, CSS,
 JS, JSON, SVG, manifest) de plus de 1 Ko part compressé, avec `Vary: Accept-Encoding` ; la version compressée est

@@ -78,6 +78,8 @@ def edition(jour, ancienne=False):
 db = base.connexion()
 db.execute("DELETE FROM editions")
 for j in JOURS:
-    db.execute("INSERT INTO editions (jour, cree, donnees) VALUES (?,?,?)", (j, base.iso(), json.dumps(edition(j, ancienne=(j == JOURS[0])), ensure_ascii=False)))
+    # les versions, comme les écrit publier.enregistrer_edition : ces éditions d'essai précèdent la méthode 1.0
+    db.execute("INSERT INTO editions (jour, cree, donnees, methode, classement) VALUES (?,?,?,?,?)",
+               (j, base.iso(), json.dumps(edition(j, ancienne=(j == JOURS[0])), ensure_ascii=False), "", publier.VERSION_CLASSEMENT))
 db.commit()
 print(publier.ecrire_pages(db), config.public())

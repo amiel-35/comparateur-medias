@@ -13,7 +13,7 @@ Fichiers : <public>/export/editions/<jour>.json, <public>/export/editions.json (
 """
 import json, os
 
-from . import base, config, schema, syntheses
+from . import base, config, schema, syntheses, methode
 
 VERSION = 1
 CHEMIN_SCHEMA = os.path.join(config.ICI, "export_schema.json")
@@ -26,6 +26,7 @@ LICENCES = {
 
 # Les champs écrits par un modèle de langage (règle 7 de DOCTRINE.md : tout texte écrit par un modèle porte
 # l'étiquette « écrit par un modèle »).
+NON_ANALYSE = "Sujet non analysé"   # le texte que publier.donnees_du_jour écrit à la place d'une analyse
 ECRIT_PAR_UN_MODELE = ["sujets[].analyse", "sujets[].divergence", "sujets[].fait", "sujets[].mots", "sujets[].titre"]
 
 
@@ -48,11 +49,13 @@ def _sujet(s, bord, lus):
     analyse = s.get("analyse") if isinstance(s.get("analyse"), dict) else {}
     return {"id": _texte(s.get("id")), "titre": _texte(s.get("titre")), "fait": _texte(s.get("fait")),
             "divergence": _entier(s.get("divergence"), None),
-            "analyse": {k: _texte(analyse.get(k)) for k in "gcd"},
+            # un sujet non analysé porte un texte écrit par le code (« Sujet non analysé ») : il sort vide, pour que
+            # tout texte de « analyse » soit bien écrit par un modèle
+            "analyse": {k: "" if _texte(analyse.get(k)).startswith(NON_ANALYSE) else _texte(analyse.get(k)) for k in "gcd"},
             "mots": [{"terme": _texte(m.get("terme")), "qui": _texte(m.get("qui"))}
                      for m in s.get("mots") or [] if isinstance(m, dict)],
             "articles": arts, "par_bande": par,
-            "cotes_silencieux": syntheses.silencieux(par, lus, len(set(noms)))}
+            "cotes_silencieux": syntheses.silencieux(par, lus, syntheses.classes(noms, bord))}
 
 
 def edition(jour, charge, versions):
@@ -71,6 +74,9 @@ def edition(jour, charge, versions):
     return {
         "v": VERSION, "jour": jour,
         "versions": {"methode": _texte(versions.get("methode")), "classement": _texte(versions.get("classement"))},
+        # Les bandes, par_bande et cotes_silencieux sont refaits à chaque publication, avec la méthode en vigueur :
+        # la version de ces comptages, distincte de celle qui a fait l'édition.
+        "methode_des_comptages": methode.VERSION,
         "licences": dict(LICENCES), "ecrit_par_un_modele": list(ECRIT_PAR_UN_MODELE),
         "heures": _entier(charge.get("heures"), 24), "total": _entier(charge.get("total"), 0),
         "medias": medias,

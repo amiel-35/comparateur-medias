@@ -18,11 +18,20 @@ function normaliserAdresse(u){
   else if(chemin.length>1&&chemin.charAt(chemin.length-1)==='/')chemin=chemin.slice(0,-1);
   return hote+chemin;
 }
+/* Le domaine : les deux dernières étiquettes de l'hôte normalisé ; un hôte numérique reste entier. C'est sur lui que
+   l'index reconnaît un média (comparateur/index.py, domaine). */
+function domaineAdresse(u){
+  var n=normaliserAdresse(u);if(n===null)return null;
+  var h=n.split('/')[0],et=h.split('.');
+  return /^[0-9]+$/.test(et[et.length-1])?h:et.slice(-2).join('.');
+}
 /* Les 16 premiers caractères hexadécimaux du SHA-256 de la forme normalisée (UTF-8). Rend une promesse : null si
    l'adresse n'a pas de forme normalisée. */
 function cleAdresse(u){
   var n=normaliserAdresse(u);
   if(n===null)return Promise.resolve(null);
+  /* hors contexte sûr (http hors localhost), crypto.subtle n'existe pas : une promesse rejetée, pas une exception */
+  if(typeof crypto==='undefined'||!crypto.subtle)return Promise.reject(new Error('crypto'));
   return crypto.subtle.digest('SHA-256',new TextEncoder().encode(n)).then(function(b){
     return Array.prototype.map.call(new Uint8Array(b),function(x){return ('0'+x.toString(16)).slice(-2);}).join('').slice(0,16);
   });
