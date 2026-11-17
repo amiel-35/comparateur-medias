@@ -168,7 +168,9 @@ async function etats(page, chemin) {
     await page.route('**/api/lot', r => r.fulfill({ json: { lot: null, restants: 0 } }));
     await page.addInitScript(() => { try { localStorage.setItem('comparateur.jeton', 'essai'); } catch (e) {} });
   } else if (chemin.startsWith('COMPTE')) {
-    const reg = await (await fetch(B + '/api/compte/registre', { headers: { Host: new URL(COMPTE).host } })).json();
+    // le registre, demandé au vrai serveur sous le nom d'hôte du compte (fetch de Node ne laisse pas changer Host)
+    const reg = await new Promise((ok, ko) => require('http').get({ host: new URL(B).hostname, port: new URL(B).port, path: '/api/compte/registre',
+      headers: { Host: new URL(COMPTE).host } }, r => { let t = ''; r.on('data', x => t += x); r.on('end', () => ok(JSON.parse(t))); }).on('error', ko));
     await page.route('**/api/compte', r => chemin === 'COMPTE#compte' ? r.fulfill({ json: Object.assign({}, SAIT, reg) }) : r.fulfill({ status: 401, json: {} }));
     await page.route('**/api/compte/code', r => r.fulfill({ status: 202, json: { ok: true } }));
   } else if (chemin.startsWith('/mail.html#confirmer') || chemin.startsWith('/mail.html#desinscrire')) {

@@ -42,6 +42,7 @@ button:disabled { opacity: .5; cursor: default; }
 .pot { position: absolute; left: -9999px; }
 a { color: inherit; }
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+h1:focus { outline: none; }
 </style>
 </head>
 <body>
@@ -112,19 +113,28 @@ a { color: inherit; }
       .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { statut: r.status, d: d }; }); });
   }
   function texte(x) { return x == null ? '' : String(x); }
+  /* les dates de la base, lisibles : 2026-11-17 en 17/11/2026, 2026-11 en 11/2026, 2026-S46 en semaine 46 de 2026 */
+  function date(x) {
+    x = texte(x); var m;
+    if ((m = /^(\d{4})-(\d\d)-(\d\d)$/.exec(x))) return m[3] + '/' + m[2] + '/' + m[1];
+    if ((m = /^(\d{4})-(\d\d)$/.exec(x))) return m[2] + '/' + m[1];
+    if ((m = /^(\d{4})-S(\d\d)$/.exec(x))) return 'la semaine ' + Number(m[2]) + ' de ' + m[1];
+    return x;
+  }
   function li(t) { var e = document.createElement('li'); e.textContent = t; return e; }
 
   /* « Ce que ce site sait de vous » : engendré depuis les lignes du compte rendues par le serveur, rien d'écrit à la main */
   function afficher(r) {
     etat = r;
     var s = r.sait, g = $('garde-site'), noms = {};
+    r.registre = r.registre || [];
     r.registre.forEach(function (t) { noms[t.type] = t; });
-    g.replaceChildren(li('Votre adresse : ' + texte(s.compte.adresse) + ', depuis le ' + texte(s.compte.cree_jour) + '.'));
-    if (s.compte.vu_mois) g.appendChild(li('Le mois de votre dernière visite : ' + texte(s.compte.vu_mois) + '.'));
+    g.replaceChildren(li('Votre adresse : ' + texte(s.compte.adresse) + ', depuis le ' + date(s.compte.cree_jour) + '.'));
+    if (s.compte.vu_mois) g.appendChild(li('Le mois de votre dernière visite : ' + date(s.compte.vu_mois) + '.'));
     s.abonnements.forEach(function (a) {
       var t = noms[a.type], cible = a.cible && t && t.cibles ? (t.cibles.filter(function (c) { return c.cible === a.cible; })[0] || {}).nom : '';
       g.appendChild(li((t ? t.nom : a.type) + (cible ? ' : ' + cible : '') + (a.etat === 'attente' ? ' (inscription à confirmer)' : '') +
-        ', depuis le ' + texte(a.cree_jour) + (a.dernier_envoi ? '. Dernier envoi : ' + texte(a.dernier_envoi) : '') + '.'));
+        ', depuis le ' + date(a.cree_jour) + (a.dernier_envoi ? '. Dernier envoi : ' + date(a.dernier_envoi) : '') + '.'));
     });
     g.appendChild(li(s.sessions.length > 1 ? s.sessions.length + ' appareils connectés, chacun jusqu’à un an.' : 'Un appareil connecté, jusqu’à un an.'));
     var actifs = {};
@@ -195,7 +205,7 @@ a { color: inherit; }
   });
   function charger() {
     appel('GET', '/api/compte').then(function (x) {
-      if (x.statut === 200) { afficher(x.d); montrer('compte'); } else montrer('adresse');
+      if (x.statut === 200 && x.d && x.d.sait) { afficher(x.d); montrer('compte'); } else montrer('adresse');
     }, function () { montrer('adresse'); dire('Pas de réseau. Réessayez plus tard.', true); });
   }
   charger();
