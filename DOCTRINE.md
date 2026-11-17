@@ -5,10 +5,11 @@ avant de toucher à `comparateur/site/`.
 
 ## Le principe
 
-Le lecteur reçoit **une page unique**, sans dépendance, qui contient son HTML, son CSS, son JavaScript et les
-données de l'édition. Cette page n'est écrite par personne : `publier.gabarit()` l'assemble à partir de
-morceaux, puis `publier.ecrire_pages` y injecte les données. Il n'y a pas d'outil de construction : l'assemblage
-tient en dix lignes de Python.
+Le lecteur reçoit **une page**, sans dépendance, qui porte son HTML et les données de l'édition, et deux fichiers
+partagés : un CSS et un JavaScript, nommés par leur empreinte (`public/actifs/site-<empreinte>.css` et `.js`). Cette
+page n'est écrite par personne : `publier.gabarit()` assemble la page entière à partir de morceaux,
+`publier.gabarit_en_actifs()` en sort le CSS et le JavaScript, puis `publier.ecrire_pages` injecte les données.
+Il n'y a pas d'outil de construction : l'assemblage tient en quelques dizaines de lignes de Python.
 
 ```
 comparateur/site/
@@ -21,6 +22,7 @@ comparateur/site/
   js/commun.js        les briques d'affichage partagées
   js/vues/<vue>.js    une vue par fichier
   js/routage.js       les routes #/…, le thème, le pied de page
+  (publiés dans public/actifs/ sous des noms d'empreinte : le CSS en un fichier, le JavaScript en un fichier)
   aveugle.html        la page du vote à l'aveugle, à part
   mail.html           la page qui confirme ou supprime une inscription au mail de la semaine, à part
   manifest.webmanifest, sw.js, icone-*.png, apple-touch-icon.png   l'application installable (essais/icones.py)
@@ -107,21 +109,26 @@ que sur `aveugle.html` (focus invisible, contraste du message d'erreur, deux ét
 une erreur de console, un défilement horizontal ou un « undefined » à l'écran, et écrit l'empreinte de chaque
 capture. Pour un changement qui ne doit rien changer à l'écran (un rangement, un découpage), on compare le
 fichier d'empreintes avant et après : il doit être identique. C'est ainsi que le découpage du gabarit a été
-vérifié, sur 252 pages.
+vérifié, sur 252 pages, puis la sortie du CSS et du JavaScript hors des pages, sur 300.
 
 ## Monter en puissance
 
 Ce qui tient déjà : une visite ne touche ni la base ni un modèle, et le coût de la fabrique ne dépend pas du
 nombre de lecteurs. Ce qui reste à faire, par ordre d'utilité, quand l'audience le demandera :
 
-1. **Un cache devant le serveur.** Les pages sont déjà servies avec `Cache-Control: public, max-age=300`.
-   Un cache (CDN, ou celui du proxy) absorbe alors presque tout le trafic. Aucun changement de code.
-2. **La limite de débit sur l'API seulement.** Aujourd'hui les 300 requêtes par minute et par adresse valent
-   aussi pour les pages. Des lecteurs derrière une même adresse (entreprise, opérateur mobile) peuvent se
-   bloquer entre eux.
-3. **La compression.** Le serveur n'envoie pas les pages compressées. Une page pèse plus de 100 Ko.
-4. **Le code hors des pages.** Chaque page d'édition embarque tout le CSS et le JavaScript. Les servir en
-   deux fichiers partagés, nommés par leur empreinte, ne laisserait dans chaque page que ses données. Le
-   découpage en morceaux rend ce pas simple : `publier.gabarit()` est le seul endroit à changer.
+1. **Un cache devant le serveur.** Fait côté serveur (17/11/2026) : pages et données en `Cache-Control: public,
+   max-age=300`, `sw.js` en `no-cache`, actifs d'empreinte en `public, max-age=31536000, immutable`, API en
+   `no-store`. Chaque fichier a un `ETag` et répond `304`. Reste : mettre un CDN ou le cache du proxy devant, sans
+   changement de code.
+2. **La limite de débit sur l'API seulement.** Fait : les 300 requêtes par minute et par adresse ne valent plus
+   que pour `/api/`. Les fichiers publics et `/sante` ne sont pas limités. Reste : le compteur est en mémoire,
+   par processus.
+3. **La compression.** Fait : `gzip` pour le texte de plus de 1 Ko si le navigateur l'accepte (`q=0` compris),
+   `Vary: Accept-Encoding`, version compressée gardée en mémoire (bornée). Reste : `br` (pas dans la bibliothèque
+   standard), et la compression à la publication plutôt qu'à la première demande.
+4. **Le code hors des pages.** Fait : une page d'édition ne porte plus que son HTML et ses données ; le CSS et le
+   JavaScript sont deux fichiers d'empreinte, partagés par toutes les éditions. Mesuré le 17/11/2026 sur une
+   édition d'essai : 142 Ko avant, 53 Ko après ; actifs 89 Ko. Les captures des 300 vues sont identiques avant et
+   après. Reste : `aveugle.html` et `mail.html` gardent leur code en ligne (une page, peu de visites).
 5. **Les votes.** SQLite et un seul conteneur suffisent pour un cercle invité. Ouvrir le vote demande
    PostgreSQL et une limite de débit partagée : voir « Limites connues » du `README.md`.

@@ -1,5 +1,5 @@
 """Tests du back-end, sans réseau ni modèle.  Depuis back/ :  python3 -m unittest discover -s tests -v"""
-import json, os, shutil, sys, tempfile, threading, unittest, urllib.error, urllib.request
+import json, os, re, shutil, sys, tempfile, threading, unittest, urllib.error, urllib.request
 
 DOSSIER = tempfile.mkdtemp(prefix="comparateur-test-")
 os.environ["COMPARATEUR_DONNEES"] = DOSSIER
@@ -647,9 +647,16 @@ class Application(unittest.TestCase):
                             '<link rel="apple-touch-icon" href="/apple-touch-icon.png">',
                             'name="theme-color" content="#f1ede4" media="(prefers-color-scheme: light)"',
                             'name="theme-color" content="#14130f" media="(prefers-color-scheme: dark)"',
-                            '<meta name="apple-mobile-web-app-title" content="Cadrages">',
-                            "navigator.serviceWorker.register('/sw.js')"):
+                            '<meta name="apple-mobile-web-app-title" content="Cadrages">'):
                 self.assertIn(attendu, page, nom)
+            # l'enregistrement du service worker : dans la page d'aveugle, dans le script à côté pour l'accueil
+            if nom == "aveugle.html":
+                code = page
+            else:
+                script = re.search(r'<script src="(/actifs/site-[0-9a-f]{12}\.js)">', page).group(1)
+                with open(os.path.join(self.pub, script.lstrip("/")), encoding="utf-8") as f:
+                    code = f.read()
+            self.assertIn("navigator.serviceWorker.register('/sw.js')", code, nom)
         page = publier.gabarit()
         self.assertIn("function vInstaller()", page)
         self.assertIn("v==='installer'", page)
