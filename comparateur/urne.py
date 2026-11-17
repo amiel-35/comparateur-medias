@@ -25,7 +25,7 @@ PROFIL_MODALITES = 5    # une question de profil a cinq modalités au plus : plu
 CHOIX = (2, 7)          # de deux à sept réponses possibles par question
 SEUIL_RIEN = 5          # sous 5 réponses dans un bord : rien n'est montré (décision D8)
 SEUIL_PUBLIABLE = 10    # 10 réponses par bord pour un résultat sans réserve
-ETIQUETTE = "Panel de volontaires. Ce n'est pas un sondage."
+ETIQUETTE = "Panel de volontaires. Ce n’est pas un sondage."
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (cle TEXT PRIMARY KEY, valeur TEXT NOT NULL) WITHOUT ROWID;

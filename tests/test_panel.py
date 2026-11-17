@@ -252,7 +252,7 @@ class Parcours(unittest.TestCase):
                 urne.resultats(q["id"])
             res = ceremonie.fermer(q["id"])
             self.assertEqual((res["delivres"], res["recues"]), (6, 5))
-            self.assertEqual(res["etiquette"], "Panel de volontaires. Ce n'est pas un sondage.")
+            self.assertEqual(res["etiquette"], "Panel de volontaires. Ce n’est pas un sondage.")
             self.assertEqual(res["questions"][0]["par_bord"]["g"]["statut"], "moins de 5")   # 3 à gauche : rien
             self.assertEqual(self.bulletin(membres[0], q["id"], pk)[0], 410)               # après : plus de bulletin
             self.assertEqual(self.deposer(q["id"], *self.bulletin_signe_hors_guichet(q["id"], pk))[0], 410)
