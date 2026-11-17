@@ -11,6 +11,7 @@ function route(opt){
   else if(v==='editions'){html=vEditions();nav='home';}
   else if(v==='semaine'||v==='mois')html=vPeriode(v);
   else if(v==='silences')html=vSilences();
+  else if(v==='situer')html=vSituer();
   else if(v==='pourquoi'){html=vPourquoi();nav='';}
   else if(v==='mentions'){html=vMentions();nav='';}
   else if(v==='installer')html=vInstaller();

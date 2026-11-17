@@ -19,6 +19,7 @@ comparateur/site/
   js/socle.js         constantes, petites fonctions
   js/donnees.js       les données de l'édition, préparées une fois
   js/commun.js        les briques d'affichage partagées
+  js/adresse.js       la normalisation d'une adresse d'article et sa clé (même règle que comparateur/index.py)
   js/vues/<vue>.js    une vue par fichier
   js/routage.js       les routes #/…, le thème, le pied de page
   aveugle.html        la page du vote à l'aveugle, à part
@@ -70,7 +71,7 @@ Le squelette nomme chaque morceau par une ligne `/*INCLURE chemin*/`. L'ordre de
 2. Si besoin, écrire `styles/<vue>.css`.
 3. Ajouter les deux lignes `/*INCLURE …*/` dans `gabarit.html`.
 4. Ajouter la route dans `js/routage.js` et, si la vue a sa place dans le menu, le lien dans `gabarit.html`.
-5. Ajouter la vue à la liste de `essais/rendu.js`.
+5. Ajouter la vue aux listes de `essais/rendu.js` et `essais/accessibilite.js`.
 
 Un test refuse un morceau présent dans `site/` mais oublié dans le squelette, et un morceau nommé deux fois.
 
