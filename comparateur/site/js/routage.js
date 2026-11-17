@@ -15,6 +15,7 @@ function route(opt){
   else if(v==='pourquoi'){html=vPourquoi();nav='';}
   else if(v==='mentions'){html=vMentions();nav='';}
   else if(v==='installer')html=vInstaller();
+  else if(v==='panel')html=vPanel();
   else{html=vHome();nav='home';}
   var y=window.scrollY;
   app.innerHTML=html;
@@ -28,6 +29,8 @@ window.addEventListener('hashchange',function(){route();});
 /* « Par mail » dans l'en-tête : vers l'inscription de la page Semaine, seulement si le mail est en service */
 (function(){var m=document.getElementById('btnMail');if(!m||!DONNEES.mail)return;m.hidden=false;
   m.addEventListener('click',function(){if(location.hash==='#/semaine/mail')route();});})();
+/* « Panel » dans le menu d'aide : seulement quand le panel a publié quelque chose (résultats ou lecture à l'aveugle) */
+(function(){var p=document.getElementById('lienPanel');if(p&&(PANEL.length||AV))p.hidden=false;})();
 
 /* L'application installable. Le service worker est enregistré s'il existe dans ce navigateur, sans erreur sinon.
    L'invitation à installer (beforeinstallprompt, Chrome, Edge, Android) est gardée pour le bouton de #/installer :

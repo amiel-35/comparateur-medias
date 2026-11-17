@@ -201,7 +201,7 @@ Dans l'esprit de `DOCTRINE.md` : des règles courtes, chacune tenue par un test.
 3. **Le mot « bord » n'existe pas côté identité.** Ni colonne, ni clé JSON, ni paramètre de route. *Test : recherche
    dans `comptes.py` et dans le schéma d'`identites.db`.*
 4. **L'urne refuse l'identité.** Une requête vers `/api/urne/` qui porte un en-tête `Cookie` ou `Authorization`
-   reçoit 400, avant toute lecture du corps. Le cookie de session est limité au chemin `/api/compte`. *Tests : le
+   reçoit 400, avant toute lecture du corps. Le cookie de session est limité au chemin `/api/compte` (fait autrement : `Path=/`, exigé par le préfixe `__Host-` ; le cookie ne part qu'à `compte.`, l'urne est sur un autre hôte). *Tests : le
    refus ; l'attribut `Path` du cookie.*
 5. **L'urne n'a ni heure ni rang.** Tables `WITHOUT ROWID`, clé = empreinte du bulletin, aucune colonne de date,
    aucun `AUTOINCREMENT`. *Test : schéma ; cent dépôts dans un ordre, relus dans l'ordre des empreintes.*

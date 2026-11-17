@@ -164,3 +164,14 @@ def _origine(nom):
     hote_port = s.split("://", 1)[-1].split("/")[0]
     port = ":" + hote_port.rsplit(":", 1)[1] if ":" in hote_port else ""
     return f"{schema}://{hotes()[nom]}{port}"
+
+
+def urne_url():
+    """L'origine de l'urne, que la page du compte appelle sans cookie (dépôt, effacement)."""
+    return env("COMPARATEUR_URNE_URL", _origine("urne")).rstrip("/")
+
+
+def urnes():
+    """Dossier des urnes : un fichier SQLite par questionnaire. Dans le compose, un volume à part, sauvegardé à la
+    clôture seulement (docs/cadrage-long-terme.md, 5.2)."""
+    return env("COMPARATEUR_URNES", os.path.join(donnees(), "urnes"))

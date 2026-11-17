@@ -29,17 +29,12 @@ CREATE TABLE IF NOT EXISTS analyses (
   sujet_id INTEGER PRIMARY KEY REFERENCES sujets(id), titre TEXT NOT NULL, fait TEXT NOT NULL,
   g TEXT NOT NULL, c TEXT NOT NULL, d TEXT NOT NULL, mots TEXT NOT NULL DEFAULT '[]', ecart INTEGER,
   empreinte TEXT NOT NULL, modele TEXT NOT NULL, cree TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS invitations (code TEXT PRIMARY KEY, cree TEXT NOT NULL, utilisee_le TEXT);
-CREATE TABLE IF NOT EXISTS votants (id TEXT PRIMARY KEY, bord INTEGER NOT NULL, cree TEXT NOT NULL);
+-- Les lots du vote à l'aveugle : des titres publics, et le média de chaque lot. Les avis ne sont pas ici : ils vivent
+-- dans l'urne (urnes/aveugle-<trimestre>.db), et les tables du vote d'avant (votants, avis_aveugle, avis_note,
+-- invitations) ne sont plus créées. Une base d'avant les garde jusqu'à `oublier-votes` (migrations.py).
 CREATE TABLE IF NOT EXISTS lots_aveugle (
   id INTEGER PRIMARY KEY, media_id INTEGER NOT NULL REFERENCES medias(id), jour TEXT NOT NULL,
   titres TEXT NOT NULL, cree TEXT NOT NULL, UNIQUE (media_id, jour));
-CREATE TABLE IF NOT EXISTS avis_aveugle (
-  votant_id TEXT NOT NULL REFERENCES votants(id), lot_id INTEGER NOT NULL REFERENCES lots_aveugle(id),
-  note INTEGER NOT NULL, cree TEXT NOT NULL, PRIMARY KEY (votant_id, lot_id));
-CREATE TABLE IF NOT EXISTS avis_note (
-  votant_id TEXT NOT NULL REFERENCES votants(id), media_id INTEGER NOT NULL REFERENCES medias(id),
-  accord INTEGER NOT NULL, cree TEXT NOT NULL, PRIMARY KEY (votant_id, media_id));
 -- Une édition par jour : la photographie complète de ce que le site affichait ce jour-là.
 -- methode, classement : les versions qui l'ont produite (« 1.0 », « FrIdéo v1.0 »). '' : édition d'avant la
 -- numérotation de la méthode. Elles sont à côté des données, qui ne sont jamais réécrites.

@@ -167,9 +167,8 @@ class Service(unittest.TestCase):
         self.assertEqual(self.appel("/sw.js")[1]["cache-control"], "no-cache")
         for chemin in (self.css, self.js):
             self.assertEqual(self.appel(chemin)[1]["cache-control"], "public, max-age=31536000, immutable", chemin)
-        self.assertEqual(self.appel("/api/resultats")[1]["cache-control"], "public, max-age=60")   # inchangé
-        statut, entetes, _ = self.appel("/api/lot")
-        self.assertEqual((statut, entetes["cache-control"]), (401, "no-store"))
+        statut, entetes, _ = self.appel("/api/inconnue")
+        self.assertEqual((statut, entetes["cache-control"]), (404, "no-store"))
         self.assertNotIn("etag", entetes)
 
     def test_etag_et_304(self):
@@ -200,8 +199,8 @@ class Service(unittest.TestCase):
             os.remove(chemin)
 
     def test_pas_d_etag_ni_de_304_pour_l_api(self):
-        statut, entetes, _ = self.appel("/api/resultats", entetes={"If-None-Match": "*"})
-        self.assertEqual(statut, 200)
+        statut, entetes, _ = self.appel("/api/inconnue", entetes={"If-None-Match": "*"})
+        self.assertEqual(statut, 404)
         self.assertNotIn("etag", entetes)
 
     def test_gzip_seulement_si_demande(self):
@@ -294,18 +293,13 @@ class Service(unittest.TestCase):
                 self.assertEqual(statut, 200, i)
             self.assertEqual(self.appel("/sante", conn=c)[0], 200)
             for i in range(300):
-                self.assertEqual(self.appel("/api/resultats", conn=c)[0], 200, i)
-            statut, ent, corps = self.appel("/api/resultats", conn=c)
+                self.assertEqual(self.appel("/api/inconnue", conn=c)[0], 404, i)
+            statut, ent, corps = self.appel("/api/inconnue", conn=c)
             self.assertEqual(statut, 429)
             self.assertEqual(ent["cache-control"], "no-store")
             self.assertEqual(self.appel("/", conn=c)[0], 200)        # l'API bloquée ne bloque pas les pages
         finally:
             c.close()
-
-    def test_les_autres_limites_restent(self):
-        for i in range(10):
-            self.assertEqual(self.appel("/api/inscription", "POST", {"Content-Type": "application/json"})[0], 400)
-        self.assertEqual(self.appel("/api/inscription", "POST")[0], 429)
 
     def test_un_fichier_hors_de_public_reste_introuvable(self):
         self.assertEqual(self.appel("/actifs/site-000000000000.css")[0], 404)

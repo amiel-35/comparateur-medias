@@ -17,5 +17,18 @@ function vClass(){
   }).join('')+'</ul></div>';
   if(NC.length)h+='<p class="note">'+(NC.length>1?NC.length+' médias lus ne sont pas classés':'Un média lu n’est pas classé')+' : '+NC.map(function(m){return '<a href="#/media/'+enc(m.nom)+'">'+esc(m.nom)+'</a>';}).join(', ')+'. FrIdéo ne les couvre pas, et ce site ne classe aucun média lui-même. Leurs titres comptent dans la couverture d’un sujet, dans aucun bord ni aucun silence.</p>';
   h+='<p class="note">Traits pointillés : les seuils de bord. Trait plein : zéro, la moyenne du panel ; à gauche de ce trait, plus à gauche que cette moyenne. Le nom d’un média ouvre sa fiche.</p>';
+  /* À côté, jamais fondue : la lecture à l'aveugle du panel (AV, facultatif). Ni score ni bande n'en viennent. */
+  if(AV){
+    /* par ordre alphabétique : ce site ne range aucun média ; la piste montre la position. Les médias que FrIdéo ne
+       classe pas n'apparaissent pas sur cette page : leur lecture à l'aveugle est sur leur fiche. */
+    var nc={};NC.forEach(function(m){nc[m.nom]=1;});
+    var av=Object.keys(AV.medias).filter(function(n){return !nc[n];}).map(function(n){return {nom:n,a:AV.medias[n]};}).sort(function(x,y){return x.nom.localeCompare(y.nom,'fr');});
+    h+='<h2 id="aveugle">'+AVT+'</h2><p class="etq">'+esc(AV.etiquette||'Panel de volontaires. Ce n’est pas un sondage.')+'</p>'+
+    '<p class="note">Une seconde mesure, à côté du classement FrIdéo. Elle ne change ni les scores ni les bandes ci-dessus, et aucune formule ne mêle les deux. '+avRegle()+' '+avSource()+'</p>';
+    h+='<ul class="avl">'+av.map(function(x){
+      return '<li><a href="#/media/'+enc(x.nom)+'">'+esc(x.nom)+'</a>'+avPiste(x.nom,x.a)+'<div class="sc">'+fs(x.a.note)+'</div><p class="avd">Avis : '+avEff(x.a)+' · '+avStatut(x.a)+'</p></li>';
+    }).join('')+'</ul>';
+    h+='<p class="note">Par ordre alphabétique. Le point : la note du panel. Trait pointillé : zéro, le milieu de l’échelle proposée aux lecteurs. Ce n’est pas la moyenne des médias, comme dans le classement FrIdéo. Un média que FrIdéo ne classe pas n’est pas listé ici : sa lecture à l’aveugle, s’il en a une, est sur sa fiche.</p>';
+  }
   return h;
 }

@@ -46,7 +46,7 @@ nav.main{display:flex;gap:2px;order:3;width:100%;overflow-x:auto;scrollbar-width
 nav.main::-webkit-scrollbar{display:none}
 nav.main a{font-size:.95rem;padding:6px 7px;text-decoration:none;border-bottom:3px solid transparent;font-weight:700;white-space:nowrap}
 nav.main a[aria-current="page"],nav.aide a[aria-current="page"]{border-bottom-color:var(--hl)}
-nav.aide{display:flex;gap:2px 12px;order:4;width:100%;font-family:var(--mono);font-size:.7rem;letter-spacing:.06em;text-transform:uppercase}
+nav.aide{display:flex;flex-wrap:wrap;gap:2px 12px;order:4;width:100%;font-family:var(--mono);font-size:.7rem;letter-spacing:.06em;text-transform:uppercase}
 nav.aide a{color:var(--mute);text-decoration:none;border-bottom:2px solid transparent;padding:2px 0}
 nav.aide a:hover{color:var(--ink)}
 .brand{order:1}.tools{order:2}

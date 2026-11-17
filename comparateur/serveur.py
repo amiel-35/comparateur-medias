@@ -1,27 +1,23 @@
-"""Le serveur : le site statique et le guichet des votes. Bibliothèque standard seulement.
+"""Le serveur : le site statique, le compte et l'urne. Bibliothèque standard seulement.
 
   GET  /sante                      état du service (pour le contrôle de santé de Coolify)
-  POST /api/inscription            {code, bord}  -> {jeton}     un code d'invitation ouvre un jeton (un pseudonyme)
-  GET  /api/lot                    -> {lot: {id, titres} | null, restants}   (Authorization: Bearer <jeton>)
-  POST /api/avis-aveugle           {lot, note}   note de -2 (gauche) à +2 (droite)
-  POST /api/avis-note              {media, accord}
-  GET  /api/resultats              notes à l'aveugle par média, avec effectifs par bord
   POST /api/mail/inscription       {adresse}     -> 202, toujours la même réponse (synthèse de la semaine par mail)
   POST /api/mail/confirmation      {jeton}       confirme l'inscription (bouton de mail.html)
   POST /api/mail/desinscription    {jeton}, ou ?jeton= avec List-Unsubscribe=One-Click (RFC 8058) : supprime l'abonné
+  compte.<domaine>  /api/compte/…  le compte, le panel, le bulletin et la carte de votant, les lots à juger
+  urne.<domaine>    /api/urne/…    dépôt, effacement, avis à l'aveugle avec la carte ; sans cookie ni identité
   tout le reste                    fichiers de <données>/public/ (ETag et 304, gzip si le navigateur l'accepte)
 
-Pseudonyme, pas anonymat : la base garde l'empreinte du jeton, le bord déclaré et les avis, sans nom ni adresse (ni
-courriel ni IP). Le jeton relie entre eux les avis d'un même votant. L'éditeur sait à qui il a remis chaque code, et
-invitations.utilisee_le et votants.cree portent le même jour : avec peu d'inscrits, le rapprochement se fait à la main. Les abonnés au mail de la semaine
-sont dans un autre fichier (identites.db, voir comptes.py) : leur adresse n'est écrite dans aucun journal.
+Le vote à l'aveugle passe par la carte de votant (une par trimestre, signée sans être vue) : le site ne reçoit plus
+aucun avis. Ses résultats sont lus dans ce que l'urne publie à chaque clôture (aveugle.resultats). Les abonnés au
+mail de la semaine sont dans le tiroir identité (comptes.py) : leur adresse n'est écrite dans aucun journal.
 """
-import gzip, hashlib, json, mimetypes, os, re, secrets, sys, threading, time
+import gzip, hashlib, json, mimetypes, os, re, sys, threading, time
 from collections import OrderedDict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
-from . import abonnements, aveugle, base, comptes, config, lettre
+from . import abonnements, base, ceremonie, comptes, config, lettre, signature, urne
 
 CORPS_MAX = 4096
 # Le manifest de l'application : type exigé par certains navigateurs, absent des vieilles tables de Python.
@@ -41,9 +37,9 @@ def politique():
 
 def politique_compte():
     """Les pages de compte.<domaine> et urne.<domaine> : rien d'extérieur, aucune mesure d'audience (premier cadrage,
-    règle 11), aucun appel ailleurs qu'à leur propre origine."""
+    règle 11). La page du compte n'appelle que son origine et l'urne (dépôt et effacement, sans cookie)."""
     return ("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
-            "connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
+            f"connect-src 'self' {config.urne_url()}; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
 
 
 COOKIE = "__Host-cadrages"   # préfixe __Host- : Secure, Path=/, sans Domain ; renvoyé à compte.<domaine> seul
@@ -181,6 +177,9 @@ class Guichet(BaseHTTPRequestHandler):
     disable_nagle_algorithm = True   # en-têtes puis corps en deux envois : sans cela, 40 ms d'attente par réponse en connexion gardée
 
     def log_message(self, fmt, *args):  # journal sans adresse du visiteur, et sans paramètres d'adresse (jetons)
+        # Rien de l'urne : l'heure d'un dépôt, à côté de celle d'un retrait ou d'une connexion, les rapprocherait.
+        if getattr(self, "cote", "") == "urne":
+            return
         args = tuple(re.sub(r"\?\S*", "?…", a) if isinstance(a, str) else a for a in args)
         print("%s %s" % (time.strftime("%H:%M:%S"), fmt % args), flush=True)
 
@@ -231,17 +230,6 @@ class Guichet(BaseHTTPRequestHandler):
             raise Erreur(400, "objet JSON attendu")
         return d
 
-    def votant(self, db):
-        auth = self.headers.get("Authorization", "")
-        if not auth.startswith("Bearer ") or len(auth) > 200:
-            raise Erreur(401, "jeton manquant")
-        vid = empreinte(auth[7:].strip())
-        if not db.execute("SELECT 1 FROM votants WHERE id = ?", (vid,)).fetchone():
-            raise Erreur(401, "jeton inconnu")
-        if not DEBIT.autorise("v:" + vid, 120, 60):
-            raise Erreur(429, "trop de requêtes")
-        return vid
-
     # ---- routes
 
     def do_GET(self):
@@ -251,6 +239,9 @@ class Guichet(BaseHTTPRequestHandler):
         self.router()
 
     def do_POST(self):
+        self.router()
+
+    def do_OPTIONS(self):
         self.router()
 
     def hote(self):
@@ -273,19 +264,15 @@ class Guichet(BaseHTTPRequestHandler):
                 return self.sante()
             if self.cote == "compte":
                 return self.compte(chemin)
-            if self.cote == "urne":   # muette jusqu'au panel (phase 3)
-                raise Erreur(404, "introuvable")
+            if self.cote == "urne":
+                return self.urne(chemin)
             if chemin.startswith("/api/compte/") or chemin == "/api/compte":
                 raise Erreur(404, "route inconnue")   # le compte ne répond que sur son hôte, où vit son cookie
             if chemin.startswith("/api/"):
                 # La limite de débit ne vaut que pour l'API : les fichiers publics (cachés, compressés) ne sont pas limités.
                 if not DEBIT.autorise("ip:" + self.adresse(), 300, 60):
                     raise Erreur(429, "trop de requêtes")
-                db = base.connexion()
-                try:
-                    return self.api(chemin, db)
-                finally:
-                    db.close()
+                return self.api(chemin)
             if self.command == "POST":
                 raise Erreur(405, "méthode non permise")
             return self.fichier(chemin)
@@ -304,65 +291,10 @@ class Guichet(BaseHTTPRequestHandler):
             db.close()
         self.envoyer(200, {"ok": True, "derniere_publication": derniere["fin"] if derniere else None})
 
-    def api(self, chemin, db):
+    def api(self, chemin):
+        """L'API du site. Le vote à l'aveugle n'y est plus : il passe par la carte de votant (compte et urne), et ses
+        résultats sont publiés comme des fichiers (public/panel/aveugle/). Ce côté n'ouvre plus comparateur.db."""
         route = (self.command, chemin)
-        if route == ("POST", "/api/inscription"):
-            if not DEBIT.autorise("insc:" + self.adresse(), 10, 3600):
-                raise Erreur(429, "trop d'essais, réessayez plus tard")
-            d = self.corps_json()
-            code, bord = str(d.get("code", "")).strip(), d.get("bord")
-            if not isinstance(bord, int) or isinstance(bord, bool) or not -2 <= bord <= 2:
-                raise Erreur(400, "bord attendu : entier de -2 à 2")
-            # Le code est consommé d'un seul geste : deux inscriptions simultanées ne passent pas toutes deux.
-            cur = db.execute("UPDATE invitations SET utilisee_le = ? WHERE code = ? AND utilisee_le IS NULL",
-                             (base.iso()[:10], code))
-            if cur.rowcount != 1:
-                db.rollback()
-                raise Erreur(403, "code d'invitation inconnu ou déjà utilisé")
-            jeton = secrets.token_urlsafe(32)
-            db.execute("INSERT INTO votants (id, bord, cree) VALUES (?, ?, ?)", (empreinte(jeton), bord, base.iso()[:10]))
-            db.commit()
-            return self.envoyer(201, {"jeton": jeton})
-
-        if route == ("GET", "/api/resultats"):
-            return self.envoyer(200, aveugle.resultats(db), cache="public, max-age=60")
-
-        if route == ("GET", "/api/lot"):
-            vid = self.votant(db)
-            lots = db.execute(
-                """SELECT id, titres FROM lots_aveugle WHERE id NOT IN
-                   (SELECT lot_id FROM avis_aveugle WHERE votant_id = ?) ORDER BY id DESC""", (vid,)).fetchall()
-            if not lots:
-                return self.envoyer(200, {"lot": None, "restants": 0})
-            lot = lots[secrets.randbelow(len(lots))]  # ordre aléatoire : pas d'indice par la position
-            return self.envoyer(200, {"lot": {"id": lot["id"], "titres": json.loads(lot["titres"])}, "restants": len(lots)})
-
-        if route == ("POST", "/api/avis-aveugle"):
-            vid, d = self.votant(db), self.corps_json()
-            lot, note = d.get("lot"), d.get("note")
-            if not isinstance(lot, int) or not isinstance(note, int) or isinstance(note, bool) or not -2 <= note <= 2:
-                raise Erreur(400, "attendu : lot (entier), note (entier de -2 à 2)")
-            if not db.execute("SELECT 1 FROM lots_aveugle WHERE id = ?", (lot,)).fetchone():
-                raise Erreur(404, "lot inconnu")
-            try:
-                db.execute("INSERT INTO avis_aveugle (votant_id, lot_id, note, cree) VALUES (?,?,?,?)",
-                           (vid, lot, note, base.iso()[:10]))
-                db.commit()
-            except base.sqlite3.IntegrityError:
-                raise Erreur(409, "lot déjà jugé")
-            return self.envoyer(201, {"ok": True})
-
-        if route == ("POST", "/api/avis-note"):
-            vid, d = self.votant(db), self.corps_json()
-            m = db.execute("SELECT id FROM medias WHERE nom = ?", (str(d.get("media", "")),)).fetchone()
-            if not m or not isinstance(d.get("accord"), bool):
-                raise Erreur(400, "attendu : media (nom connu), accord (booléen)")
-            db.execute("""INSERT INTO avis_note (votant_id, media_id, accord, cree) VALUES (?,?,?,?)
-                          ON CONFLICT(votant_id, media_id) DO UPDATE SET accord = excluded.accord, cree = excluded.cree""",
-                       (vid, m["id"], int(d["accord"]), base.iso()[:10]))
-            db.commit()
-            return self.envoyer(201, {"ok": True})
-
         if chemin.startswith("/api/mail/") and config.mail():
             ident = comptes.connexion()
             try:
@@ -453,12 +385,14 @@ class Guichet(BaseHTTPRequestHandler):
         if not chemin.startswith("/api/"):
             if self.command == "POST":
                 raise Erreur(405, "méthode non permise")
-            nom = {"/": "compte.html"}.get(chemin, chemin.lstrip("/"))
-            if nom not in ("compte.html",):
+            nom = {"/": "compte.html", "/panel": "panel.html"}.get(chemin, chemin.lstrip("/"))
+            types = {"compte.html": "text/html; charset=utf-8", "panel.html": "text/html; charset=utf-8",
+                     "aveugle-rsa.js": "application/javascript; charset=utf-8"}
+            if nom not in types or not os.path.isfile(os.path.join(COMPTE, nom)):
                 raise Erreur(404, "introuvable")
             with open(os.path.join(COMPTE, nom), "rb") as f:
                 page = f.read().replace(b"__SITE_URL__", config.site_url().encode())   # le lien vers le site
-                return self.envoyer(200, page, "text/html; charset=utf-8", cache="no-store")
+                return self.envoyer(200, page, types[nom], cache="no-store")
         if not DEBIT.autorise("ip:" + self.adresse(), 300, 60):
             raise Erreur(429, "trop de requêtes")
         ident = comptes.connexion()
@@ -518,12 +452,125 @@ class Guichet(BaseHTTPRequestHandler):
             except abonnements.Refus as e:
                 raise Erreur(400, str(e))
             return self.envoyer(200, {"sait": comptes.lire(ident, compte), "registre": abonnements.ecran()})
+        if route == ("GET", "/api/compte/panel"):
+            return self.envoyer(200, self.etat_panel(ident, compte))
+        if route == ("POST", "/api/compte/panel/rejoindre"):
+            d = self.corps_json()
+            if d.get("consentement") is not True:
+                raise Erreur(400, "le consentement est requis")
+            if not DEBIT.autorise("panel:" + self.adresse(), 10, 3600):
+                raise Erreur(429, "trop d'essais, réessayez dans une heure")
+            if not comptes.rejoindre_panel(ident, compte, d.get("code")):
+                raise Erreur(403, "code d'invitation inconnu ou déjà utilisé")
+            return self.envoyer(200, self.etat_panel(ident, compte))
+        if route == ("POST", "/api/compte/panel/quitter"):
+            comptes.desabonner(ident, compte, "panel")
+            return self.envoyer(200, self.etat_panel(ident, compte))
+        if route == ("POST", "/api/compte/bulletin"):
+            d = self.corps_json()
+            q, aveugle_hex = d.get("questionnaire"), d.get("aveugle")
+            if not isinstance(q, str) or not urne.ID.match(q) or not isinstance(aveugle_hex, str) \
+                    or not re.fullmatch(r"(?:[0-9a-f]{2}){64,1024}", aveugle_hex):
+                raise Erreur(400, "attendu : questionnaire, bulletin aveuglé")
+            if q == urne.carte_id(ceremonie.trimestre()):
+                ceremonie.assurer_carte(ident)
+            try:
+                sig = comptes.retirer(ident, compte, q, bytes.fromhex(aveugle_hex))
+            except comptes.RetraitRefuse as e:
+                raise Erreur(e.code, e.message)
+            return self.envoyer(200, {"signature": sig.hex()})
+        if route == ("GET", "/api/compte/lots"):
+            try:
+                with open(os.path.join(config.public(), "aveugle", "lots.json"), "rb") as f:
+                    return self.envoyer(200, f.read(), cache="no-store")
+            except OSError:
+                return self.envoyer(200, {"lots": []})
         if route == ("POST", "/api/compte/deconnexion"):
             comptes.fermer_session(ident, self.jeton_session())
             return self.envoyer(200, {"ok": True}, plus=self.poser_cookie(None))
         if route == ("POST", "/api/compte/suppression"):
             comptes.supprimer(ident, compte)
             return self.envoyer(200, {"ok": True}, plus=self.poser_cookie(None))
+        raise Erreur(404, "route inconnue")
+
+    def etat_panel(self, ident, compte):
+        """Ce que la page du panel montre : l'appartenance, les questionnaires ouverts (leur description publique,
+        et si ce compte a déjà retiré son bulletin), la carte de votant du trimestre. Le bord n'y est jamais."""
+        depuis = comptes.membre(ident, compte)
+        retires = {r[0] for r in ident.execute("SELECT questionnaire FROM retraits WHERE compte = ?", (compte,))}
+        questionnaires = []
+        dossier = os.path.join(config.public(), "panel", "questionnaires")
+        for nom in sorted(os.listdir(dossier)) if os.path.isdir(dossier) else []:
+            try:
+                with open(os.path.join(dossier, nom), encoding="utf-8") as f:
+                    q = json.load(f)
+            except (OSError, ValueError):
+                continue
+            q["retire"] = q.get("id") in retires
+            questionnaires.append(q)
+        cid = urne.carte_id(ceremonie.trimestre())
+        carte = None
+        if depuis:
+            ceremonie.assurer_carte(ident)
+            try:
+                with open(os.path.join(config.public(), "panel", "cles", cid + ".json"), encoding="utf-8") as f:
+                    carte = {"id": cid, "trimestre": ceremonie.trimestre(), "cle": json.load(f), "retiree": cid in retires}
+            except (OSError, ValueError):
+                carte = None
+        return {"membre": depuis is not None, "membre_depuis": depuis, "questionnaires": questionnaires if depuis else [],
+                "carte": carte, "urne": config.urne_url(), "etiquette": urne.ETIQUETTE}
+
+    # ---- urne.<domaine> : sans session, sans cookie, sans en-tête d'identité
+
+    def cors(self):
+        """La page du compte appelle l'urne depuis une autre origine : elle seule est admise, sans cookie."""
+        if self.headers.get("Origin") == config.compte_url():
+            return {"Access-Control-Allow-Origin": config.compte_url(), "Vary": "Origin"}
+        return {"Vary": "Origin"}
+
+    def urne(self, chemin):
+        """Toute réponse de l'urne, refus compris, porte l'en-tête CORS : sans lui, la page ne lirait ni un 409 ni un
+        410, et croirait à une panne du réseau."""
+        try:
+            return self.urne_api(chemin)
+        except urne.Refus as e:
+            return self.envoyer(e.code, {"erreur": e.message}, plus=self.cors())
+        except Erreur as e:
+            return self.envoyer(e.code, {"erreur": e.message}, plus=self.cors())
+
+    def urne_api(self, chemin):
+        """L'urne refuse l'identité : un Cookie ou un Authorization donne 400, avant toute lecture du corps
+        (premier cadrage, règle 4). Elle ne lit que ses fichiers, les clés publiques et la liste publique des lots."""
+        if not config.mail() or not chemin.startswith("/api/urne/"):
+            raise Erreur(404, "introuvable")
+        if self.command == "OPTIONS":
+            plus = self.cors()
+            if "Access-Control-Allow-Origin" not in plus:
+                raise Erreur(403, "origine refusée")
+            plus.update({"Access-Control-Allow-Methods": "POST", "Access-Control-Allow-Headers": "Content-Type",
+                         "Access-Control-Max-Age": "600"})
+            return self.envoyer(204, b"", plus=plus)
+        if self.headers.get("Cookie") is not None or self.headers.get("Authorization") is not None:
+            raise Erreur(400, "l'urne ne reçoit ni cookie ni identité")
+        if self.command != "POST":
+            raise Erreur(405, "méthode non permise")
+        if not DEBIT.autorise("ip:" + self.adresse(), 300, 60):
+            raise Erreur(429, "trop de requêtes")
+        d = self.corps_json()
+        try:
+            if chemin == "/api/urne/depot":
+                urne.deposer(d.get("questionnaire"), d.get("bulletin"), d.get("signature"), d.get("bord"), d.get("reponses"))
+                return self.envoyer(201, {"ok": True}, plus=self.cors())
+            if chemin == "/api/urne/effacement":
+                ok = urne.effacer(d.get("questionnaire"), d.get("bulletin"))
+                return self.envoyer(200, {"efface": ok}, plus=self.cors())
+            if chemin == "/api/urne/avis":
+                urne.donner_avis(d.get("trimestre"), d.get("carte"), d.get("signature"), d.get("lot"), d.get("note"))
+                return self.envoyer(201, {"ok": True}, plus=self.cors())
+            if chemin == "/api/urne/lots-juges":
+                return self.envoyer(200, {"lots": urne.lots_juges(d.get("trimestre"), d.get("carte"))}, plus=self.cors())
+        except urne.Refus as e:
+            raise Erreur(e.code, e.message)
         raise Erreur(404, "route inconnue")
 
     def fichier(self, chemin):
@@ -581,6 +628,7 @@ def envois():
     ident = comptes.connexion()
     try:
         comptes.purger(ident)
+        ceremonie.echeances(ident)   # trimestres finis, questionnaires arrivés à leur jour de fermeture
         jour = base.paris().strftime("%Y-%m-%d")
         if lettre.alerte(jour) is None:   # l'édition du jour n'est pas encore là
             return {"jour": jour, "edition": False}
@@ -621,7 +669,7 @@ def demarrage():
 
 def guichet():
     """Le guichet seul : sert le site, le compte et l'urne ; envoie les mails. Il tient la clé d'envoi, pas celle
-    des modèles. Du tiroir public, il n'écrit que guichet.json (le mail est-il en service ?)."""
+    des modèles. Du tiroir public, il n'écrit que guichet.json et public/panel/ (le mail est-il en service ?)."""
     srv = creer()
     demarrage()
     oublier()

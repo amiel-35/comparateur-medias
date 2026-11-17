@@ -26,3 +26,13 @@ function barFine(par,pct){
   }).join('')+'</span>';
 }
 function silChip(r){return r.sil.length?'<span class="am">Silence : '+r.sil.map(function(x){return GL[x].toLowerCase();}).join(', ')+'</span>':'';}
+/* La lecture à l'aveugle du panel (AV), pour la page Classement et la fiche d'un média : une seconde mesure, à côté
+   du classement FrIdéo, jamais fondue en lui. Ni bande ni couleur de bord : un point sur une échelle neutre, de −2 à +2. */
+var AVT='Perçu à l’aveugle par le panel, titres masqués';
+function avTrim(t){var m=/^(\d{4})T([1-4])$/.exec(t);return t==='historique'?'les avis d’avant la carte de votant':m?(m[2]==='1'?'1er':m[2]+'e')+' trimestre '+m[1]:esc(t);}
+function avSource(){return 'Version : '+esc(AV.version||'')+'. Avis pris en compte : '+(AV.trimestres||[]).map(avTrim).join(', ')+'.';}
+function avRegle(){return 'Des volontaires lisent dix titres d’un même média, sans son nom, et le placent de −2 (gauche) à +2 (droite). La note est la moyenne des avis par bord déclaré des lecteurs (gauche, centre, droite), puis la moyenne des bords : un bord nombreux ne pèse pas plus qu’un autre. Statut « publiable » quand chaque bord compte au moins '+(AV.min_par_bord||5)+' avis, « indicatif » sinon.';}
+function avStatut(a){return a.statut==='publiable'?'publiable':'indicatif';}
+function avEff(a){var e=a.effectifs||{};return 'gauche '+(e.g||0)+', centre '+(e.c||0)+', droite '+(e.d||0);}
+function avPiste(nom,a){var p=Math.max(0,Math.min(100,(a.note+2)/4*100));
+  return '<div class="avp" role="img" aria-label="'+esc(nom)+' : perçu à '+fs(a.note)+', sur une échelle de −2 (gauche) à +2 (droite)"><span class="avz"></span><i style="left:calc('+p+'% - 3px)"></i></div>';}

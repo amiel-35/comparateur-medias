@@ -1,6 +1,8 @@
 """Fabrique quatre éditions d'essai et écrit le site, sans réseau ni modèle, pour voir le rendu en local.
 
-La première édition a la forme d'avant les rubriques et le suivi : elle sert à vérifier les replis.
+La première édition a la forme d'avant les rubriques et le suivi : elle sert à vérifier les replis. La dernière porte
+une lecture à l'aveugle du panel, et toutes les pages un résultat de questionnaire : des fichiers factices, au format de
+ce que l'urne publie (public/panel/).
 Efface les éditions de la base visée : à lancer sur un dossier de données à part.
 
     COMPARATEUR_DONNEES=/tmp/essai python3 essais/editions_essai.py
@@ -10,7 +12,7 @@ import json, os, random, re, sys, unicodedata
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 if not os.environ.get("COMPARATEUR_DONNEES"):
     sys.exit("COMPARATEUR_DONNEES n'est pas réglé : ce script efface les éditions, il lui faut un dossier à part.")
-from comparateur import base, config, publier
+from comparateur import aveugle, base, config, publier
 random.seed(7)
 def hote(nom):
     """Un domaine d'essai par média (« le-monde.exemple.test ») : l'index public déduit le média du domaine."""
@@ -75,11 +77,51 @@ def edition(jour, ancienne=False):
         d["ecartes"] = {"rubriques": ["culture", "sport"], "titres": 87}
         d["rythme"] = {"recolte_minutes": 180, "edition_heure": 6}
     return d
+def ecrire_json(*chemin, x):
+    c = os.path.join(config.public(), *chemin)
+    os.makedirs(os.path.dirname(c), exist_ok=True)
+    with open(c, "w", encoding="utf-8") as f:
+        json.dump(x, f, ensure_ascii=False)
+
+
+def panel_factice(db):
+    """Le panel, pour voir son affichage : un trimestre clos du vote à l'aveugle (public/panel/aveugle/2026T3.json,
+    avec des lots d'essai dans lots_aveugle) et un questionnaire clos (public/panel/resultats/). Des chiffres inventés,
+    au format de ce que l'urne publie. Rend la lecture à l'aveugle, telle que la fabrique la met dans une édition."""
+    base.charger_medias(db)
+    ids = {r["nom"]: r["id"] for r in db.execute("SELECT id, nom FROM medias")}
+    lots = {}
+    for i, nom in enumerate(["L'Humanité", "Libération", "Le Monde", "franceinfo", "Ouest-France", "Le Figaro", "CNews", "Valeurs actuelles"]):
+        db.execute("INSERT OR IGNORE INTO lots_aveugle (media_id, jour, titres, cree) VALUES (?, '2026-08-15', ?, ?)",
+                   (ids[nom], json.dumps([f"Un titre d'essai numéro {k}, sans le nom du média" for k in range(10)]), base.iso()))
+        lot = db.execute("SELECT id FROM lots_aveugle WHERE media_id = ? AND jour = '2026-08-15'", (ids[nom],)).fetchone()["id"]
+        n = 6 if i % 3 else 3                       # un bord sur trois sous le seuil : « indicatif »
+        lots[str(lot)] = {"g": [n, round(n * (i - 4) / 3)], "c": [6, round(6 * (i - 3.5) / 3)], "d": [6, round(6 * (i - 3) / 3)]}
+    db.commit()
+    ecrire_json("panel", "aveugle", "2026T3.json", x={"v": 1, "mesure": "aveugle", "trimestre": "2026T3", "cartes_delivrees": 21,
+                                                       "etiquette": "Panel de volontaires. Ce n’est pas un sondage.", "lots": lots})
+    ecrire_json("panel", "resultats", "essai-confiance.json", x={
+        "v": 1, "mesure": "panel", "questionnaire": "essai-confiance", "titre": "La confiance dans les médias (essai)",
+        "etiquette": "Panel de volontaires. Ce n’est pas un sondage.", "delivres": 31, "recues": None,
+        "effectifs": {"g": 12, "c": None, "d": 13}, "scellement": "9f2c" * 16, "questions": [
+            {"id": "q1", "texte": "Faites-vous confiance aux médias pour vous informer ?", "choix": ["Oui", "Plutôt", "Plutôt pas", "Non"], "profil": False,
+             "par_bord": {"g": {"statut": "publiable", "reponses": 12, "par_choix": [2, 5, 3, 2]}, "c": {"statut": "moins de 5"},
+                          "d": {"statut": "publiable", "reponses": 13, "par_choix": [1, 3, 5, 4]}}},
+            {"id": "age", "texte": "Votre âge", "choix": ["Moins de 30 ans", "30 à 59 ans", "60 ans et plus"], "profil": True,
+             "par_bord": {"g": {"statut": "publiable", "reponses": 12, "par_choix": [3, 6, 3]}, "c": {"statut": "moins de 5"},
+                          "d": {"statut": "publiable", "reponses": 13, "par_choix": [2, 7, 4]}}}]})
+    return aveugle.resultats(db)
+
+
 db = base.connexion()
 db.execute("DELETE FROM editions")
+LECTURE = panel_factice(db)
 for j in JOURS:
+    d = edition(j, ancienne=(j == JOURS[0]))
+    if j == JOURS[-1]:
+        d["aveugle"] = LECTURE   # la dernière édition a la lecture à l'aveugle ; les autres, la forme d'avant ({})
     # les versions, comme les écrit publier.enregistrer_edition : ces éditions d'essai précèdent la méthode 1.0
     db.execute("INSERT INTO editions (jour, cree, donnees, methode, classement) VALUES (?,?,?,?,?)",
-               (j, base.iso(), json.dumps(edition(j, ancienne=(j == JOURS[0])), ensure_ascii=False), "", publier.VERSION_CLASSEMENT))
+               (j, base.iso(), json.dumps(d, ensure_ascii=False), "", publier.VERSION_CLASSEMENT))
 db.commit()
 print(publier.ecrire_pages(db), config.public())

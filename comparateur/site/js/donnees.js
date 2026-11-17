@@ -50,3 +50,8 @@ function edUrl(j){return '/editions/'+j+'.html';}
 var PER=D.periodes||null;
 function jourNum(j){return new Date(j+'T12:00:00Z').toLocaleDateString('fr-FR',{timeZone:'UTC',day:'numeric',month:'long'});}
 function sujLien(x){return (x.dernier===ED.jour?'':edUrl(x.dernier))+'#/sujet/'+x.id;}
+/* Le panel. D.aveugle (facultatif) : la lecture à l'aveugle, une seconde mesure versionnée, lue dans ce que l'urne a
+   publié ; une édition d'avant la carte de votant porte un autre format, ou rien, et ne montre rien. D.panel
+   (facultatif) : les résultats publiés des questionnaires. Aucune donnée du panel n'entre dans un calcul du classement. */
+var AV=(D.aveugle&&D.aveugle.mesure==='aveugle'&&D.aveugle.medias&&Object.keys(D.aveugle.medias).length)?D.aveugle:null;
+var PANEL=Array.isArray(D.panel)?D.panel.filter(function(q){return q&&Array.isArray(q.questions);}):[];
