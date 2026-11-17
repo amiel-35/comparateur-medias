@@ -23,8 +23,8 @@ services:
       COMPARATEUR_MIN_PAR_BORD: ${COMPARATEUR_MIN_PAR_BORD:-5}
       COMPARATEUR_UMAMI_ID: ${COMPARATEUR_UMAMI_ID:-}
       COMPARATEUR_SITE_URL: ${COMPARATEUR_SITE_URL:-}
-      # La fabrique ne lit pas les secrets SMTP. Elle doit seulement savoir si le mail est en service, pour afficher
-      # ou non le formulaire et le lien du compte : COMPARATEUR_MAIL_EN_SERVICE=1 quand le guichet a ses réglages SMTP.
+      # La fabrique ne lit pas les secrets SMTP. Elle sait si le mail est en service par public/guichet.json, que le
+      # guichet écrit à son démarrage ; ce réglage ne sert qu'à forcer ce choix.
       COMPARATEUR_MAIL_EN_SERVICE: ${COMPARATEUR_MAIL_EN_SERVICE:-}
     volumes:
       - comparateur-donnees:/data

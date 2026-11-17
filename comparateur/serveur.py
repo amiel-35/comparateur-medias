@@ -14,7 +14,7 @@
 Pseudonyme, pas anonymat : la base garde l'empreinte du jeton, le bord déclaré et les avis, sans nom ni adresse (ni
 courriel ni IP). Le jeton relie entre eux les avis d'un même votant. L'éditeur sait à qui il a remis chaque code, et
 invitations.utilisee_le et votants.cree portent le même jour : avec peu d'inscrits, le rapprochement se fait à la main. Les abonnés au mail de la semaine
-sont à part (table abonnes, voir lettre.py) : leur adresse n'est écrite dans aucun journal.
+sont dans un autre fichier (identites.db, voir comptes.py) : leur adresse n'est écrite dans aucun journal.
 """
 import gzip, hashlib, json, mimetypes, os, re, secrets, sys, threading, time
 from collections import OrderedDict
@@ -270,7 +270,7 @@ class Guichet(BaseHTTPRequestHandler):
         # inconnu (une adresse IP, le contrôle de santé du conteneur) est le site.
         self.cote = "compte" if self.hote() == h["compte"] else "urne" if self.hote() == h["urne"] else "site"
         try:
-            if chemin == "/sante":   # ouvre la base : limité, comme l'API
+            if chemin == "/sante" and self.cote == "site":   # ouvre la base : limité, comme l'API
                 if not DEBIT.autorise("sante:" + self.adresse(), 120, 60):
                     raise Erreur(429, "trop de requêtes")
                 return self.sante()
@@ -399,7 +399,8 @@ class Guichet(BaseHTTPRequestHandler):
             return self.envoyer(200, {"ok": True})
 
         if route[1] == "/api/mail/desinscription":
-            jeton = (parse_qs(urlsplit(self.path).query).get("jeton") or [""])[0]
+            jetons = parse_qs(urlsplit(self.path).query).get("jeton") or []   # plusieurs : un mail, plusieurs abonnements
+            jeton = jetons[0] if jetons else ""
             if route[0] == "GET":   # un lien ouvert ne désinscrit pas : il mène à la page et à son bouton
                 self.send_response(303)
                 self.send_header("Location", "/mail.html#desinscrire=" + re.sub(r"[^\w-]", "", jeton))
@@ -411,11 +412,12 @@ class Guichet(BaseHTTPRequestHandler):
                 return
             if route[0] == "POST":
                 brut = self.corps_brut()
-                if not jeton:   # depuis la page : {jeton} en JSON ; en un clic (RFC 8058) : ?jeton= dans l'adresse
-                    jeton = str(self.corps_json(brut).get("jeton", ""))
+                if not jetons:   # depuis la page : {jeton} en JSON ; en un clic (RFC 8058) : ?jeton= dans l'adresse
+                    jetons = [str(self.corps_json(brut).get("jeton", ""))]
                 if not DEBIT.autorise("mailj:" + self.adresse(), 20, 3600):
                     raise Erreur(429, "trop d'essais, réessayez plus tard")
-                comptes.sortir(ident, jeton)
+                for j in jetons[:10]:
+                    comptes.sortir(ident, j)
                 return self.envoyer(200, {"ok": True})   # déjà désinscrit : même réponse
 
         raise Erreur(404, "route inconnue")
@@ -442,7 +444,7 @@ class Guichet(BaseHTTPRequestHandler):
         if (self.headers.get("Content-Type") or "").split(";")[0].strip() != "application/json":
             raise Erreur(415, "JSON attendu")
         origine = self.headers.get("Origin")
-        if origine and origine.split("://", 1)[-1].lower() != config.hotes()["compte"] and origine != config.compte_url():
+        if origine and origine != config.compte_url():   # l'origine exacte : schéma, hôte et port
             raise Erreur(403, "origine refusée")
         if self.headers.get("Sec-Fetch-Site") not in (None, "same-origin"):
             raise Erreur(403, "origine refusée")
@@ -460,7 +462,8 @@ class Guichet(BaseHTTPRequestHandler):
             if nom not in types or not os.path.isfile(os.path.join(COMPTE, nom)):
                 raise Erreur(404, "introuvable")
             with open(os.path.join(COMPTE, nom), "rb") as f:
-                return self.envoyer(200, f.read(), types[nom], cache="no-store")
+                page = f.read().replace(b"__SITE_URL__", config.site_url().encode())   # le lien vers le site
+                return self.envoyer(200, page, types[nom], cache="no-store")
         if not DEBIT.autorise("ip:" + self.adresse(), 300, 60):
             raise Erreur(429, "trop de requêtes")
         ident = comptes.connexion()
@@ -492,6 +495,10 @@ class Guichet(BaseHTTPRequestHandler):
             if not DEBIT.autorise("cnx:" + self.adresse(), 20, 3600):
                 raise Erreur(429, "trop d'essais, réessayez dans une heure")
             d = self.corps_json()
+            a = comptes.normaliser(d.get("adresse"))
+            # dix essais par jour et par adresse, d'où qu'ils viennent : plusieurs adresses IP ne multiplient pas les essais
+            if a and not DEBIT.autorise("cnxadr:" + empreinte(a), 10, 86400):
+                raise Erreur(429, "trop d'essais pour cette adresse, réessayez demain")
             compte = comptes.verifier_code(ident, d.get("adresse"), d.get("code"))
             if not compte:
                 raise Erreur(403, "code faux ou expiré")
@@ -705,10 +712,27 @@ def boucle_envois(pause=60):
     threading.Thread(target=boucle, daemon=True, name="envois").start()
 
 
+def demarrage():
+    """Au démarrage du guichet : déplacer les abonnés de l'ancienne table abonnes, s'il en reste (ligne par ligne,
+    écrits dans identites.db puis retirés d'abonnes : il n'y a pas de fenêtre où une désinscription se perd),
+    puis dire à la fabrique, par le tiroir public, si le mail est en service."""
+    if config.mail():
+        from . import migrations
+        bilan = migrations.verser_abonnes()
+        if bilan["retirees"]:
+            print(f"guichet : {bilan['retirees']} ligne(s) déplacée(s) depuis la table abonnes", flush=True)
+    etat = {"mail": config.mail() is not None, "compte": config.compte_url() if config.mail() else None}
+    chemin = os.path.join(config.public(), "guichet.json")
+    with open(chemin + ".tmp", "w", encoding="utf-8") as f:
+        json.dump(etat, f)
+    os.replace(chemin + ".tmp", chemin)
+
+
 def guichet():
     """Le guichet seul : sert le site, le compte et l'urne ; envoie les mails. Il tient la clé d'envoi, pas celle
-    des modèles, et n'écrit pas le tiroir public."""
+    des modèles. Du tiroir public, il n'écrit que guichet.json (le mail est-il en service ?)."""
     srv = creer()
+    demarrage()
     oublier()
     print(f"guichet : écoute sur le port {srv.server_address[1]}", flush=True)
     boucle_envois()

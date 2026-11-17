@@ -16,8 +16,7 @@ serveur : tout est à vérifier en local d'abord, sur une copie de la vraie base
 ## Les réglages de chaque service
 
 - **fabrique** : `ANTHROPIC_API_KEY`, les réglages de récolte, `COMPARATEUR_SITE_URL`, `COMPARATEUR_UMAMI_ID`, et
-  `COMPARATEUR_MAIL_EN_SERVICE=1` si le guichet a ses réglages SMTP (les pages montrent alors le formulaire et le
-  lien du compte). Pas de clé SMTP.
+  rien pour le mail : elle lit `public/guichet.json`, écrit par le guichet. Pas de clé SMTP.
 - **guichet** : `COMPARATEUR_SMTP_UTILISATEUR`, `COMPARATEUR_SMTP_MOT_DE_PASSE` (secret), `COMPARATEUR_SITE_URL`,
   `COMPARATEUR_UMAMI_ID`. Pas de clé des modèles. `COMPARATEUR_IDENTITES=/identites` est écrit dans le compose.
 
@@ -45,14 +44,20 @@ Deux enregistrements de plus, vers le même serveur que le site : `compte.compar
 ## L'ordre, le jour du passage
 
 1. Sauvegarder le volume `comparateur-donnees` (il porte `comparateur.db`, donc la table `abonnes`).
-2. Sur une copie, en local : `python -m comparateur verser-abonnes`, vérifier le bilan (`lues` = `comptes` +
-   `deja`… + `invalides`), puis faire le parcours d'un abonné (lien de désinscription d'un mail déjà reçu).
-3. Déployer les deux services. Au démarrage, le guichet crée `identites.db` vide.
-4. Dans le terminal du guichet : `python -m comparateur verser-abonnes`. Les liens de désinscription déjà envoyés
-   marchent encore (le jeton d'`abonnes` devient le jeton de sortie).
-5. Quand tout est vérifié : `python -m comparateur oublier-abonnes`. Il ne vide `abonnes` que si chaque ligne est
-   retrouvée dans `identites.db`, puis compacte la base.
-6. Ajouter le volume `comparateur-identites` aux sauvegardes, à part de `comparateur-donnees`.
+2. Sur une copie, en local : lancer le guichet une fois (ou `python -m comparateur verser-abonnes`), lire le bilan
+   (`lues` = `abonnements` + `deja` + `invalides`), puis faire le parcours d'un abonné : le lien de désinscription
+   d'un mail déjà reçu doit marcher.
+3. Déployer les deux services. Au démarrage, le guichet crée `identites.db` et y déplace les abonnés d'`abonnes`,
+   ligne par ligne : chaque abonné est écrit dans `identites.db`, puis retiré d'`abonnes`. Il n'y a pas de moment
+   où une désinscription se perd, et un désinscrit ne revient pas au démarrage suivant. Les liens de désinscription
+   déjà envoyés marchent encore (le jeton d'`abonnes` devient le jeton de sortie).
+4. Ajouter les volumes `comparateur-identites` (et, en phase 3, `comparateur-urnes`) aux sauvegardes, à part de
+   `comparateur-donnees`. Les copies de `comparateur-donnees` d'avant le passage contiennent encore `abonnes` : les
+   garder le moins longtemps possible.
+
+Le guichet écrit `public/guichet.json` à son démarrage (`{"mail": true, "compte": "<adresse du compte>"}`) : la
+fabrique, qui n'a pas la clé SMTP, y lit si le mail est en service et l'adresse du compte. Le réglage
+`COMPARATEUR_MAIL_EN_SERVICE=1` n'est utile que pour forcer ce choix.
 
 ## En local
 
