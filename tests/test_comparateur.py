@@ -181,41 +181,28 @@ class Chaine(unittest.TestCase):
         self.assertEqual(self.appel("GET", "/../comparateur.db")[0], 404)
         self.assertEqual(self.appel("GET", "/%2e%2e/comparateur.db")[0], 404)
 
-    def test_3_vote_anonyme(self):
-        self.assertEqual(self.appel("GET", "/api/lot")[0], 401)
-        self.assertEqual(self.appel("POST", "/api/inscription", {"code": "faux", "bord": 0})[0], 403)
-        code = self.inviter()
-        self.assertEqual(self.appel("POST", "/api/inscription", {"code": code, "bord": 7})[0], 400)
-        statut, d = self.appel("POST", "/api/inscription", {"code": code, "bord": -1})
-        self.assertEqual(statut, 201)
-        jeton = d["jeton"]
-        self.assertEqual(self.appel("POST", "/api/inscription", {"code": code, "bord": 1})[0], 403)   # code à usage unique
-        # la base ne contient ni le jeton ni un lien invitation -> votant
-        self.assertIsNone(self.db.execute("SELECT 1 FROM votants WHERE id = ?", (jeton,)).fetchone())
-        self.assertEqual([c[1] for c in self.db.execute("PRAGMA table_info(votants)")], ["id", "bord", "cree"])
-
-        statut, d = self.appel("GET", "/api/lot", jeton=jeton)
-        self.assertEqual((statut, d["restants"], len(d["lot"]["titres"])), (200, 4, 10))
-        self.assertNotIn("media", json.dumps(d))            # aucun indice sur le média dans la réponse
-        lot = d["lot"]["id"]
-        self.assertEqual(self.appel("POST", "/api/avis-aveugle", {"lot": lot, "note": 3}, jeton)[0], 400)
-        self.assertEqual(self.appel("POST", "/api/avis-aveugle", {"lot": lot, "note": -2}, jeton)[0], 201)
-        self.assertEqual(self.appel("POST", "/api/avis-aveugle", {"lot": lot, "note": 2}, jeton)[0], 409)   # un vote par lot
-        self.assertEqual(self.appel("GET", "/api/lot", jeton=jeton)[1]["restants"], 3)
-        self.assertEqual(self.appel("POST", "/api/avis-note", {"media": "Le Monde", "accord": False}, jeton)[0], 201)
-        res = self.appel("GET", "/api/resultats")[1]
-        juge = [m for m, v in res.items() if "aveugle" in v]
-        self.assertEqual(len(juge), 1)
-        self.assertEqual(res[juge[0]]["aveugle"]["statut"], "indicatif")
-        self.assertEqual(res["Le Monde"]["accord"], {"oui": 0, "votes": 1})
+    def test_3_le_vieux_vote_est_parti(self):
+        """Phase 3 : le vote à l'aveugle passe par la carte de votant (compte et urne). Les routes du vieux vote ne
+        répondent plus ; la base neuve ne crée plus ses tables ; les lots partent au panel sans leur média."""
+        for methode, chemin, corps in (("POST", "/api/inscription", {"code": "x", "bord": 0}), ("GET", "/api/lot", None),
+                                       ("POST", "/api/avis-aveugle", {"lot": 1, "note": 0}),
+                                       ("POST", "/api/avis-note", {"media": "Le Monde", "accord": True}), ("GET", "/api/resultats", None)):
+            self.assertEqual(self.appel(methode, chemin, corps, jeton="essai")[0], 404, chemin)
+        tables = {r[0] for r in self.db.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+        self.assertFalse(tables & {"votants", "avis_aveugle", "avis_note", "invitations"}, tables)
+        code, lots = self.appel("GET", "/aveugle/lots.json")
+        self.assertEqual((code, len(lots["lots"])), (200, 4))
+        self.assertEqual(sorted(lots), ["lots"])
+        for lot in lots["lots"]:
+            self.assertEqual(sorted(lot), ["id", "titres"])                  # aucun indice sur le média
+            self.assertEqual(len(lot["titres"]), 10)
+        brut = json.dumps(lots, ensure_ascii=False)
+        for nom in ("L'Humanité", "Le Monde", "franceinfo", "Le Figaro", "media"):
+            self.assertNotIn(nom, brut)
 
     def test_4_garde_fous(self):
-        self.assertEqual(self.appel("POST", "/api/inscription", {"x": "y" * 5000})[0], 413)
         self.assertEqual(self.appel("GET", "/api/inconnu")[0], 404)
         self.assertEqual(self.appel("POST", "/")[0], 405)
-        for _ in range(12):   # 10 essais d'inscription par heure et par adresse
-            dernier = self.appel("POST", "/api/inscription", {"code": "faux", "bord": 0})[0]
-        self.assertEqual(dernier, 429)
 
 
 class Editions(unittest.TestCase):
@@ -949,7 +936,7 @@ class Assise(unittest.TestCase):
                 self.assertGreaterEqual(self.contraste(t[texte], t[fond]), 4.5, f"{nom} : --{texte} sur --{fond}")
             for fond in ("bg", "paper"):   # le contour est dessiné hors de l’élément (outline-offset), sur le fond
                 self.assertGreaterEqual(self.contraste(t["focus"], t[fond]), 3, f"{nom} : focus sur --{fond}")
-        for page, couples in (("aveugle.html", [("encre", "fond"), ("encre", "carte"), ("doux", "fond"), ("doux", "carte"), ("ko", "fond")]),
+        for page, couples in (("aveugle.html", [("encre", "fond"), ("encre", "carte"), ("doux", "fond"), ("doux", "carte"), ("fond", "encre")]),
                               ("mail.html", [("ink", "bg"), ("mute", "bg"), ("ko", "bg"), ("bg", "ink")])):
             p = self.lire(page)
             for nom, t in (("clair", self.jetons(p, ":root {")), ("sombre", self.jetons(p, "@media (prefers-color-scheme: dark)"))):
@@ -979,13 +966,20 @@ class Assise(unittest.TestCase):
         self.assertTrue(os.path.isfile(os.path.join(base.config.ICI, "..", "essais", "accessibilite.js")))
 
     def test_le_vote_a_l_aveugle_est_dit_pseudonyme(self):
-        # Le premier cadrage : un jeton stable est un pseudonyme, pas un anonymat ; et l'éditeur sait à qui il a remis
-        # chaque code. Les pages ne disent plus « anonyme » ni « aucun lien ».
-        for texte in (self.lire("aveugle.html"), self.lire("js", "vues", "mentions.js")):
-            self.assertIn("pseudonyme", texte)
+        # Le premier cadrage : une carte stable sur un trimestre est un pseudonyme, pas un anonymat. Les pages ne
+        # disent ni « anonyme » ni « aucun lien », hormis la phrase de la limite, mot pour mot.
+        limite = ("ce site ne garde aucun lien entre une personne et ses réponses ; il ne peut pas en reconstituer un "
+                  "après coup ; il ne protège pas contre un serveur piraté au moment même où la réponse est envoyée.")
+        mentions = self.lire("js", "vues", "mentions.js")
+        self.assertIn("pseudonyme", mentions)
+        self.assertIn(limite, mentions.lower())
+        for texte in (self.lire("aveugle.html"), mentions):
             self.assertNotIn("anonyme", texte.replace("pseudonyme", ""))
-            self.assertNotIn("aucun lien", texte.lower())
-        self.assertIn("#code=", self.lire("aveugle.html"))   # le code d'invitation n'arrive pas au serveur
+            self.assertNotIn("aucun lien", texte.lower().replace(limite, ""))
+        page = self.lire("aveugle.html")
+        self.assertIn("'//compte.' + location.host + '/panel'", page)   # la page renvoie au panel, sur le compte
+        self.assertNotIn("/api/", page)                                  # et n'appelle plus rien
+        self.assertIn("localStorage.removeItem('comparateur.jeton')", page)
         with open(os.path.join(base.config.ICI, "..", "README.md"), encoding="utf-8") as f:
             readme = f.read()
         self.assertFalse("aucun lien entre une invitation" in readme.lower())
@@ -1017,8 +1011,10 @@ class Assise(unittest.TestCase):
         import gzip
         temoins = {"adresse": "temoin-abonne@exemple.fr", "jeton": "temoin-jeton-abonne-0123", "votant": "temoin-votant-4567",
                    "code": "temoin-invitation-89"}
+        from comparateur import migrations
         db = base.connexion()
         try:
+            db.executescript(migrations.ANCIEN_VOTE)   # une base d'avant la phase 3, pas encore passée par oublier-votes
             db.execute("INSERT INTO abonnes (adresse, jeton, cree) VALUES (?, ?, ?)", (temoins["adresse"], temoins["jeton"], base.iso()))
             db.execute("INSERT INTO votants (id, bord, cree) VALUES (?, 1, ?)", (temoins["votant"], base.iso()[:10]))
             db.execute("INSERT INTO invitations (code, cree) VALUES (?, ?)", (temoins["code"], base.iso()))
@@ -1028,6 +1024,8 @@ class Assise(unittest.TestCase):
             db.execute("DELETE FROM abonnes WHERE adresse = ?", (temoins["adresse"],))
             db.execute("DELETE FROM votants WHERE id = ?", (temoins["votant"],))
             db.execute("DELETE FROM invitations WHERE code = ?", (temoins["code"],))
+            for t in migrations.TABLES_DU_VOTE:
+                db.execute(f"DROP TABLE IF EXISTS {t}")
             db.commit()
             db.close()
         for dossier, _, fichiers in os.walk(publier.config.public()):

@@ -9,9 +9,9 @@
 //              la couleur fait 3:1 avec le fond qui l'entoure ; dans les deux thèmes
 //   langue     la page déclare le français ; le titre de l'onglet reprend le h1 de la vue
 //
-// Les pages à part (aveugle.html, mail.html) sont contrôlées aussi, avec leurs états qui n'apparaissent qu'après un
-// geste : un lot à juger et la fin des lots (réponses du serveur simulées), le message d'erreur, le résultat d'un
-// clic sur mail.html. Le script liste tous les défauts, puis échoue s'il y en a.
+// Les pages à part (aveugle.html, qui renvoie au compte, et mail.html) sont contrôlées aussi, avec les états de
+// mail.html qui n'apparaissent qu'après un geste : le message d'erreur, le résultat d'un clic (réponses du serveur
+// simulées). Le script liste tous les défauts, puis échoue s'il y en a.
 //
 //   COMPARATEUR_DONNEES=/tmp/essai python3 essais/editions_essai.py
 //   COMPARATEUR_DONNEES=/tmp/essai COMPARATEUR_SMTP_UTILISATEUR=essai COMPARATEUR_SMTP_MOT_DE_PASSE=essai \
@@ -190,13 +190,7 @@ async function focus(page) {
 
 // Les états des pages à part qui n'apparaissent qu'après un geste. Les réponses du serveur sont simulées.
 async function etats(page, chemin) {
-  if (chemin === '/aveugle.html#lot') {
-    await page.route('**/api/lot', r => r.fulfill({ json: { lot: { id: 1, titres: Array.from({ length: 10 }, (_, i) => `Un titre d’essai numéro ${i + 1}, assez long pour une ligne`) }, restants: 3 } }));
-    await page.addInitScript(() => { try { localStorage.setItem('comparateur.jeton', 'essai'); } catch (e) {} });
-  } else if (chemin === '/aveugle.html#fini') {
-    await page.route('**/api/lot', r => r.fulfill({ json: { lot: null, restants: 0 } }));
-    await page.addInitScript(() => { try { localStorage.setItem('comparateur.jeton', 'essai'); } catch (e) {} });
-  } else if (chemin.startsWith('COMPTE')) {
+  if (chemin.startsWith('COMPTE')) {
     // le registre, demandé au vrai serveur sous le nom d'hôte du compte (fetch de Node ne laisse pas changer Host)
     const reg = await new Promise((ok, ko) => require('http').get({ host: new URL(B).hostname, port: new URL(B).port, path: '/api/compte/registre',
       headers: { Host: new URL(COMPTE).host } }, r => { let t = ''; r.on('data', x => t += x); r.on('end', () => ok(JSON.parse(t))); }).on('error', ko));
@@ -228,10 +222,10 @@ async function etats(page, chemin) {
       for (const j of jours) {
         const d = await (await fetch(`${B}/data/editions/${j}.json`)).json();
         const vues = ['#/', '#/pourquoi', '#/silences', '#/sujet/seuls', '#/semaine', '#/mois', '#/demarche', '#/origine', '#/mentions', '#/installer',
-          '#/classement', '#/medias', '#/situer', '#/media/' + encodeURIComponent(d.medias[0].nom), '#/editions'].concat(d.sujets.map(s => '#/sujet/' + s.id));
+          '#/classement', '#/medias', '#/situer', '#/panel', '#/media/' + encodeURIComponent(d.medias[0].nom), '#/editions'].concat(d.sujets.map(s => '#/sujet/' + s.id));
         for (const v of vues) pages.push(`/editions/${j}.html${v}`);
       }
-      pages.push('/aveugle.html', '/aveugle.html#lot', '/aveugle.html#fini', '/mail.html#confirmer=essai-essai-essai',
+      pages.push('/aveugle.html', '/mail.html#confirmer=essai-essai-essai',
         '/mail.html#desinscrire=essai-essai-essai', '/mail.html#desinscrire=essai-essai-clic', '/mail.html#confirmer=essai-essai-404', '/mail.html');
       if (COMPTE) pages.push('COMPTE#adresse', 'COMPTE#code', 'COMPTE#compte', ...ECRANS_PANEL.map(e => 'PANEL#' + e));
       // « Mes sujets » n'apparaît à l'accueil que si l'appareil en suit : une visite avec deux sujets suivis

@@ -51,3 +51,8 @@ details>summary{cursor:pointer;font-weight:700;font-size:.9rem;padding:8px 0;min
 .nums div{border:1px solid var(--line);background:var(--paper);padding:10px}
 .nums b{display:block;font-family:var(--serif);font-size:1.9rem;line-height:1.1}
 .nums span{font-size:.82rem;color:var(--mute)}
+/* le panel : l'étiquette de ses résultats, et l'échelle neutre de la lecture à l'aveugle (ni bande ni couleur de bord) */
+.etq{display:inline-block;font-family:var(--mono);font-size:.72rem;letter-spacing:.05em;text-transform:uppercase;padding:2px 8px;border:1px solid var(--ink);margin:0 0 10px}
+.avp{position:relative;height:16px;border:1px solid var(--ink);background:var(--paper);margin:4px 3px}
+.avp .avz{position:absolute;left:50%;top:0;bottom:0;border-left:1px dashed var(--mute)}
+.avp i{position:absolute;top:-5px;bottom:-5px;width:6px;background:var(--ink)}

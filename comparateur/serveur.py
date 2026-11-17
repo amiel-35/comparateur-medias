@@ -1,27 +1,23 @@
-"""Le serveur : le site statique et le guichet des votes. Bibliothèque standard seulement.
+"""Le serveur : le site statique, le compte et l'urne. Bibliothèque standard seulement.
 
   GET  /sante                      état du service (pour le contrôle de santé de Coolify)
-  POST /api/inscription            {code, bord}  -> {jeton}     un code d'invitation ouvre un jeton (un pseudonyme)
-  GET  /api/lot                    -> {lot: {id, titres} | null, restants}   (Authorization: Bearer <jeton>)
-  POST /api/avis-aveugle           {lot, note}   note de -2 (gauche) à +2 (droite)
-  POST /api/avis-note              {media, accord}
-  GET  /api/resultats              notes à l'aveugle par média, avec effectifs par bord
   POST /api/mail/inscription       {adresse}     -> 202, toujours la même réponse (synthèse de la semaine par mail)
   POST /api/mail/confirmation      {jeton}       confirme l'inscription (bouton de mail.html)
   POST /api/mail/desinscription    {jeton}, ou ?jeton= avec List-Unsubscribe=One-Click (RFC 8058) : supprime l'abonné
+  compte.<domaine>  /api/compte/…  le compte, le panel, le bulletin et la carte de votant, les lots à juger
+  urne.<domaine>    /api/urne/…    dépôt, effacement, avis à l'aveugle avec la carte ; sans cookie ni identité
   tout le reste                    fichiers de <données>/public/ (ETag et 304, gzip si le navigateur l'accepte)
 
-Pseudonyme, pas anonymat : la base garde l'empreinte du jeton, le bord déclaré et les avis, sans nom ni adresse (ni
-courriel ni IP). Le jeton relie entre eux les avis d'un même votant. L'éditeur sait à qui il a remis chaque code, et
-invitations.utilisee_le et votants.cree portent le même jour : avec peu d'inscrits, le rapprochement se fait à la main. Les abonnés au mail de la semaine
-sont dans un autre fichier (identites.db, voir comptes.py) : leur adresse n'est écrite dans aucun journal.
+Le vote à l'aveugle passe par la carte de votant (une par trimestre, signée sans être vue) : le site ne reçoit plus
+aucun avis. Ses résultats sont lus dans ce que l'urne publie à chaque clôture (aveugle.resultats). Les abonnés au
+mail de la semaine sont dans le tiroir identité (comptes.py) : leur adresse n'est écrite dans aucun journal.
 """
-import gzip, hashlib, json, mimetypes, os, re, secrets, sys, threading, time
+import gzip, hashlib, json, mimetypes, os, re, sys, threading, time
 from collections import OrderedDict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
-from . import abonnements, aveugle, base, ceremonie, comptes, config, lettre, signature, urne
+from . import abonnements, base, ceremonie, comptes, config, lettre, signature, urne
 
 CORPS_MAX = 4096
 # Le manifest de l'application : type exigé par certains navigateurs, absent des vieilles tables de Python.
@@ -231,17 +227,6 @@ class Guichet(BaseHTTPRequestHandler):
             raise Erreur(400, "objet JSON attendu")
         return d
 
-    def votant(self, db):
-        auth = self.headers.get("Authorization", "")
-        if not auth.startswith("Bearer ") or len(auth) > 200:
-            raise Erreur(401, "jeton manquant")
-        vid = empreinte(auth[7:].strip())
-        if not db.execute("SELECT 1 FROM votants WHERE id = ?", (vid,)).fetchone():
-            raise Erreur(401, "jeton inconnu")
-        if not DEBIT.autorise("v:" + vid, 120, 60):
-            raise Erreur(429, "trop de requêtes")
-        return vid
-
     # ---- routes
 
     def do_GET(self):
@@ -284,11 +269,7 @@ class Guichet(BaseHTTPRequestHandler):
                 # La limite de débit ne vaut que pour l'API : les fichiers publics (cachés, compressés) ne sont pas limités.
                 if not DEBIT.autorise("ip:" + self.adresse(), 300, 60):
                     raise Erreur(429, "trop de requêtes")
-                db = base.connexion()
-                try:
-                    return self.api(chemin, db)
-                finally:
-                    db.close()
+                return self.api(chemin)
             if self.command == "POST":
                 raise Erreur(405, "méthode non permise")
             return self.fichier(chemin)
@@ -307,65 +288,10 @@ class Guichet(BaseHTTPRequestHandler):
             db.close()
         self.envoyer(200, {"ok": True, "derniere_publication": derniere["fin"] if derniere else None})
 
-    def api(self, chemin, db):
+    def api(self, chemin):
+        """L'API du site. Le vote à l'aveugle n'y est plus : il passe par la carte de votant (compte et urne), et ses
+        résultats sont publiés comme des fichiers (public/panel/aveugle/). Ce côté n'ouvre plus comparateur.db."""
         route = (self.command, chemin)
-        if route == ("POST", "/api/inscription"):
-            if not DEBIT.autorise("insc:" + self.adresse(), 10, 3600):
-                raise Erreur(429, "trop d'essais, réessayez plus tard")
-            d = self.corps_json()
-            code, bord = str(d.get("code", "")).strip(), d.get("bord")
-            if not isinstance(bord, int) or isinstance(bord, bool) or not -2 <= bord <= 2:
-                raise Erreur(400, "bord attendu : entier de -2 à 2")
-            # Le code est consommé d'un seul geste : deux inscriptions simultanées ne passent pas toutes deux.
-            cur = db.execute("UPDATE invitations SET utilisee_le = ? WHERE code = ? AND utilisee_le IS NULL",
-                             (base.iso()[:10], code))
-            if cur.rowcount != 1:
-                db.rollback()
-                raise Erreur(403, "code d'invitation inconnu ou déjà utilisé")
-            jeton = secrets.token_urlsafe(32)
-            db.execute("INSERT INTO votants (id, bord, cree) VALUES (?, ?, ?)", (empreinte(jeton), bord, base.iso()[:10]))
-            db.commit()
-            return self.envoyer(201, {"jeton": jeton})
-
-        if route == ("GET", "/api/resultats"):
-            return self.envoyer(200, aveugle.resultats(db), cache="public, max-age=60")
-
-        if route == ("GET", "/api/lot"):
-            vid = self.votant(db)
-            lots = db.execute(
-                """SELECT id, titres FROM lots_aveugle WHERE id NOT IN
-                   (SELECT lot_id FROM avis_aveugle WHERE votant_id = ?) ORDER BY id DESC""", (vid,)).fetchall()
-            if not lots:
-                return self.envoyer(200, {"lot": None, "restants": 0})
-            lot = lots[secrets.randbelow(len(lots))]  # ordre aléatoire : pas d'indice par la position
-            return self.envoyer(200, {"lot": {"id": lot["id"], "titres": json.loads(lot["titres"])}, "restants": len(lots)})
-
-        if route == ("POST", "/api/avis-aveugle"):
-            vid, d = self.votant(db), self.corps_json()
-            lot, note = d.get("lot"), d.get("note")
-            if not isinstance(lot, int) or not isinstance(note, int) or isinstance(note, bool) or not -2 <= note <= 2:
-                raise Erreur(400, "attendu : lot (entier), note (entier de -2 à 2)")
-            if not db.execute("SELECT 1 FROM lots_aveugle WHERE id = ?", (lot,)).fetchone():
-                raise Erreur(404, "lot inconnu")
-            try:
-                db.execute("INSERT INTO avis_aveugle (votant_id, lot_id, note, cree) VALUES (?,?,?,?)",
-                           (vid, lot, note, base.iso()[:10]))
-                db.commit()
-            except base.sqlite3.IntegrityError:
-                raise Erreur(409, "lot déjà jugé")
-            return self.envoyer(201, {"ok": True})
-
-        if route == ("POST", "/api/avis-note"):
-            vid, d = self.votant(db), self.corps_json()
-            m = db.execute("SELECT id FROM medias WHERE nom = ?", (str(d.get("media", "")),)).fetchone()
-            if not m or not isinstance(d.get("accord"), bool):
-                raise Erreur(400, "attendu : media (nom connu), accord (booléen)")
-            db.execute("""INSERT INTO avis_note (votant_id, media_id, accord, cree) VALUES (?,?,?,?)
-                          ON CONFLICT(votant_id, media_id) DO UPDATE SET accord = excluded.accord, cree = excluded.cree""",
-                       (vid, m["id"], int(d["accord"]), base.iso()[:10]))
-            db.commit()
-            return self.envoyer(201, {"ok": True})
-
         if chemin.startswith("/api/mail/") and config.mail():
             ident = comptes.connexion()
             try:

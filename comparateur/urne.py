@@ -309,6 +309,16 @@ def lots_juges(trimestre, carte):
         db.close()
 
 
+HISTORIQUE = "aveugle-historique"   # les avis d'avant la carte de votant, versés une fois (migrations.verser_votes)
+
+
+def ouvrir_aveugle(nom_urne, creer=False):
+    """Une urne du vote à l'aveugle, ouverte telle quelle : pour la migration des avis d'avant la carte seulement."""
+    if not nom_urne.startswith("aveugle-"):
+        raise Refus(404, "urne inconnue")
+    return _ouvrir(nom_urne, SCHEMA_AVEUGLE, creer=creer)
+
+
 def agregats_aveugle(nom_urne):
     """Pour chaque lot : nombre d'avis et somme des notes, par bord déclaré. Ce que l'urne publie, après la clôture
     du trimestre : jamais un avis, jamais une carte. Rend {lot: {g: [n, somme], c: [...], d: [...]}}."""

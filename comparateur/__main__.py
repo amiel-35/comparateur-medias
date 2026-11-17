@@ -9,16 +9,20 @@
   pages                réécrit le site depuis les éditions gardées, sans en refaire une (au démarrage)
   tout                 l'édition du jour : recolter + regrouper + analyser + lots + publier
   importer <fichier>   charge une récolte du test de concept (articles.json)
-  inviter [n]          crée n codes d'invitation et les affiche (défaut : 1)
+  panel-inviter [n]    crée n codes d'invitation au panel et affiche leur lien (défaut : 1 ; mail réglé)
   jetons               bilan des appels aux modèles (jetons, coût)
   journal              dernières étapes de la fabrique
   servir               le guichet et la fabrique dans un seul processus (poste de développement)
   guichet              le guichet seul : site, compte, urne, mails (service « guichet » du compose)
   fabrique             la fabrique seule : récolte et édition, sans port (service « fabrique » du compose)
   verser-abonnes       déplace la table abonnes de comparateur.db dans identites.db (le guichet le fait au démarrage)
+  verser-votes         copie les avis du vieux vote à l'aveugle dans urnes/aveugle-historique.db et publie leurs
+                       sommes (public/panel/aveugle/historique.json) ; migration de la phase 3
+  oublier-votes        vide votants, avis_aveugle, avis_note et invitations de comparateur.db, une fois chaque avis
+                       retrouvé dans l'urne historique
   mail-essai <adresse> envoie à cette seule adresse la synthèse de la dernière semaine (SMTP réglé)
 """
-import secrets, sys
+import sys
 
 from . import aveugle, base, chaine, config, fabrique, llm, publier
 # Le guichet (serveur, lettre, comptes) n'est importé que par ses commandes : le processus de la fabrique ne
@@ -47,6 +51,27 @@ def main(argv):
         from . import migrations
         print(migrations.verser_abonnes())
         return 0
+    if cmd in ("verser-votes", "oublier-votes"):
+        from . import migrations
+        bilan = migrations.verser_votes() if cmd == "verser-votes" else migrations.oublier_votes()
+        print(bilan)
+        return 1 if bilan.get("manquants") else 0
+    if cmd == "panel-inviter":
+        if not config.compte_url():
+            print("mail éteint : sans réglages SMTP, ni compte ni panel (COMPARATEUR_SMTP_UTILISATEUR, COMPARATEUR_SMTP_MOT_DE_PASSE)")
+            return 1
+        from . import comptes
+        ident = comptes.connexion()
+        try:
+            for code in comptes.inviter_panel(ident, int(argv[2]) if len(argv) > 2 else 1):
+                # le code dans le fragment : ni le serveur ni le journal du proxy ne le voient
+                print(f"{code}  {config.compte_url()}/panel#code={code}")
+        finally:
+            ident.close()
+        return 0
+    if cmd == "inviter":
+        print("commande retirée avec l'ancien vote à l'aveugle : le panel invite par `python -m comparateur panel-inviter [n]`")
+        return 2
     db = base.connexion()
     try:
         if cmd == "init":
@@ -68,13 +93,6 @@ def main(argv):
             chaine.tout(db)
         elif cmd == "importer":
             print(fabrique.importer_json(db, argv[2]), "titres importés")
-        elif cmd == "inviter":
-            for _ in range(int(argv[2]) if len(argv) > 2 else 1):
-                code = secrets.token_urlsafe(9)
-                db.execute("INSERT INTO invitations (code, cree) VALUES (?, ?)", (code, base.iso()))
-                # le code dans le fragment : ni le serveur ni le journal du proxy ne le voient
-                print(f"{code}  {config.site_url()}/aveugle.html#code={code}")
-            db.commit()
         elif cmd == "jetons":
             total = {"appels": 0, "entree": 0, "sortie": 0, "cout": 0.0}
             for (etape, modele), b in sorted(llm.bilan().items()):
