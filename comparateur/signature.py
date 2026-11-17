@@ -10,7 +10,7 @@ RSA-PSS ordinaire (RFC 8017) et ne peut pas être rapprochée de la demande. Les
   verifier(cle_publique, prepare, signature)                     l'urne vérifie                    (§4.5)
 
 Une clé ne sert qu'à un questionnaire et à rien d'autre (RFC 9474, §6.2 et §7.2). La même règle est écrite en
-JavaScript dans site/js/aveugle-rsa.js ; les deux passent les vecteurs de l'annexe A.1 de la RFC.
+JavaScript dans compte/aveugle-rsa.js ; les deux passent les vecteurs de l'annexe A.1 de la RFC.
 
 Ce module ne connaît ni compte ni urne : il n'importe rien du paquet.
 """
@@ -139,7 +139,7 @@ def publique(cle):
 
 
 def en_hex(pk):
-    """La clé publique en hexadécimal, comme la lit site/js/aveugle-rsa.js."""
+    """La clé publique en hexadécimal, comme la lit compte/aveugle-rsa.js."""
     return {"n": format(pk["n"], "x"), "e": format(pk["e"], "x")}
 
 

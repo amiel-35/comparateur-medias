@@ -242,7 +242,9 @@ def resultats(questionnaire):
             par[g] = {"statut": "publiable" if n >= SEUIL_PUBLIABLE else "indicatif", "reponses": n, "par_choix": nombres}
         questions.append({"id": x["id"], "texte": x["texte"], "choix": x["choix"], "profil": bool(x.get("profil")), "par_bord": par})
     return {"v": 1, "mesure": "panel", "questionnaire": q["id"], "titre": q["titre"], "etiquette": ETIQUETTE,
-            "delivres": int(meta.get("delivres", "0")), "recues": len(lignes),
+            # le total n'est publié que si chaque bord est montré : sinon il dirait l'effectif d'un bord caché
+            "delivres": int(meta.get("delivres", "0")),
+            "recues": len(lignes) if all(n >= SEUIL_RIEN for n in effectifs.values()) else None,
             "effectifs": {g: (n if n >= SEUIL_RIEN else None) for g, n in effectifs.items()},
             "scellement": meta.get("scellement", ""), "questions": questions}
 

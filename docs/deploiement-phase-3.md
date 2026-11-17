@@ -30,8 +30,12 @@ les deux réglages SMTP, elles refusent.
   compactée et scellée, résultats publiés dans `public/panel/resultats/<id>.json` avec deux effectifs. Le guichet la
   fait seul le lendemain du jour de fermeture inscrit dans le questionnaire. La commande refuse un questionnaire
   inconnu ou déjà clos.
-- `python -m comparateur questionnaire resultats <id>` : recompte un questionnaire clos et republie ses résultats,
-  par exemple après qu'un membre a effacé ses réponses par son reçu. Avant la clôture, elle refuse.
+- `python -m comparateur questionnaire resultats <id>` : recompte un questionnaire clos, le scelle de nouveau et
+  republie ses résultats, par exemple après qu'un membre a effacé ses réponses par son reçu. Avant la clôture, elle
+  refuse. Attention : la différence entre deux publications montre la ligne effacée (son bord et ses réponses). Ne
+  republier qu'après plusieurs effacements, ou jamais ; les résultats publiés restent sinon ceux de la clôture.
+- Une clôture interrompue (arrêt du guichet, base verrouillée) se reprend : le guichet la finit seul à la minute
+  suivante, ou `questionnaire fermer <id>` la relance.
 - Les résultats paraissent sur le site (vue `#/panel`) quand la fabrique réécrit les pages, à l'édition suivante.
 - La carte de votant du vote à l'aveugle : une clé par trimestre, créée à la première demande, détruite au début du
   trimestre suivant, quand le guichet publie les agrégats par lot (`public/panel/aveugle/<trimestre>.json`).

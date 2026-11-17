@@ -134,7 +134,8 @@ def main(argv):
 def _resume(res):
     """Ce qui a été publié, en clair : les deux effectifs, et chaque bord (montré ou non)."""
     lignes = [f"  {res['titre']} ({res['questionnaire']})",
-              f"  bulletins délivrés : {res['delivres']}, réponses reçues : {res['recues']}",
+              f"  bulletins délivrés : {res['delivres']}, réponses reçues : "
+              f"{res['recues'] if res['recues'] is not None else 'non publié (un bord en a moins de 5)'}",
               "  par bord : " + ", ".join(f"{nom} {res['effectifs'][g] if res['effectifs'][g] is not None else 'moins de 5'}"
                                           for g, nom in (("g", "gauche"), ("c", "centre"), ("d", "droite"))),
               f"  scellement : {res['scellement']}"]

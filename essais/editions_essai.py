@@ -102,7 +102,7 @@ def panel_factice(db):
                                                        "etiquette": "Panel de volontaires. Ce n’est pas un sondage.", "lots": lots})
     ecrire_json("panel", "resultats", "essai-confiance.json", x={
         "v": 1, "mesure": "panel", "questionnaire": "essai-confiance", "titre": "La confiance dans les médias (essai)",
-        "etiquette": "Panel de volontaires. Ce n’est pas un sondage.", "delivres": 31, "recues": 29,
+        "etiquette": "Panel de volontaires. Ce n’est pas un sondage.", "delivres": 31, "recues": None,
         "effectifs": {"g": 12, "c": None, "d": 13}, "scellement": "9f2c" * 16, "questions": [
             {"id": "q1", "texte": "Faites-vous confiance aux médias pour vous informer ?", "choix": ["Oui", "Plutôt", "Plutôt pas", "Non"], "profil": False,
              "par_bord": {"g": {"statut": "publiable", "reponses": 12, "par_choix": [2, 5, 3, 2]}, "c": {"statut": "moins de 5"},

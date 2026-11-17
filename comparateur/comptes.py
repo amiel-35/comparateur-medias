@@ -113,7 +113,10 @@ def lire(db, compte):
                 """SELECT type, cible, etat, cree_jour, fin_jour, dernier_envoi FROM abonnements WHERE compte = ?
                    ORDER BY type, cible""", (compte,))],
             "sessions": [dict(r) for r in db.execute(
-                "SELECT cree_jour, fin_jour FROM sessions WHERE compte = ? ORDER BY cree_jour", (compte,))]}
+                "SELECT cree_jour, fin_jour FROM sessions WHERE compte = ? ORDER BY cree_jour", (compte,))],
+            # le panel : les questionnaires et la carte dont le compte a retiré le bulletin, jusqu'à leur clôture
+            "retraits": [r[0] for r in db.execute(
+                "SELECT questionnaire FROM retraits WHERE compte = ? ORDER BY questionnaire", (compte,))]}
 
 
 def supprimer(db, compte):

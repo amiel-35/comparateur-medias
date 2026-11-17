@@ -252,7 +252,8 @@ class Parcours(unittest.TestCase):
             with self.assertRaises(urne.Refus):
                 urne.resultats(q["id"])
             res = ceremonie.fermer(q["id"])
-            self.assertEqual((res["delivres"], res["recues"]), (6, 5))
+            self.assertEqual((res["delivres"], res["recues"]), (6, None))                    # un bord caché : pas de total
+            self.assertEqual(sum(n for n in res["effectifs"].values() if n), 0)
             self.assertEqual(res["etiquette"], "Panel de volontaires. Ce n’est pas un sondage.")
             self.assertEqual(res["questions"][0]["par_bord"]["g"]["statut"], "moins de 5")   # 3 à gauche : rien
             self.assertEqual(self.bulletin(membres[0], q["id"], pk)[0], 410)               # après : plus de bulletin
@@ -270,6 +271,47 @@ class Parcours(unittest.TestCase):
         texte = journal.getvalue()
         for secret in ["membre0@exemple.fr", "127.0.0.1"] + [p.hex() for p in recus] + [urne.empreinte(p) for p in recus]:
             self.assertNotIn(secret, texte)
+        self.assertIn("/api/compte/bulletin", texte)
+        self.assertNotIn("/api/urne/", texte)                                               # rien de l'urne au journal
+
+    def test_cloture_interrompue_puis_reprise(self):
+        """Une clôture qui s'arrête après la destruction de la clé se reprend seule ; l'urne n'accepte plus rien
+        entre-temps ; un compte supprimé n'ôte pas son bulletin du compte des délivrés."""
+        sortie = io.StringIO()
+        with contextlib.redirect_stdout(sortie):
+            q = dict(json.loads(json.dumps(Questionnaire.BON)), id="essai-reprise")
+            pk = signature.de_hex(ceremonie.ouvrir(q)["cle"])
+            a, b = self.membre("reprise-a@exemple.fr"), self.membre("reprise-b@exemple.fr")
+            s, prep, sig = self.bulletin(a, q["id"], pk)
+            self.assertEqual(self.deposer(q["id"], prep, sig)[0], 201)
+            self.assertEqual(self.bulletin(b, q["id"], pk)[0], 200)
+            self.assertEqual(self.appel("GET", "/api/compte", cookie=b)[2]["sait"]["retraits"], [q["id"]])   # l'écran le dit
+            self.assertEqual(self.appel("POST", "/api/compte/suppression", {}, cookie=b)[0], 200)   # son retrait part avec lui
+            vraie = urne.sceller
+            urne.sceller = lambda x: (_ for _ in ()).throw(sqlite3.OperationalError("database is locked"))
+            try:
+                with self.assertRaises(sqlite3.OperationalError):
+                    ceremonie.fermer(q["id"])
+            finally:
+                urne.sceller = vraie
+            # la clé n'est plus là, l'urne est close : un dépôt reçoit 410, lisible par la page
+            s, e, _ = self.deposer(q["id"], *self.bulletin_signe_hors_guichet(q["id"], pk))
+            self.assertEqual((s, e["Access-Control-Allow-Origin"]), (410, "https://compte.cadrages.test"))
+            ident = comptes.connexion()
+            try:
+                self.assertEqual(ceremonie.a_reprendre(ident), [q["id"]])
+                self.assertIn(q["id"], ceremonie.echeances(ident))
+                self.assertEqual(ceremonie.a_reprendre(ident), [])
+            finally:
+                ident.close()
+            with open(os.path.join(config.public(), "panel", "resultats", q["id"] + ".json"), encoding="utf-8") as f:
+                res = json.load(f)
+            self.assertEqual(res["delivres"], 2)                                              # le compte supprimé reste compté
+            self.assertIsNone(res["recues"])
+            self.assertTrue(res["scellement"])
+            self.assertFalse(os.path.exists(os.path.join(config.public(), "panel", "questionnaires", q["id"] + ".json")))
+            # une urne du vote ne s'ouvre pas comme une urne de questionnaire
+            self.assertEqual(self.deposer("aveugle-2026t4", prep, sig)[0], 404)
 
     def test_la_page_du_panel_est_servie(self):
         """compte.<domaine>/panel sert la page et son script ; la politique de la page admet l'urne et rien d'autre."""
@@ -437,6 +479,19 @@ class PagePanel(unittest.TestCase):
         self.assertIn("plus.href = '/panel'", compte)
         self.assertIn("'En savoir plus'", compte)
         self.assertIn("c.disabled = !t.ouvert || panel", compte)       # la case reste désactivée
+        # déconnexion et suppression effacent de l'appareil ce que le panel y garde
+        self.assertEqual(compte.count("oublierPanel();"), 2)
+        for cle in ("cadrages.bord", "cadrages.bulletins", "cadrages.carte", "cadrages.recus"):
+            self.assertIn(f"'{cle}'", compte)
+
+    def test_le_classement_ne_range_pas_par_la_note_du_panel(self):
+        """Ce site ne classe aucun média : la lecture à l'aveugle est listée par nom, sans les non classés."""
+        with open(os.path.join(config.ICI, "site", "js", "vues", "classement.js"), encoding="utf-8") as f:
+            js = f.read()
+        bloc = js[js.index("if(AV){"):]
+        self.assertIn("x.nom.localeCompare(y.nom,'fr')", bloc)
+        self.assertNotIn(".note-", bloc)
+        self.assertIn("return !nc[n];", bloc)
 
 
 class MigrationDuVote(unittest.TestCase):
@@ -672,7 +727,7 @@ class LigneDeCommande(unittest.TestCase):
 
         code, texte = self.lancer("questionnaire", "fermer", "essai-commande")
         self.assertEqual(code, 0, texte)
-        self.assertIn("bulletins délivrés : 0, réponses reçues : 0", texte)
+        self.assertIn("bulletins délivrés : 0, réponses reçues : non publié", texte)
         self.assertIn("gauche moins de 5", texte)
         with open(os.path.join(config.public(), "panel", "resultats", "essai-commande.json"), encoding="utf-8") as f:
             self.assertEqual(json.load(f)["questionnaire"], "essai-commande")

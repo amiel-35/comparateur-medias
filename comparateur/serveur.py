@@ -669,7 +669,7 @@ def demarrage():
 
 def guichet():
     """Le guichet seul : sert le site, le compte et l'urne ; envoie les mails. Il tient la clé d'envoi, pas celle
-    des modèles. Du tiroir public, il n'écrit que guichet.json (le mail est-il en service ?)."""
+    des modèles. Du tiroir public, il n'écrit que guichet.json et public/panel/ (le mail est-il en service ?)."""
     srv = creer()
     demarrage()
     oublier()

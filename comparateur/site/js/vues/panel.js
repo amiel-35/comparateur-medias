@@ -10,7 +10,7 @@ function vPanel(){
   PANEL.forEach(function(q){
     var ef=q.effectifs||{};
     h+='<h2>'+esc(q.titre||q.questionnaire||'Questionnaire')+'</h2>'+
-    '<p class="note">'+pl(q.delivres||0,'membre l’a commencé','membres l’ont commencé')+', '+pl(q.recues||0,'réponse est arrivée','réponses sont arrivées')+'. Il ne peut pas y avoir plus de réponses que de questionnaires commencés.'+
+    '<p class="note">'+pl(q.delivres||0,'membre l’a commencé','membres l’ont commencé')+(q.recues!=null?', '+pl(q.recues,'réponse est arrivée','réponses sont arrivées')+'. Il ne peut pas y avoir plus de réponses que de questionnaires commencés.':'. Le nombre de réponses arrivées n’est pas publié : un bord en compte moins de cinq, et le total le dirait.')+
     (q.scellement?' Empreinte des réponses, prise à la clôture : <span class="pn-s">'+esc(q.scellement)+'</span>.':'')+'</p>';
     (q.questions||[]).forEach(function(x){
       var par=x.par_bord||{};
