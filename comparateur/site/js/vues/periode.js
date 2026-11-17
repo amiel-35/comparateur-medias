@@ -48,7 +48,7 @@ function vPeriode(type){
   /* par journal */
   h+='<h2>Par journal</h2><p class="note">« Grands sujets » : ceux repris par '+p.min_medias+' médias ou plus. « Dans le top » : présence parmi les '+p.top.length+' sujets les plus couverts.</p>';
   h+='<div class="ptw"><table class="pt"><thead><tr><th scope="col">Journal</th><th scope="col">Bord</th><th scope="col">Titres rangés</th><th scope="col">Grands sujets</th><th scope="col">Dans le top</th></tr></thead><tbody>'+p.medias.map(function(m){
-    return '<tr><th scope="row"><a href="#/media/'+enc(m.nom)+'">'+esc(m.nom)+'</a></th><td>'+(BL[m.bord]||GL[m.cote]||'')+'</td><td>'+m.titres+'</td><td>'+m.sujets+' sur '+p.larges+'</td><td>'+m.top+' sur '+p.top.length+'</td></tr>';
+    return '<tr><th scope="row"><a href="#/media/'+enc(m.nom)+'">'+esc(m.nom)+'</a></th><td>'+(BL[m.bord]||GL[m.cote]||'Non classé')+'</td><td>'+m.titres+'</td><td>'+m.sujets+' sur '+p.larges+'</td><td>'+m.top+' sur '+p.top.length+'</td></tr>';
   }).join('')+'</tbody></table></div>';
   h+='<p class="note">Limites. Un journal absent d’un sujet n’en a peut-être pas parlé, ou son titre n’a pas été rangé sous ce sujet. Deux sujets ouverts séparément sur le même fait sont comptés deux fois. Les journaux dont le flux est illisible n’apparaissent pas.</p>';
   return h;

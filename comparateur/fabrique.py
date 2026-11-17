@@ -444,7 +444,8 @@ def sujets_du_jour(db):
                 ORDER BY s.id, a.id""", (base.depuis(),) + rubs):
         s = out.setdefault(r["sid"], {"id": r["sid"], "libelle": r["libelle"], "articles": []})
         s["articles"].append({"id": r["id"], "titre": r["titre"], "lien": r["lien"], "media": r["nom"],
-                              "cote": base.COTE[base.bord(notes.get(r["media_id"], 0.0))]})
+                              # un média non classé n'a pas de côté : ses titres comptent dans la couverture seulement
+                              "cote": base.COTE[base.bord(notes[r["media_id"]])] if r["media_id"] in notes else None})
     sujets = list(out.values())
     for s in sujets:
         s["medias"] = len({a["media"] for a in s["articles"]})
@@ -456,7 +457,7 @@ def analyser(db):
     """Analyse le cadrage des sujets assez couverts ; ne refait pas un sujet dont les titres n'ont pas changé."""
     with base.Etape(db, "analyse") as etape:
         candidats = [s for s in sujets_du_jour(db)
-                     if s["medias"] >= MIN_MEDIAS and len({a["cote"] for a in s["articles"]}) >= 2][:MAX_SUJETS]
+                     if s["medias"] >= MIN_MEDIAS and len({a["cote"] for a in s["articles"]} - {None}) >= 2][:MAX_SUJETS]
         faites = {r["sujet_id"]: r["empreinte"] for r in db.execute("SELECT sujet_id, empreinte FROM analyses")}
         a_faire = [s for s in candidats if faites.get(s["id"]) != empreinte(a["id"] for a in s["articles"])]
 

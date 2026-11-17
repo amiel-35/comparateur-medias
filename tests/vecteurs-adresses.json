@@ -1,0 +1,284 @@
+[
+ {
+  "entree": "https://www.LeMonde.fr/politique/article/2026/11/17/titre_1.html",
+  "normalisee": "lemonde.fr/politique/article/2026/11/17/titre_1.html",
+  "cle": "7cf59fb3de71d8fc",
+  "domaine": "lemonde.fr"
+ },
+ {
+  "entree": "http://lemonde.fr/a/b",
+  "normalisee": "lemonde.fr/a/b",
+  "cle": "f2b256adca4059a4",
+  "domaine": "lemonde.fr"
+ },
+ {
+  "entree": "https://m.lemonde.fr/a/b",
+  "normalisee": "lemonde.fr/a/b",
+  "cle": "f2b256adca4059a4",
+  "domaine": "lemonde.fr"
+ },
+ {
+  "entree": "https://mobile.lemonde.fr/a/b",
+  "normalisee": "lemonde.fr/a/b",
+  "cle": "f2b256adca4059a4",
+  "domaine": "lemonde.fr"
+ },
+ {
+  "entree": "https://amp.lemonde.fr/a/b",
+  "normalisee": "lemonde.fr/a/b",
+  "cle": "f2b256adca4059a4",
+  "domaine": "lemonde.fr"
+ },
+ {
+  "entree": "https://www.m.lemonde.fr/a",
+  "normalisee": "m.lemonde.fr/a",
+  "cle": "c8b0c68fa461a734",
+  "domaine": "lemonde.fr"
+ },
+ {
+  "entree": "https://www.lemonde.fr:8443/a/b",
+  "normalisee": "lemonde.fr/a/b",
+  "cle": "f2b256adca4059a4",
+  "domaine": "lemonde.fr"
+ },
+ {
+  "entree": "https://lemonde.fr:443/a/b",
+  "normalisee": "lemonde.fr/a/b",
+  "cle": "f2b256adca4059a4",
+  "domaine": "lemonde.fr"
+ },
+ {
+  "entree": "https://lemonde.fr:/a",
+  "normalisee": "lemonde.fr/a",
+  "cle": "5b0a7fc45933c5f1",
+  "domaine": "lemonde.fr"
+ },
+ {
+  "entree": "https://lemonde.fr/a/b?utm_source=x&id=3",
+  "normalisee": "lemonde.fr/a/b",
+  "cle": "f2b256adca4059a4",
+  "domaine": "lemonde.fr"
+ },
+ {
+  "entree": "https://lemonde.fr/a/b#section",
+  "normalisee": "lemonde.fr/a/b",
+  "cle": "f2b256adca4059a4",
+  "domaine": "lemonde.fr"
+ },
+ {
+  "entree": "https://lemonde.fr/a/b/?x=1#y",
+  "normalisee": "lemonde.fr/a/b",
+  "cle": "f2b256adca4059a4",
+  "domaine": "lemonde.fr"
+ },
+ {
+  "entree": "https://lemonde.fr",
+  "normalisee": "lemonde.fr/",
+  "cle": "161ad841e05255bc",
+  "domaine": "lemonde.fr"
+ },
+ {
+  "entree": "https://lemonde.fr/",
+  "normalisee": "lemonde.fr/",
+  "cle": "161ad841e05255bc",
+  "domaine": "lemonde.fr"
+ },
+ {
+  "entree": "https://lemonde.fr?x=1",
+  "normalisee": "lemonde.fr/",
+  "cle": "161ad841e05255bc",
+  "domaine": "lemonde.fr"
+ },
+ {
+  "entree": "https://lemonde.fr#top",
+  "normalisee": "lemonde.fr/",
+  "cle": "161ad841e05255bc",
+  "domaine": "lemonde.fr"
+ },
+ {
+  "entree": "https://lemonde.fr/caf%C3%A9/article",
+  "normalisee": "lemonde.fr/caf%C3%A9/article",
+  "cle": "5eb370d6f8323f3f",
+  "domaine": "lemonde.fr"
+ },
+ {
+  "entree": "https://lemonde.fr/café/article",
+  "normalisee": "lemonde.fr/café/article",
+  "cle": "87bb50995c4c96a7",
+  "domaine": "lemonde.fr"
+ },
+ {
+  "entree": "https://lemonde.fr/Politique/Article-X",
+  "normalisee": "lemonde.fr/Politique/Article-X",
+  "cle": "349e3d281720026f",
+  "domaine": "lemonde.fr"
+ },
+ {
+  "entree": "https://lemonde.fr/a%2Fb/c",
+  "normalisee": "lemonde.fr/a%2Fb/c",
+  "cle": "0561317edfea07af",
+  "domaine": "lemonde.fr"
+ },
+ {
+  "entree": "javascript:alert(1)",
+  "normalisee": null,
+  "cle": null,
+  "domaine": null
+ },
+ {
+  "entree": "ftp://lemonde.fr/a",
+  "normalisee": null,
+  "cle": null,
+  "domaine": null
+ },
+ {
+  "entree": "",
+  "normalisee": null,
+  "cle": null,
+  "domaine": null
+ },
+ {
+  "entree": "   ",
+  "normalisee": null,
+  "cle": null,
+  "domaine": null
+ },
+ {
+  "entree": "lemonde.fr/a/b",
+  "normalisee": null,
+  "cle": null,
+  "domaine": null
+ },
+ {
+  "entree": "//lemonde.fr/a",
+  "normalisee": null,
+  "cle": null,
+  "domaine": null
+ },
+ {
+  "entree": "  https://lemonde.fr/a/b \n",
+  "normalisee": "lemonde.fr/a/b",
+  "cle": "f2b256adca4059a4",
+  "domaine": "lemonde.fr"
+ },
+ {
+  "entree": "https://user@lemonde.fr/a",
+  "normalisee": "lemonde.fr/a",
+  "cle": "5b0a7fc45933c5f1",
+  "domaine": "lemonde.fr"
+ },
+ {
+  "entree": "https://user:mot@www.lemonde.fr/a",
+  "normalisee": "lemonde.fr/a",
+  "cle": "5b0a7fc45933c5f1",
+  "domaine": "lemonde.fr"
+ },
+ {
+  "entree": "http://192.168.0.1/a/b/",
+  "normalisee": "192.168.0.1/a/b",
+  "cle": "47f7ce051dad50f5",
+  "domaine": "192.168.0.1"
+ },
+ {
+  "entree": "http://192.168.0.1:8080/",
+  "normalisee": "192.168.0.1/",
+  "cle": "719aeecd10f94270",
+  "domaine": "192.168.0.1"
+ },
+ {
+  "entree": "https://www.localhost/x",
+  "normalisee": "www.localhost/x",
+  "cle": "7aa7f50bc623c330",
+  "domaine": "www.localhost"
+ },
+ {
+  "entree": "https://www.com/x",
+  "normalisee": "www.com/x",
+  "cle": "699695bdbe9bb635",
+  "domaine": "www.com"
+ },
+ {
+  "entree": "https://lemonde.fr./a/b",
+  "normalisee": "lemonde.fr/a/b",
+  "cle": "f2b256adca4059a4",
+  "domaine": "lemonde.fr"
+ },
+ {
+  "entree": "https://LEMONDE.FR/A",
+  "normalisee": "lemonde.fr/A",
+  "cle": "69e6af80fa0ce2b7",
+  "domaine": "lemonde.fr"
+ },
+ {
+  "entree": "HTTPS://Lemonde.fr/a",
+  "normalisee": "lemonde.fr/a",
+  "cle": "5b0a7fc45933c5f1",
+  "domaine": "lemonde.fr"
+ },
+ {
+  "entree": "https://[::1]/a",
+  "normalisee": null,
+  "cle": null,
+  "domaine": null
+ },
+ {
+  "entree": "https://www.france-info.fr/",
+  "normalisee": "france-info.fr/",
+  "cle": "6de0ad70d7d5ca93",
+  "domaine": "france-info.fr"
+ },
+ {
+  "entree": "https://lemonde.fr/a//",
+  "normalisee": "lemonde.fr/a/",
+  "cle": "fd112dcf5a27f4d0",
+  "domaine": "lemonde.fr"
+ },
+ {
+  "entree": "mailto:a@b.fr",
+  "normalisee": null,
+  "cle": null,
+  "domaine": null
+ },
+ {
+  "entree": "https://www./a",
+  "normalisee": "www/a",
+  "cle": "83ad0668fbf1d356",
+  "domaine": "www"
+ },
+ {
+  "entree": "https://bücher.example/ä",
+  "normalisee": "bücher.example/ä",
+  "cle": "ceb3c0b557c7f7c2",
+  "domaine": "bücher.example"
+ },
+ {
+  "entree": "https://news.example.co.uk/a/",
+  "normalisee": "news.example.co.uk/a",
+  "cle": "1671656038aea567",
+  "domaine": "co.uk"
+ },
+ {
+  "entree": "http:lemonde.fr/a",
+  "normalisee": null,
+  "cle": null,
+  "domaine": null
+ },
+ {
+  "entree": "https://lemonde.fr/a b",
+  "normalisee": "lemonde.fr/a b",
+  "cle": "948e3257e71b0060",
+  "domaine": "lemonde.fr"
+ },
+ {
+  "entree": "httpſ://exemple.fr/a",
+  "normalisee": null,
+  "cle": null,
+  "domaine": null
+ },
+ {
+  "entree": "https://abonnes.lemonde.fr/article",
+  "normalisee": "abonnes.lemonde.fr/article",
+  "cle": "154718383a77e35c",
+  "domaine": "lemonde.fr"
+ }
+]

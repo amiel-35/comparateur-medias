@@ -34,7 +34,7 @@ function sujetView(r){
   if(r.fait)h+='<div class="fait"><span class="mono">Le fait commun'+mdl()+'</span><p>'+esc(r.fait)+'</p></div>';
   /* qui en parle */
   h+='<h2>Qui en parle</h2><p class="note">Les titres, comptés sur les sept bandes de FrIdéo. Par formule, sans modèle.</p>'+brows(r);
-  if(r.kind==='sujet')h+='<div class="chips">'+(r.sil.length?silChip(r)+'<span class="note">Aucun média de '+(r.sil.length>1?'ces côtés':'ce côté')+' n’a de titre rangé sous ce sujet, repris par '+r.nmed+' médias. <a href="#/silences">Tous les silences de l’édition</a>.</span>':r.large?'<span class="note">Gauche, centre et droite ont chacun au moins un titre sur ce sujet.</span>':'<span class="note">Sujet repris par moins de '+MIN+' médias : les silences n’y sont pas relevés.</span>')+'</div>';
+  if(r.kind==='sujet')h+='<div class="chips">'+(r.sil.length?silChip(r)+'<span class="note">Aucun média de '+(r.sil.length>1?'ces côtés':'ce côté')+' n’a de titre rangé sous ce sujet, repris par '+r.nmed+' médias. <a href="#/silences">Tous les silences de l’édition</a>.</span>':r.large?'<span class="note">Gauche, centre et droite ont chacun au moins un titre sur ce sujet.</span>':'<span class="note">Sujet repris par moins de '+MIN+' médias classés : les silences n’y sont pas relevés.</span>')+'</div>';
   if(r.div!=null){h+='<p><span class="mono">Écart de cadrage</span> <span class="dots" aria-label="'+r.div+' sur 5">'+'●'.repeat(r.div)+'○'.repeat(5-r.div)+'</span> '+r.div+' sur 5'+mdl()+'</p>';}
   /* face à face */
   h+='<h2>'+(r.kind==='sujet'?'Le même fait, trois formulations':'Les titres, côté par côté')+'</h2>';
@@ -55,6 +55,13 @@ function sujetView(r){
     h+='</div></section>';
   });
   h+='</div>';
+  /* les titres des médias non classés : comptés dans la couverture du sujet, rangés sous aucun côté */
+  if(r.nc&&r.nc.length){
+    var ncm={};r.nc.forEach(function(a){ncm[a.media]=1;});
+    h+='<section class="col nc-col"><header><span>Non classés</span><span class="mono" style="font-weight:400">'+pl(r.nc.length,'titre','titres')+' · '+pl(Object.keys(ncm).length,'média','médias')+'</span></header><div class="body">'+
+      '<p class="note">FrIdéo ne classe pas ces médias. Leurs titres comptent dans la couverture du sujet, dans aucun bord ni aucun silence.</p>'+
+      '<ul class="tlist">'+r.nc.map(function(a){return titleLi(r,a);}).join('')+'</ul></div></section>';
+  }
   if(r.mots&&r.mots.length){
     h+='<h2>Les mots qui diffèrent'+mdl()+'</h2><ul class="mots">'+r.mots.map(function(m){return '<li><q>'+esc(m.terme)+'</q><br><span class="mute">'+esc(m.qui)+'</span></li>';}).join('')+'</ul>';
   }else if(r.kind==='sujet'){h+='<h2>Les mots qui diffèrent</h2><p class="note">Le modèle n’a repéré aucun mot qui diffère nettement sur ce sujet.</p>';}

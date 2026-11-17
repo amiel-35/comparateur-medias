@@ -35,6 +35,12 @@ def repartition(medias, bord):
     return par
 
 
+def classes(noms, bord):
+    """Le nombre de médias classés parmi ces noms. Le seuil des silences se juge sur eux seuls : un média non
+    classé compte dans la couverture d'un sujet, jamais dans un silence, ni pour en faire naître un."""
+    return len({n for n in noms if bord.get(n)})
+
+
 def silencieux(par, lus, medias):
     """Côtés silencieux sur un sujet (« g », « c », « d ») : aucun titre de tout un côté, alors que le sujet est
     repris par MIN_MEDIAS médias ou plus et que ce côté a au moins un média lu. Les comptages se font sur sept
@@ -57,7 +63,7 @@ def suivi(editions):
             noms = [a["media"] for a in s["articles"]]
             par = repartition(noms, bord)
             out.setdefault(s["id"], []).append({"jour": jour, "titres": len(noms), "medias": len(set(noms)), "par": par,
-                                                "silences": silencieux(par, lus, len(set(noms)))})
+                                                "silences": silencieux(par, lus, classes(noms, bord))})
     return out
 
 
@@ -98,13 +104,14 @@ def periode(editions, cle, debut, fin):
         medias = set(a["titres"].values())
         lignes.append({"id": a["id"], "titre": a["titre"], "dernier": a["dernier"], "jours": len(set(a["jours"])),
                        "medias": len(medias), "titres": len(a["titres"]), "ecart": a["ecart"],
-                       "par": repartition(a["titres"].values(), bord), "noms": sorted(medias)})
+                       "par": repartition(a["titres"].values(), bord), "noms": sorted(medias),
+                       "classes": classes(medias, bord)})
     lignes.sort(key=lambda s: (s["medias"], s["titres"]), reverse=True)
-    larges = [s for s in lignes if s["medias"] >= MIN_MEDIAS]
+    larges = [s for s in lignes if s["classes"] >= MIN_MEDIAS]   # repris par MIN_MEDIAS médias classés ou plus
     bords = {}
     for c in BORDS:
         # le silence d'un côté est compté pour chacun de ses bords qui a au moins un média lu
-        tus = [s for s in larges if lus.get(c) and base.COTE[c] in silencieux(s["par"], lus, s["medias"])]
+        tus = [s for s in larges if lus.get(c) and base.COTE[c] in silencieux(s["par"], lus, s["classes"])]
         bords[c] = {"medias": lus[c], "titres": sum(s["par"][c] for s in lignes),
                     "sujets": sum(1 for s in larges if s["par"][c]), "sur": len(larges), "silences": len(tus),
                     "plus_couverts": [{"id": s["id"], "titre": s["titre"], "dernier": s["dernier"], "titres": s["par"][c]}
@@ -115,7 +122,7 @@ def periode(editions, cle, debut, fin):
     top = lignes[:TOP]
     medias = []
     for nom in sorted(bord, key=lambda n: n.lower()):
-        medias.append({"nom": nom, "bord": bord[nom], "cote": base.COTE.get(bord[nom], "c"),
+        medias.append({"nom": nom, "bord": bord[nom], "cote": base.COTE.get(bord[nom]),   # None : non classé
                        "titres": sum(1 for s in lignes for m in sujets[s["id"]]["titres"].values() if m == nom),
                        "sujets": sum(1 for s in larges if nom in s["noms"]),
                        "top": sum(1 for s in top if nom in s["noms"])})

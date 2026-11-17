@@ -74,11 +74,41 @@ publie **l'édition du jour**, qui ne bouge plus ensuite.
 - Un export n'est jamais une copie de `comparateur.db` (règle 10 de [DOCTRINE.md](DOCTRINE.md)) : la base porte
   aussi les adresses des abonnés et les votants.
 
+## L'export de chaque édition
+
+Chaque édition gardée est aussi publiée en JSON, la même pour tout le monde (aucun paramètre, aucune heure de
+génération : mêmes octets d'un passage à l'autre).
+
+- `/export/editions.json` : la liste des jours.
+- `/export/editions/<jour>.json` : l'édition du jour (version 1 du format).
+- `/export/schema.json` : le schéma JSON (2020-12) de ces fichiers, écrit à la main dans
+  `comparateur/export_schema.json`.
+
+Un export contient : les versions de la méthode et du classement, les licences (code AGPL-3.0 ; classement FrIdéo,
+French News Lab, CC BY 4.0 ; les titres appartiennent à leurs journaux), la liste des champs écrits par un modèle,
+les médias lus (nom, statut, score, bande), les absents, les non classés, les sujets (titre, fait, divergence,
+angles, mots, titres, comptage par bande, côtés silencieux) et les titres restés seuls. Il ne contient ni
+résultats de votes, ni rien qui touche un abonné ou un votant. Une édition d'avant les statuts ou la version 1.0
+s'exporte aussi : un champ manquant reçoit une valeur par défaut. `comparateur/export.py` le construit champ par
+champ à partir de l'édition gardée, jamais depuis la base, et `comparateur/schema.py` (un validateur de la
+bibliothèque standard) le vérifie contre le schéma avant de l'écrire.
+
 ## La méthode, versionnée
 
 La page Démarche (`#/demarche`) est le document de référence de la méthode. Elle porte une ligne de version
 (`comparateur/methode.py`) et l'historique des changements de
 règle, relevé dans l'historique du dépôt. Une version change quand une règle de comptage change.
+
+## Le service des fichiers
+
+Les pages d'édition ne portent que leur HTML et leurs données. Le CSS et le JavaScript sont écrits dans
+`public/actifs/site-<empreinte>.css` et `.js` (12 caractères du SHA-256 du contenu) ; un ancien actif reste un jour après
+la dernière publication qui le citait (`actifs/retires.json`), pour les pages encore en cache. Le serveur envoie les pages et les données avec `Cache-Control: public, max-age=300`, `sw.js` avec
+`no-cache`, les actifs avec `public, max-age=31536000, immutable`, et l'API avec `no-store`. Chaque fichier a un
+`ETag` et répond `304` à un `If-None-Match` qui correspond. Si le navigateur accepte `gzip`, le texte (HTML, CSS,
+JS, JSON, SVG, manifest) de plus de 1 Ko part compressé, avec `Vary: Accept-Encoding` ; la version compressée est
+gardée en mémoire (512 fichiers et 32 Mo au plus). Une page d'édition de l'essai passe de 142 Ko à 53 Ko (31 Ko à
+6 Ko compressée), et les deux actifs, 89 Ko, ne se chargent qu'une fois (25 Ko compressés).
 
 ## L'application
 
@@ -164,6 +194,38 @@ le même identifiant d'un jour à l'autre, ce qui permet de le suivre ; deux suj
 même fait sont comptés deux fois. Les synthèses sont recalculées à chaque publication et s'ouvrent depuis
 l'accueil (« la semaine », « le mois »).
 
+## L'index et « Situer un article »
+
+`public/index.json` est un fichier unique, à une seule adresse, sans paramètre : les mêmes octets pour tous
+(`comparateur/index.py`, écrit par `publier.ecrire_pages`, atomiquement). Il se construit à partir des éditions
+gardées des sept derniers jours, jamais de la base. Format `v: 1` : `genere_le` (le jour de la dernière édition),
+`methode`, `classement`, `medias` (domaine, puis nom, statut, bande, score, intervalle ; un média non classé n'a
+que son nom et son statut), `sujets` (titre, jour, titres par bande, côtés silencieux, page) et `articles` (clé,
+puis identifiant de sujet). Le domaine d'un média est déduit des adresses de ses articles ; un domaine vu chez
+deux médias n'est pas retenu. Un champ facultatif `domaines` d'une entrée de `medias.json` s'ajouterait aux
+domaines vus.
+
+La clé d'un article est les 16 premiers caractères hexadécimaux du SHA-256 de son adresse normalisée. La règle
+de normalisation est écrite deux fois, en Python (`index.normaliser`) et en JavaScript (`js/adresse.js`), et
+essayée avec les mêmes vecteurs (`tests/vecteurs-adresses.json`, calculés par Python) :
+
+1. les espaces des bords sont retirés ;
+2. le schéma doit être `http` ou `https`, sinon rien ; il est ensuite oublié ;
+3. l'hôte est mis en minuscules, sans point final, sans port, sans identifiants ;
+4. un préfixe d'usage est retiré une fois en tête d'hôte (`www.`, `m.`, `mobile.`, `amp.`), si l'hôte garde au
+   moins deux étiquettes ;
+5. le chemin est gardé tel quel (casse et `%xx` conservés) ; vide, il devient `/` ; une barre finale est retirée,
+   sauf pour `/` ;
+6. les paramètres (`?…`) et le fragment (`#…`) sont retirés.
+
+Le résultat est l'hôte suivi du chemin. Une adresse sans hôte, ou dont l'hôte est une adresse IPv6, n'a pas de
+forme normalisée.
+
+La vue `#/situer` télécharge `/index.json` une fois, puis cherche sur l'appareil : l'adresse collée n'est envoyée
+à personne. Elle dit le média (bande FrIdéo ou « non classé », ou « ce site ne lit pas ce média ») et, si
+l'article est dans l'index, le sujet, la répartition sur sept bords, les côtés silencieux et le lien vers la page
+du sujet. Un test refuse tout autre appel réseau dans la vue. Le contrat : `docs/cadrage-long-terme.md`, 6.3.
+
 ## L'API des votes
 
 | Route | Corps | Réponse |
@@ -188,8 +250,8 @@ remplace ce vote par la carte de votant.
 **Comptage.** Moyenne par bord déclaré (gauche, centre, droite), puis moyenne des bords : un bord nombreux ne
 pèse pas plus qu'un autre. `publiable` seulement si chaque bord atteint `COMPARATEUR_MIN_PAR_BORD` votants.
 
-**Abus.** Un vote par lot et par jeton ; 10 essais d'inscription par heure et par adresse ; 300 requêtes par
-minute et par adresse ; corps limité à 4 Ko.
+**Abus.** Un vote par lot et par jeton ; 10 essais d'inscription par heure et par adresse ; 300 requêtes d'API par
+minute et par adresse (les fichiers publics ne sont pas limités) ; corps limité à 4 Ko.
 
 ## Garde-fous de la fabrique
 

@@ -1,0 +1,9 @@
+/* Situer un article : un champ, un bouton, une réponse */
+.fsit{max-width:78ch;margin:0 0 18px}
+.fsit label{display:block;font-weight:700;margin:.6rem 0 .3rem}
+.fsit .fl{display:flex;flex-wrap:wrap;gap:8px}
+.fsit input[type=text]{flex:1 1 16rem;min-width:0;font:inherit;padding:8px 10px;min-height:40px;border:2px solid var(--ink);border-radius:0;background:var(--bg);color:var(--ink)}
+.sit-rep{max-width:78ch}
+.sit-rep:not(:empty){border:2px solid var(--ink);background:var(--paper);padding:4px 16px 12px;margin:0 0 18px}
+.sit-rep h2{margin:.8rem 0 .4rem}
+.sit-sujet{font-family:var(--serif);font-size:1.15rem;margin:.2rem 0 .6rem;overflow-wrap:anywhere}

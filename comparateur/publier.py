@@ -3,13 +3,15 @@
 Les lecteurs ne lisent que ces fichiers : ni la base ni les modèles ne sont sollicités par une visite.
 Écriture atomique (fichier temporaire puis renommage) : un lecteur ne voit jamais un fichier à moitié écrit.
 """
-import json, os, re, shutil
+import hashlib, json, os, re, shutil, time
 
-from . import aveugle, base, config, methode, syntheses
+from . import aveugle, base, config, export, index, methode, syntheses
 from .fabrique import hors_ecartees, sujets_du_jour
 
 
-SEUILS = json.load(open(os.path.join(config.ICI, "medias.json"), encoding="utf-8"))["seuils"]
+_REF = json.load(open(os.path.join(config.ICI, "medias.json"), encoding="utf-8"))
+SEUILS = _REF["seuils"]
+VERSION_CLASSEMENT = _REF["version"]   # « FrIdéo v1.0 » : inscrite dans chaque édition gardée
 
 
 def _ecrire(chemin, texte):
@@ -21,6 +23,9 @@ def _ecrire(chemin, texte):
 
 SITE = os.path.join(config.ICI, "site")
 INCLURE = re.compile(r"/\*INCLURE ([\w./-]+)\*/")
+STYLE = re.compile(r"<style>\n(.*?)</style>", re.S)
+SCRIPT = re.compile(r'<script id="app-js">\n(.*?)</script>', re.S)
+ACTIF = re.compile(r"site-[0-9a-f]{12}\.(css|js)$")   # un actif nommé par son empreinte : jamais modifié, donc immuable
 
 
 def gabarit():
@@ -33,6 +38,55 @@ def gabarit():
     with open(os.path.join(SITE, "gabarit.html"), encoding="utf-8") as f:
         page = INCLURE.sub(morceau, f.read())
     return page.replace("<!--MESURE-->", balise_mesure())
+
+
+def gabarit_en_actifs():
+    """La même page, mais le CSS et le JavaScript en sont sortis : (page, {chemin: contenu}). La page garde son HTML
+    et ses données, et cite actifs/site-<empreinte>.css et .js (12 hexadécimaux du SHA-256 du contenu). Les données
+    (<script id="donnees">, const DONNEES) sont déclarées avant le script : un script classique les voit.
+    gabarit() reste la page entière, d'un seul tenant : c'est elle que les tests lisent."""
+    page, actifs = gabarit(), {}
+
+    def sortir(m, ext, balise):
+        corps = m.group(1)
+        nom = "actifs/site-" + hashlib.sha256(corps.encode("utf-8")).hexdigest()[:12] + "." + ext
+        actifs[nom] = corps
+        return balise % ("/" + nom)
+    page = STYLE.sub(lambda m: sortir(m, "css", '<link rel="stylesheet" href="%s">'), page, count=1)
+    page = SCRIPT.sub(lambda m: sortir(m, "js", '<script src="%s"></script>'), page, count=1)
+    return page, actifs
+
+
+def ecrire_actifs(pub, actifs):
+    os.makedirs(os.path.join(pub, "actifs"), exist_ok=True)
+    for nom, corps in actifs.items():
+        _ecrire(os.path.join(pub, nom), corps)
+
+
+GARDE_ACTIFS = 86400   # un actif que les pages ne citent plus reste un jour : une page gardée en cache le cite encore
+
+
+def retirer_anciens_actifs(pub, actifs, maintenant=None):
+    """Supprime les site-*.css/js que les pages ne citent plus depuis plus d'un jour. Une page en cache dans un
+    navigateur ou un proxy (max-age=300, copie du service worker) peut encore citer l'actif d'avant : il reste là le
+    temps qu'elle soit oubliée. actifs/retires.json garde l'heure où chaque actif a cessé d'être cité."""
+    dossier, t = os.path.join(pub, "actifs"), time.time() if maintenant is None else maintenant
+    registre = os.path.join(dossier, "retires.json")
+    try:
+        with open(registre, encoding="utf-8") as f:
+            retires = {k: float(v) for k, v in json.load(f).items()}
+    except (OSError, ValueError, AttributeError):
+        retires = {}
+    garde = {}
+    for ancien in os.listdir(dossier):
+        if not ACTIF.match(ancien) or "actifs/" + ancien in actifs:
+            continue
+        depuis = retires.get(ancien, t)   # vu pour la première fois sans être cité : l'horloge part maintenant
+        if t - depuis > GARDE_ACTIFS:
+            os.remove(os.path.join(dossier, ancien))
+        else:
+            garde[ancien] = depuis
+    _ecrire(registre, json.dumps(garde, sort_keys=True))
 
 
 def balise_mesure():
@@ -48,7 +102,9 @@ def balise_mesure():
 def donnees_du_jour(db):
     notes = base.scores(db)
     fiche = {m["nom"]: m for m in json.load(open(os.path.join(config.ICI, "medias.json"), encoding="utf-8"))["medias"]}
-    medias = [{"nom": r["nom"], "score": notes.get(r["id"], 0.0), "bord": base.bord(notes.get(r["id"], 0.0)),
+    # Un média sans note FrIdéo est non classé : ni score, ni bord. Il n'est jamais rangé au centre par défaut.
+    medias = [{"nom": r["nom"], "score": notes.get(r["id"]),
+               "bord": base.bord(notes[r["id"]]) if r["id"] in notes else None, "statut": base.statut(notes.get(r["id"])),
                "proprietaire": r["proprietaire"], "id": r["id"], "ic": fiche.get(r["nom"], {}).get("ic"),
                "sources": fiche.get(r["nom"], {}).get("sources"),
                "peu_documente": bool(fiche.get(r["nom"], {}).get("peu_documente"))}
@@ -82,13 +138,15 @@ def donnees_du_jour(db):
     source = db.execute("SELECT source FROM notes_media WHERE methode = 'etude tierce' ORDER BY cree DESC, id DESC LIMIT 1").fetchone()
     return {"recolte": base.iso(), "heures": config.heures(), "total": total, "mode": "auto",
             "ecartes": {"rubriques": config.rubriques_ecartees(), "titres": ecartes},
-            "medias": sorted(({k: m[k] for k in ("nom", "score", "bord", "proprietaire")} for m in medias if m["id"] in presents),
-                             key=lambda m: m["score"]),
+            "medias": sorted(({k: m[k] for k in ("nom", "score", "bord", "statut", "proprietaire")} for m in medias if m["id"] in presents),
+                             key=lambda m: (m["score"] is None, m["score"] or 0, m["nom"])),
             "absents": [m["nom"] for m in medias if m["id"] not in presents],
             "source_classement": source["source"] if source else "",
             "classement": {"source": source["source"] if source else "", "seuils": SEUILS,
-                           "medias": sorted(({k: m[k] for k in ("nom", "score", "ic", "sources", "peu_documente")} for m in medias),
-                                             key=lambda m: m["score"])},
+                           "medias": sorted(({k: m[k] for k in ("nom", "score", "ic", "sources", "peu_documente")}
+                                             for m in medias if m["statut"] == "classe"), key=lambda m: m["score"])},
+            # Les médias lus hors de FrIdéo : comptés dans la couverture d'un sujet, dans aucun bord ni aucun silence.
+            "non_classes": sorted(m["nom"] for m in medias if m["statut"] == "non-classe"),
             "sujets": sujets, "seuls": seuls,
             "aveugle": aveugle.resultats(db)}
 
@@ -99,9 +157,12 @@ def enregistrer_edition(db, jour=None):
     charge = donnees_du_jour(db)
     charge["rythme"] = {"recolte_minutes": config.fabrique_minutes(), "edition_heure": config.edition_heure()}
     jour = jour or base.paris().strftime("%Y-%m-%d")
-    db.execute("""INSERT INTO editions (jour, cree, donnees) VALUES (?, ?, ?)
-                  ON CONFLICT(jour) DO UPDATE SET cree = excluded.cree, donnees = excluded.donnees""",
-               (jour, base.iso(), json.dumps(charge, ensure_ascii=False)))
+    # Les versions qui produisent l'édition sont gardées avec elle : un changement de méthode ou de classement ne
+    # réécrit rien, et chaque édition dit sous quelles règles elle a été faite.
+    db.execute("""INSERT INTO editions (jour, cree, donnees, methode, classement) VALUES (?, ?, ?, ?, ?)
+                  ON CONFLICT(jour) DO UPDATE SET cree = excluded.cree, donnees = excluded.donnees,
+                    methode = excluded.methode, classement = excluded.classement""",
+               (jour, base.iso(), json.dumps(charge, ensure_ascii=False), methode.VERSION, VERSION_CLASSEMENT))
     db.commit()
     return jour, charge
 
@@ -112,8 +173,9 @@ def ecrire_pages(db):
     pub = config.public()
     os.makedirs(os.path.join(pub, "editions"), exist_ok=True)
     os.makedirs(os.path.join(pub, "data", "editions"), exist_ok=True)
-    modele = gabarit()
-    lignes = db.execute("SELECT jour, donnees FROM editions ORDER BY jour").fetchall()
+    modele, actifs = gabarit_en_actifs()
+    ecrire_actifs(pub, actifs)
+    lignes = db.execute("SELECT jour, donnees, methode, classement FROM editions ORDER BY jour").fetchall()
     jours = [r["jour"] for r in lignes]
     charges = [(r["jour"], json.loads(r["donnees"])) for r in lignes]
     # Une édition faite avant que les intervalles de confiance soient connus les reçoit ici, sans rien réécrire d'autre.
@@ -124,6 +186,7 @@ def ecrire_pages(db):
         for m in charge.get("medias", []):
             if m.get("score") is not None:
                 m["bord"] = base.bord(m["score"])
+            m["statut"] = base.statut(m.get("score"))   # une édition d'avant les statuts : tous ses médias sont classés
         charge.setdefault("classement", {})["seuils"] = SEUILS
         for m in charge.get("classement", {}).get("medias", []):
             if m.get("ic") is None and m["nom"] in fiche:
@@ -138,6 +201,8 @@ def ecrire_pages(db):
         # Le suivi d'un sujet : sa présence dans toutes les éditions gardées, s'il y figure plus d'un jour.
         charge["suivi"] = {s["id"]: suivi[s["id"]] for s in charge["sujets"] if len(suivi.get(s["id"], [])) > 1}
         charge["min_medias"] = syntheses.MIN_MEDIAS
+        # Les versions de cette édition : celles du jour où elle a été faite. methode '' : avant la version 1.0.
+        charge["versions"] = {"methode": r["methode"] or "", "classement": r["classement"] or ""}
         charge["methode"] = methode.charge()   # la version de la méthode et son historique, lus par la page Démarche
         charge["mesure"] = "umami" if config.umami() else None   # lu par la page Mentions et le pied de page
         # La synthèse de la semaine par mail : null quand le SMTP n'est pas réglé (ni formulaire, ni mention).
@@ -154,9 +219,12 @@ def ecrire_pages(db):
             _ecrire(os.path.join(pub, "index.html"), page)
             _ecrire(os.path.join(pub, "data", "jour.json"), texte)
     _ecrire(os.path.join(pub, "data", "editions.json"), json.dumps(jours))
+    index.ecrire(pub, charges)   # l'index public : les éditions des sept derniers jours (public/index.json)
+    retirer_anciens_actifs(pub, actifs)   # les pages citent les nouveaux : les anciens ne servent plus
     for nom in os.listdir(SITE):   # les autres pages (aveugle.html) ; les morceaux du gabarit ne sont pas publiés
         if nom != "gabarit.html" and os.path.isfile(os.path.join(SITE, nom)):
             shutil.copyfile(os.path.join(SITE, nom), os.path.join(pub, nom))
+    export.ecrire(pub, [(j, c, c["versions"]) for j, c in charges])   # l'export public, champ par champ
     return jours
 
 

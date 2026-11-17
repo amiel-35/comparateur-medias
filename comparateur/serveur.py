@@ -9,14 +9,15 @@
   POST /api/mail/inscription       {adresse}     -> 202, toujours la même réponse (synthèse de la semaine par mail)
   POST /api/mail/confirmation      {jeton}       confirme l'inscription (bouton de mail.html)
   POST /api/mail/desinscription    {jeton}, ou ?jeton= avec List-Unsubscribe=One-Click (RFC 8058) : supprime l'abonné
-  tout le reste                    fichiers de <données>/public/
+  tout le reste                    fichiers de <données>/public/ (ETag et 304, gzip si le navigateur l'accepte)
 
 Pseudonyme, pas anonymat : la base garde l'empreinte du jeton, le bord déclaré et les avis, sans nom ni adresse (ni
 courriel ni IP). Le jeton relie entre eux les avis d'un même votant. L'éditeur sait à qui il a remis chaque code, et
 invitations.utilisee_le et votants.cree portent le même jour : avec peu d'inscrits, le rapprochement se fait à la main. Les abonnés au mail de la semaine
 sont à part (table abonnes, voir lettre.py) : leur adresse n'est écrite dans aucun journal.
 """
-import hashlib, json, mimetypes, os, re, secrets, sys, threading, time
+import gzip, hashlib, json, mimetypes, os, re, secrets, sys, threading, time
+from collections import OrderedDict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
@@ -81,6 +82,66 @@ class Debit:
 
 DEBIT = Debit()
 
+# Les fichiers texte de plus de 1 Ko partent compressés si le navigateur l'accepte.
+COMPRESSIBLES = ("text/html", "text/css", "text/javascript", "application/javascript", "application/json",
+                 "image/svg+xml", "application/manifest+json")
+SEUIL_GZIP = 1024
+IMMUABLE = re.compile(r"^actifs/site-[0-9a-f]{12}\.(css|js)$")   # nommé par son empreinte : ne change jamais
+
+
+def accepte_gzip(entete):
+    """Lecture de Accept-Encoding : gzip, ou « * » à défaut, avec un q non nul (gzip;q=0 le refuse)."""
+    q = {}
+    for part in (entete or "").split(","):
+        nom, _, params = part.partition(";")
+        poids = 1.0
+        m = re.search(r"\bq\s*=\s*([^;,\s]*)", params, re.I)
+        if m:
+            try:
+                poids = float(m.group(1))
+            except ValueError:
+                poids = 0.0
+        q[nom.strip().lower()] = poids
+    return q.get("gzip", q.get("*", 0.0)) > 0
+
+
+class Memo:
+    """Ce qu'on retient d'un fichier public : son ETag et sa version gzip, clé (chemin, date de modification,
+    taille). Mémoire bornée (nombre d'entrées et octets), la plus anciennement servie part la première : un fichier
+    n'est pas recompressé à chaque visite, et rien ne grossit sans fin."""
+
+    def __init__(self, entrees=512, octets=32 * 1024 * 1024):
+        self.gardes, self.entrees, self.maxi, self.verrou = OrderedDict(), entrees, octets, threading.Lock()
+
+    def lire(self, cle, brut, comprimer):
+        with self.verrou:
+            e = self.gardes.get(cle)
+            if e is not None:
+                self.gardes.move_to_end(cle)
+        if e is None:
+            e = {"etag": hashlib.sha256(brut).hexdigest()[:16], "gz": None}
+        if comprimer and e["gz"] is None:
+            e["gz"] = gzip.compress(brut, 6, mtime=0)
+        with self.verrou:
+            self.gardes[cle] = e
+            self.gardes.move_to_end(cle)
+            while len(self.gardes) > 1 and (len(self.gardes) > self.entrees or
+                                            sum(len(x["gz"] or b"") for x in self.gardes.values()) > self.maxi):
+                self.gardes.popitem(last=False)
+        return e
+
+
+MEMO = Memo()
+
+
+def correspond(si_aucun, etag):
+    """If-None-Match : une liste d'ETag (faibles ou forts) ou « * »."""
+    for x in (si_aucun or "").split(","):
+        x = x.strip()
+        if x == "*" or x == etag or (x.startswith("W/") and x[2:] == etag):
+            return True
+    return False
+
 
 def oublier(debit=None, pause=60):
     """Le fil qui purge la limite de débit toutes les minutes : une adresse IP n'est jamais gardée plus d'une heure
@@ -107,6 +168,7 @@ class Erreur(Exception):
 class Guichet(BaseHTTPRequestHandler):
     server_version = "Comparateur"
     protocol_version = "HTTP/1.1"
+    disable_nagle_algorithm = True   # en-têtes puis corps en deux envois : sans cela, 40 ms d'attente par réponse en connexion gardée
 
     def log_message(self, fmt, *args):  # journal sans adresse du visiteur, et sans paramètres d'adresse (jetons)
         args = tuple(re.sub(r"\?\S*", "?…", a) if isinstance(a, str) else a for a in args)
@@ -121,17 +183,22 @@ class Guichet(BaseHTTPRequestHandler):
                 return xff.split(",")[0].strip()
         return self.client_address[0]
 
-    def envoyer(self, code, corps, type_mime="application/json; charset=utf-8", cache="no-store"):
+    def envoyer(self, code, corps, type_mime="application/json; charset=utf-8", cache="no-store", plus=None):
+        """`plus` : en-têtes en plus (ETag, Vary, Content-Encoding). Un 304 n'a ni corps ni Content-Length ;
+        un HEAD a les en-têtes du GET (dont sa Content-Length) et pas de corps."""
         if isinstance(corps, (dict, list)):
             corps = json.dumps(corps, ensure_ascii=False).encode()
         self.send_response(code)
-        self.send_header("Content-Type", type_mime)
-        self.send_header("Content-Length", str(len(corps)))
+        if code != 304:
+            self.send_header("Content-Type", type_mime)
+            self.send_header("Content-Length", str(len(corps)))
         self.send_header("Cache-Control", cache)
+        for k, v in (plus or {}).items():
+            self.send_header(k, v)
         for k, v in ENTETES.items():
             self.send_header(k, v)
         self.end_headers()
-        if self.command != "HEAD":
+        if self.command != "HEAD" and code != 304:
             self.wfile.write(corps)
 
     def corps_brut(self):
@@ -178,11 +245,14 @@ class Guichet(BaseHTTPRequestHandler):
     def router(self):
         chemin = urlsplit(self.path).path
         try:
-            if not DEBIT.autorise("ip:" + self.adresse(), 300, 60):
-                raise Erreur(429, "trop de requêtes")
-            if chemin == "/sante":
+            if chemin == "/sante":   # ouvre la base : limité, comme l'API
+                if not DEBIT.autorise("sante:" + self.adresse(), 120, 60):
+                    raise Erreur(429, "trop de requêtes")
                 return self.sante()
             if chemin.startswith("/api/"):
+                # La limite de débit ne vaut que pour l'API : les fichiers publics (cachés, compressés) ne sont pas limités.
+                if not DEBIT.autorise("ip:" + self.adresse(), 300, 60):
+                    raise Erreur(429, "trop de requêtes")
                 db = base.connexion()
                 try:
                     return self.api(chemin, db)
@@ -327,12 +397,26 @@ class Guichet(BaseHTTPRequestHandler):
         if not (cible == racine or cible.startswith(racine + os.sep)) or not os.path.isfile(cible):
             raise Erreur(404, "introuvable")
         type_mime = mimetypes.guess_type(cible)[0] or "application/octet-stream"
+        comprimable = type_mime in COMPRESSIBLES
         if type_mime.startswith("text/") or type_mime in ("application/json", "application/javascript"):
             type_mime += "; charset=utf-8"
         # Le service worker est revérifié à chaque visite : une nouvelle version prend effet tout de suite.
-        cache = "no-cache" if rel == "sw.js" else "public, max-age=300"
+        # Un actif nommé par son empreinte ne change jamais : un an, sans revalidation.
+        cache = "no-cache" if rel == "sw.js" else "public, max-age=31536000, immutable" if IMMUABLE.search(rel) \
+            else "public, max-age=300"
         with open(cible, "rb") as f:
-            self.envoyer(200, f.read(), type_mime, cache=cache)
+            st = os.fstat(f.fileno())   # la date et la taille de ce qu'on lit, pas d'un fichier remplacé entre-temps
+            brut = f.read()
+        e = MEMO.lire((cible, st.st_mtime_ns, st.st_size), brut, comprimable and len(brut) > SEUIL_GZIP)
+        plus = {"Vary": "Accept-Encoding"} if comprimable else {}
+        etag = '"%s"' % e["etag"]
+        if e["gz"] is not None and accepte_gzip(self.headers.get("Accept-Encoding")):
+            brut, etag = e["gz"], '"%s-gzip"' % e["etag"]
+            plus["Content-Encoding"] = "gzip"
+        plus["ETag"] = etag
+        if correspond(self.headers.get("If-None-Match"), etag):
+            return self.envoyer(304, b"", type_mime, cache=cache, plus=plus)
+        self.envoyer(200, brut, type_mime, cache=cache, plus=plus)
 
 
 class Serveur(ThreadingHTTPServer):
