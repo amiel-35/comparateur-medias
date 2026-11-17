@@ -59,7 +59,8 @@ Le squelette nomme chaque morceau par une ligne `/*INCLURE chemin*/`. L'ordre de
    les adresses des abonnés, les votants, le journal de la fabrique y sont aussi. Un export, un index, un jeu de
    données se construit champ par champ à partir de ce qui est déjà publié (les éditions), jamais en copiant le
    fichier ou une table. Une sauvegarde est une copie, et c'est pour cela qu'elle n'est jamais publiée. Seul
-   `base.py` ouvre la base. *Test : `Assise.test_un_export_n_est_jamais_une_copie_de_la_base`.*
+   `base.py` ouvre la base. *Test : `Assise.test_un_export_n_est_jamais_une_copie_de_la_base`.* Exemple :
+   `comparateur/export.py` lit l'édition gardée, champ par champ, et valide chaque fichier contre son schéma.
 11. **La méthode a une version.** Changer une règle de comptage (bords, silences, fenêtre, rubriques) change la
    version de `comparateur/methode.py` et ajoute une ligne à son historique. La page Démarche l'affiche : c'est
    le document de référence.

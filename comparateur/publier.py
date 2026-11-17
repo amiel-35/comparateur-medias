@@ -5,7 +5,7 @@ Les lecteurs ne lisent que ces fichiers : ni la base ni les modèles ne sont sol
 """
 import json, os, re, shutil
 
-from . import aveugle, base, config, methode, syntheses
+from . import aveugle, base, config, export, methode, syntheses
 from .fabrique import hors_ecartees, sujets_du_jour
 
 
@@ -169,6 +169,7 @@ def ecrire_pages(db):
     for nom in os.listdir(SITE):   # les autres pages (aveugle.html) ; les morceaux du gabarit ne sont pas publiés
         if nom != "gabarit.html" and os.path.isfile(os.path.join(SITE, nom)):
             shutil.copyfile(os.path.join(SITE, nom), os.path.join(pub, nom))
+    export.ecrire(pub, [(j, c, c["versions"]) for j, c in charges])   # l'export public, champ par champ
     return jours
 
 
