@@ -23,6 +23,13 @@ Elles priment sur les recommandations du document là où elles diffèrent.
 | 4 | Prototype (section 9) | **Périmètre validé** : les six preuves (signature aveugle sans dépendance, séparation tenue par des tests, parcours sans jargon, compte générique à deux types plus un type factice, noms d'hôte séparés essayés depuis l'application installée sur iPhone, une urne par questionnaire scellée à la clôture). Branche `proto/panel-comptes`, données d'essai, rien de déployé. |
 | 5 | Classement (7.1) | **FrIdéo seule source, statut « non classé » pour les autres médias.** La piste d'une méthode de classement propre est abandonnée. La lecture à l'aveugle du panel s'affiche à côté, jamais fondue. |
 
+### Décisions d'Amiel du 17/11/2026
+
+| # | Point | Décision |
+|---|---|---|
+| 6 | Prestataire d'envoi (phase 0) | **Brevo est gardé.** Son relais SMTP ajoute un pixel d'ouverture et réécrit les liens ; ce suivi ne se coupe pas. Les mentions doivent le dire. Le point « le suivi des clics de Brevo est vérifié » de la phase 0 est donc fait ; reste la phrase des mentions. |
+| 7 | Structure et neutralité financière (questions 1 et 4, 8.4) | **Projet mené seul, sur les deniers d'Amiel.** La question se rouvre si cela change : premier euro venu d'ailleurs ou seconde personne. |
+
 ## 1. Ce que ce cadrage avance
 
 1. **Quatre tiroirs, pas trois.** Public, identité, urne, appareil. L'urne ne partage plus son fichier avec les
