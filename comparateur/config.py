@@ -100,3 +100,18 @@ def mail():
             "utilisateur": utilisateur, "mot_de_passe": mot_de_passe,
             "expediteur": env("COMPARATEUR_MAIL_EXPEDITEUR", "no-reply@inflexion.me"),
             "nom": env("COMPARATEUR_MAIL_NOM", "Cadrages"), "site": site_url()}
+
+
+def sauvegarde_jours():
+    """Nombre de jours pendant lesquels une copie de la base est gardée, sur place et sur la Storage Box."""
+    return max(1, int(env("COMPARATEUR_SAUVEGARDE_JOURS", "14")))
+
+
+def sauvegarde_distante():
+    """Le dossier WebDAV (Storage Box Hetzner) où partent les copies de la base. Sans adresse, utilisateur et mot de
+    passe : copies sur place seulement. Rend None, ou {url, utilisateur, mot_de_passe}."""
+    url, utilisateur = env("COMPARATEUR_SAUVEGARDE_URL", ""), env("COMPARATEUR_SAUVEGARDE_UTILISATEUR", "")
+    mot_de_passe = env("COMPARATEUR_SAUVEGARDE_MOT_DE_PASSE", "")
+    if not (url and utilisateur and mot_de_passe):
+        return None
+    return {"url": url, "utilisateur": utilisateur, "mot_de_passe": mot_de_passe}

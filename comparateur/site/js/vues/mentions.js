@@ -1,7 +1,8 @@
 /* Mentions légales et données personnelles. D.mesure (facultatif) : "umami" si la fréquentation est mesurée.
-   D.mail (facultatif) : réglé si la synthèse de la semaine part par mail. */
+   D.mail (facultatif) : réglé si la synthèse de la semaine part par mail.
+   D.sauvegardes (facultatif) : {jours, distante}, la garde des copies de la base. */
 function vMentions(){
-  var UM=D.mesure==='umami';
+  var UM=D.mesure==='umami',SV=D.sauvegardes||null;
   var mail='<a href="mailto:amiel@inflexion.me">amiel@inflexion.me</a>';
   return '<h1 tabindex="-1" id="h1">Ce site ne dépose aucun cookie</h1>'+
   '<div class="prose"><p>Ce site est personnel et non commercial. Il n’est pas une activité d’Inflexion.</p></div>'+
@@ -17,6 +18,7 @@ function vMentions(){
   (D.mail?'<li><b>Mail de la semaine.</b> Si vous vous y inscrivez, la base garde votre adresse mail, un jeton aléatoire pour les liens de confirmation et de désinscription, la date d’inscription, celle de la confirmation et la semaine du dernier envoi. L’adresse sert au mail de la semaine, rien d’autre. Elle est gardée jusqu’à la désinscription. Une inscription non confirmée sous 7 jours est effacée.</li>'+
      '<li><b>Envoi du mail.</b> Il passe par Brevo (Brevo SAS, 17 rue Salneuve, 75017 Paris, France), prestataire d’envoi. Brevo reçoit l’adresse pour chaque envoi.</li>'+
      '<li><b>Se désinscrire.</b> Le lien en bas de chaque mail mène à une page avec un bouton. Un clic supprime l’adresse de la base. Les logiciels de messagerie qui proposent « se désabonner » le font aussi, en un clic. L’inscription ne dépose aucun cookie.</li>':'')+
+  (SV&&SV.jours?'<li><b>Sauvegardes.</b> La base est copiée chaque jour, sur le serveur'+(SV.distante?' et sur un espace de stockage séparé, chez Hetzner':'')+'. Chaque copie est effacée au bout de '+pl(SV.jours,'jour','jours')+'.'+(D.mail?' Une adresse désinscrite peut donc y rester jusqu’à '+pl(SV.jours,'jour','jours')+'.':'')+'</li>':'')+
   '<li><b>Adresse IP.</b> Le serveur la garde en mémoire, pour limiter les abus. Il ne l’écrit ni dans un fichier ni dans la base.</li>'+
   '<li><b>Vote à l’aveugle.</b> Il est réservé aux invités. La base garde l’empreinte d’un jeton anonyme, le bord déclaré par le votant et ses avis, datés au jour. Aucun nom, aucune adresse, aucun lien entre une invitation et un votant. Le jeton reste dans le navigateur du votant.</li>'+
   '<li><b>Vos droits.</b> Pour toute question sur vos données : '+mail+'. Vous pouvez aussi saisir la <a href="https://www.cnil.fr/fr/plaintes" target="_blank" rel="noopener noreferrer">CNIL ↗</a>.</li></ul>'+
