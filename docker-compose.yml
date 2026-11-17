@@ -3,7 +3,8 @@
 #   fabrique  récolte les flux, fait l'édition, écrit le tiroir public. N'écoute aucun port. Tient la clé des modèles.
 #   guichet   sert le site, compte.<domaine> et urne.<domaine> ; envoie les mails. Tient la clé d'envoi.
 # Le volume comparateur-donnees (tiroir public) est partagé : la fabrique écrit, le guichet lit. Le volume
-# comparateur-identites (identites.db) n'est monté que sur le guichet : la fabrique ne peut pas l'ouvrir.
+# comparateur-identites (identites.db) et comparateur-urnes (une urne par questionnaire) ne sont montés que sur le
+# guichet : la fabrique ne peut pas les ouvrir. Trois sauvegardes distinctes ; une urne ne se sauvegarde qu'à sa clôture.
 services:
   fabrique:
     build: .
@@ -51,9 +52,12 @@ services:
       COMPARATEUR_HOTE_COMPTE: ${COMPARATEUR_HOTE_COMPTE:-}
       COMPARATEUR_HOTE_URNE: ${COMPARATEUR_HOTE_URNE:-}
       COMPARATEUR_IDENTITES: /identites
+      # Les urnes du panel : un fichier par questionnaire, dans un volume à part. Sauvegardé à la clôture seulement.
+      COMPARATEUR_URNES: /urnes
     volumes:
       - comparateur-donnees:/data
       - comparateur-identites:/identites
+      - comparateur-urnes:/urnes
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/sante"]
       interval: 30s
@@ -64,3 +68,4 @@ services:
 volumes:
   comparateur-donnees:
   comparateur-identites:
+  comparateur-urnes:
