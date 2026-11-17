@@ -16,15 +16,23 @@ sans le voir : il ne peut pas rapprocher un retrait d'un dépôt, même en lisan
 
 ## Les commandes
 
+Toutes dans le terminal du conteneur `guichet` (il tient `identites.db`, les urnes et `/data`), mail réglé : sans
+les deux réglages SMTP, elles refusent.
+
 - `python -m comparateur panel-inviter 5` : cinq codes d'invitation au panel (le lien est
   `https://compte.compare-media.inflexion.me/panel#code=<code>`). Seule l'empreinte du code est gardée ; un code
   servi est effacé.
 - `python -m comparateur questionnaire ouvrir <fichier.json>` : un questionnaire (format : `tests/test_panel.py`,
   `Questionnaire.BON`). Il se refuse lui-même s'il a un texte libre, plus de deux questions de profil ou une question
-  de profil trop fine. Le panel est figé : seuls les membres inscrits sept jours avant l'ouverture peuvent répondre.
+  de profil trop fine. La `fermeture` est obligatoire : une date `AAAA-MM-JJ` après aujourd'hui. Le panel est figé :
+  seuls les membres inscrits sept jours avant l'ouverture peuvent répondre.
 - `python -m comparateur questionnaire fermer <id>` : la clôture. Clé détruite, retraits effacés, urne close,
   compactée et scellée, résultats publiés dans `public/panel/resultats/<id>.json` avec deux effectifs. Le guichet la
-  fait seul le lendemain du jour de fermeture inscrit dans le questionnaire.
+  fait seul le lendemain du jour de fermeture inscrit dans le questionnaire. La commande refuse un questionnaire
+  inconnu ou déjà clos.
+- `python -m comparateur questionnaire resultats <id>` : recompte un questionnaire clos et republie ses résultats,
+  par exemple après qu'un membre a effacé ses réponses par son reçu. Avant la clôture, elle refuse.
+- Les résultats paraissent sur le site (vue `#/panel`) quand la fabrique réécrit les pages, à l'édition suivante.
 - La carte de votant du vote à l'aveugle : une clé par trimestre, créée à la première demande, détruite au début du
   trimestre suivant, quand le guichet publie les agrégats par lot (`public/panel/aveugle/<trimestre>.json`).
 
@@ -37,8 +45,9 @@ sans le voir : il ne peut pas rapprocher un retrait d'un dépôt, même en lisan
 - **Le DNS et Coolify** : `urne.compare-media.inflexion.me` sur le service `guichet`, port 8080, comme `compte.`
   (docs/deploiement-phase-2.md). Le volume `comparateur-urnes` est dans le compose.
 - **Brevo** : l'annonce d'un questionnaire, en texte seul, sans lien (le suivi des clics ne se coupe pas).
-- **La migration du vote à l'aveugle** : voir le README (commandes `verser-votes`, `oublier-votes`), sur une copie
-  d'abord.
+- **La migration du vote à l'aveugle** : voir le README (commandes `verser-votes`, `oublier-votes`, dans le conteneur
+  `guichet`), sur une copie d'abord. Tant qu'elle n'est pas faite, les avis d'avant la phase 3 ne s'affichent plus
+  nulle part : la lecture à l'aveugle ne lit que ce que l'urne publie.
 
 ## À essayer avant tout déploiement
 

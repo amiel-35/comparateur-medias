@@ -566,6 +566,94 @@ class MigrationDuVote(unittest.TestCase):
             os.remove(os.path.join(dossier, "2026T3.json"))
 
 
+class LigneDeCommande(unittest.TestCase):
+    """python -m comparateur panel-inviter et questionnaire ouvrir|fermer|resultats (docs/deploiement-phase-3.md)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls._vraie = signature.nouvelle_cle
+        signature.nouvelle_cle = lambda bits=2048: cls._vraie(BITS)
+
+    @classmethod
+    def tearDownClass(cls):
+        signature.nouvelle_cle = cls._vraie
+
+    def lancer(self, *args):
+        from comparateur import __main__ as cli
+        sortie = io.StringIO()
+        with contextlib.redirect_stdout(sortie):
+            code = cli.main(["comparateur", *args])
+        return code, sortie.getvalue()
+
+    def fichier(self, q):
+        f = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, dir=DOSSIER, encoding="utf-8")
+        json.dump(q, f, ensure_ascii=False)
+        f.close()
+        return f.name
+
+    def test_panel_inviter(self):
+        code, texte = self.lancer("panel-inviter", "2")
+        self.assertEqual(code, 0)
+        codes = re.findall(r"^(\S+)  https://compte\.cadrages\.test/panel#code=(\S+)$", texte, re.M)
+        self.assertEqual(len(codes), 2)
+        self.assertTrue(all(a == b for a, b in codes))
+        ident = comptes.connexion()
+        try:
+            for c, _ in codes:   # seule l'empreinte est gardée
+                self.assertTrue(ident.execute("SELECT 1 FROM invitations_panel WHERE empreinte = ?", (comptes.empreinte(c),)).fetchone())
+        finally:
+            ident.close()
+        self.assertEqual(self.lancer("inviter")[0], 2)                                       # l'ancienne commande
+
+    def test_ouvrir_fermer_resultats(self):
+        q = dict(Questionnaire.BON, id="essai-commande")
+        self.assertEqual(self.lancer("questionnaire")[0], 2)
+        self.assertEqual(self.lancer("questionnaire", "ouvrir", os.path.join(DOSSIER, "absent.json"))[0], 2)
+        for fin in (None, "2020-01-01", "31/12/2099", 20991231):                             # une date à venir, au bon format
+            self.assertEqual(self.lancer("questionnaire", "ouvrir", self.fichier(dict(q, fermeture=fin)))[0], 2, fin)
+        libre = json.loads(json.dumps(q)); libre["questions"][0]["type"] = "texte"
+        code, texte = self.lancer("questionnaire", "ouvrir", self.fichier(libre))
+        self.assertEqual(code, 2)
+        self.assertIn("refusé", texte)
+        self.assertFalse(os.path.exists(urne.chemin("essai-commande")))
+
+        code, texte = self.lancer("questionnaire", "ouvrir", self.fichier(q))
+        self.assertEqual(code, 0, texte)
+        self.assertIn("jusqu'au 2099-01-01", texte)
+        for d in ("cles", "questionnaires"):
+            self.assertTrue(os.path.isfile(os.path.join(config.public(), "panel", d, "essai-commande.json")))
+        self.assertEqual(self.lancer("questionnaire", "ouvrir", self.fichier(q))[0], 2)      # pas deux fois
+        self.assertEqual(self.lancer("questionnaire", "resultats", "essai-commande")[0], 1)   # pas avant la clôture
+
+        code, texte = self.lancer("questionnaire", "fermer", "essai-commande")
+        self.assertEqual(code, 0, texte)
+        self.assertIn("bulletins délivrés : 0, réponses reçues : 0", texte)
+        self.assertIn("gauche moins de 5", texte)
+        with open(os.path.join(config.public(), "panel", "resultats", "essai-commande.json"), encoding="utf-8") as f:
+            self.assertEqual(json.load(f)["questionnaire"], "essai-commande")
+        self.assertFalse(os.path.exists(os.path.join(config.public(), "panel", "cles", "essai-commande.json")))
+        ident = comptes.connexion()
+        try:
+            self.assertNotIn("essai-commande", [r["questionnaire"] for r in comptes.cles_ouvertes(ident)])
+        finally:
+            ident.close()
+        self.assertEqual(self.lancer("questionnaire", "fermer", "essai-commande")[0], 1)      # déjà clos
+        self.assertEqual(self.lancer("questionnaire", "fermer", "inconnu-du-panel")[0], 1)
+        self.assertEqual(self.lancer("questionnaire", "fermer", "carte-2026t4")[0], 2)        # pas une carte
+        code, texte = self.lancer("questionnaire", "resultats", "essai-commande")
+        self.assertEqual(code, 0, texte)
+        self.assertIn("recompté", texte)
+        self.assertEqual(self.lancer("questionnaire", "resultats", "inconnu-du-panel")[0], 1)
+
+    def test_sans_mail_rien(self):
+        avant = os.environ.pop("COMPARATEUR_SMTP_MOT_DE_PASSE")
+        try:
+            self.assertEqual(self.lancer("questionnaire", "fermer", "essai-x")[0], 1)
+            self.assertEqual(self.lancer("panel-inviter")[0], 1)
+        finally:
+            os.environ["COMPARATEUR_SMTP_MOT_DE_PASSE"] = avant
+
+
 class Separation(unittest.TestCase):
     """Premier cadrage, règle 1 : aucun module n'importe l'autre côté ; l'urne ne lit que ses fichiers et les clés
     publiques ; pas d'ATTACH."""
