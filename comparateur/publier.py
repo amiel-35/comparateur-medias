@@ -3,7 +3,7 @@
 Les lecteurs ne lisent que ces fichiers : ni la base ni les modèles ne sont sollicités par une visite.
 Écriture atomique (fichier temporaire puis renommage) : un lecteur ne voit jamais un fichier à moitié écrit.
 """
-import json, os, re, shutil
+import hashlib, json, os, re, shutil, time
 
 from . import aveugle, base, config, export, methode, syntheses
 from .fabrique import hors_ecartees, sujets_du_jour
@@ -23,6 +23,9 @@ def _ecrire(chemin, texte):
 
 SITE = os.path.join(config.ICI, "site")
 INCLURE = re.compile(r"/\*INCLURE ([\w./-]+)\*/")
+STYLE = re.compile(r"<style>\n(.*?)</style>", re.S)
+SCRIPT = re.compile(r'<script id="app-js">\n(.*?)</script>', re.S)
+ACTIF = re.compile(r"site-[0-9a-f]{12}\.(css|js)$")   # un actif nommé par son empreinte : jamais modifié, donc immuable
 
 
 def gabarit():
@@ -35,6 +38,43 @@ def gabarit():
     with open(os.path.join(SITE, "gabarit.html"), encoding="utf-8") as f:
         page = INCLURE.sub(morceau, f.read())
     return page.replace("<!--MESURE-->", balise_mesure())
+
+
+def gabarit_en_actifs():
+    """La même page, mais le CSS et le JavaScript en sont sortis : (page, {chemin: contenu}). La page garde son HTML
+    et ses données, et cite actifs/site-<empreinte>.css et .js (12 hexadécimaux du SHA-256 du contenu). Les données
+    (<script id="donnees">, const DONNEES) sont déclarées avant le script : un script classique les voit.
+    gabarit() reste la page entière, d'un seul tenant : c'est elle que les tests lisent."""
+    page, actifs = gabarit(), {}
+
+    def sortir(m, ext, balise):
+        corps = m.group(1)
+        nom = "actifs/site-" + hashlib.sha256(corps.encode("utf-8")).hexdigest()[:12] + "." + ext
+        actifs[nom] = corps
+        return balise % ("/" + nom)
+    page = STYLE.sub(lambda m: sortir(m, "css", '<link rel="stylesheet" href="%s">'), page, count=1)
+    page = SCRIPT.sub(lambda m: sortir(m, "js", '<script src="%s"></script>'), page, count=1)
+    return page, actifs
+
+
+def ecrire_actifs(pub, actifs):
+    os.makedirs(os.path.join(pub, "actifs"), exist_ok=True)
+    for nom, corps in actifs.items():
+        _ecrire(os.path.join(pub, nom), corps)
+
+
+GARDE_ACTIFS = 86400   # un actif que les pages ne citent plus reste un jour : une page gardée en cache le cite encore
+
+
+def retirer_anciens_actifs(pub, actifs):
+    """Supprime les site-*.css/js que les pages ne citent plus depuis plus d'un jour. Une page en cache dans un
+    navigateur ou un proxy (max-age=300, copie du service worker) peut encore citer l'actif d'avant : il reste là le
+    temps qu'elle soit oubliée. Un actif cité est réécrit à chaque publication, sa date suit."""
+    dossier, t = os.path.join(pub, "actifs"), time.time()
+    for ancien in os.listdir(dossier):
+        chemin = os.path.join(dossier, ancien)
+        if ACTIF.match(ancien) and "actifs/" + ancien not in actifs and t - os.path.getmtime(chemin) > GARDE_ACTIFS:
+            os.remove(chemin)
 
 
 def balise_mesure():
@@ -121,7 +161,8 @@ def ecrire_pages(db):
     pub = config.public()
     os.makedirs(os.path.join(pub, "editions"), exist_ok=True)
     os.makedirs(os.path.join(pub, "data", "editions"), exist_ok=True)
-    modele = gabarit()
+    modele, actifs = gabarit_en_actifs()
+    ecrire_actifs(pub, actifs)
     lignes = db.execute("SELECT jour, donnees, methode, classement FROM editions ORDER BY jour").fetchall()
     jours = [r["jour"] for r in lignes]
     charges = [(r["jour"], json.loads(r["donnees"])) for r in lignes]
@@ -166,6 +207,7 @@ def ecrire_pages(db):
             _ecrire(os.path.join(pub, "index.html"), page)
             _ecrire(os.path.join(pub, "data", "jour.json"), texte)
     _ecrire(os.path.join(pub, "data", "editions.json"), json.dumps(jours))
+    retirer_anciens_actifs(pub, actifs)   # les pages citent les nouveaux : les anciens ne servent plus
     for nom in os.listdir(SITE):   # les autres pages (aveugle.html) ; les morceaux du gabarit ne sont pas publiés
         if nom != "gabarit.html" and os.path.isfile(os.path.join(SITE, nom)):
             shutil.copyfile(os.path.join(SITE, nom), os.path.join(pub, nom))

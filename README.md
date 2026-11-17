@@ -99,6 +99,17 @@ La page Démarche (`#/demarche`) est le document de référence de la méthode. 
 (`comparateur/methode.py`) et l'historique des changements de
 règle, relevé dans l'historique du dépôt. Une version change quand une règle de comptage change.
 
+## Le service des fichiers
+
+Les pages d'édition ne portent que leur HTML et leurs données. Le CSS et le JavaScript sont écrits dans
+`public/actifs/site-<empreinte>.css` et `.js` (12 caractères du SHA-256 du contenu) ; les anciens sont retirés à
+chaque écriture. Le serveur envoie les pages et les données avec `Cache-Control: public, max-age=300`, `sw.js` avec
+`no-cache`, les actifs avec `public, max-age=31536000, immutable`, et l'API avec `no-store`. Chaque fichier a un
+`ETag` et répond `304` à un `If-None-Match` qui correspond. Si le navigateur accepte `gzip`, le texte (HTML, CSS,
+JS, JSON, SVG, manifest) de plus de 1 Ko part compressé, avec `Vary: Accept-Encoding` ; la version compressée est
+gardée en mémoire (512 fichiers et 32 Mo au plus). Une page d'édition de l'essai passe de 142 Ko à 53 Ko (31 Ko à
+6 Ko compressée), et les deux actifs, 89 Ko, ne se chargent qu'une fois (25 Ko compressés).
+
 ## L'application
 
 Le site s'installe comme une application, sans magasin : `manifest.webmanifest`, icônes PNG (192, 512, 512
@@ -207,8 +218,8 @@ remplace ce vote par la carte de votant.
 **Comptage.** Moyenne par bord déclaré (gauche, centre, droite), puis moyenne des bords : un bord nombreux ne
 pèse pas plus qu'un autre. `publiable` seulement si chaque bord atteint `COMPARATEUR_MIN_PAR_BORD` votants.
 
-**Abus.** Un vote par lot et par jeton ; 10 essais d'inscription par heure et par adresse ; 300 requêtes par
-minute et par adresse ; corps limité à 4 Ko.
+**Abus.** Un vote par lot et par jeton ; 10 essais d'inscription par heure et par adresse ; 300 requêtes d'API par
+minute et par adresse (les fichiers publics ne sont pas limités) ; corps limité à 4 Ko.
 
 ## Garde-fous de la fabrique
 
