@@ -270,6 +270,18 @@ class Parcours(unittest.TestCase):
         for secret in ["membre0@exemple.fr", "127.0.0.1"] + [p.hex() for p in recus] + [urne.empreinte(p) for p in recus]:
             self.assertNotIn(secret, texte)
 
+    def test_la_page_du_panel_est_servie(self):
+        """compte.<domaine>/panel sert la page et son script ; la politique de la page admet l'urne et rien d'autre."""
+        for chemin, attendu in (("/panel", "text/html"), ("/aveugle-rsa.js", "application/javascript")):
+            req = urllib.request.Request(self.url + chemin, headers={"Host": "compte.cadrages.test"})
+            with urllib.request.urlopen(req, timeout=20) as r:
+                self.assertEqual(r.status, 200)
+                self.assertTrue(r.headers["Content-Type"].startswith(attendu))
+                csp = r.headers["Content-Security-Policy"]
+        self.assertIn("connect-src 'self' https://urne.cadrages.test;", csp)
+        self.assertNotIn("umami", csp)
+        self.assertEqual(self.appel("GET", "/api/compte/panel", hote="cadrages.test")[0], 404)   # le site ne répond pas pour le compte
+
     def bulletin_signe_hors_guichet(self, q, pk):
         return signature.preparer(q.encode() + b"\x00" + os.urandom(32)), b"\x00" * (BITS // 8)
 
@@ -304,6 +316,114 @@ class Parcours(unittest.TestCase):
         self.assertEqual(agg["lots"]["7"]["c"], [1, 1])
         self.assertEqual(agg["cartes_delivrees"], 1)
         self.assertNotIn(urne.empreinte(prep), json.dumps(agg))                              # jamais une carte publiée
+
+
+class PagePanel(unittest.TestCase):
+    """compte/panel.html, le parcours du votant : un h1 par écran, rien d'extérieur, le bord jamais au guichet, l'urne
+    appelée sans cookie, aucun texte du serveur par innerHTML (premier cadrage, règles 4, 11 et 15)."""
+
+    @classmethod
+    def setUpClass(cls):
+        with open(os.path.join(config.ICI, "compte", "panel.html"), encoding="utf-8") as f:
+            cls.page = f.read()
+        cls.script = "\n".join(re.findall(r"<script>(.*?)</script>", cls.page, re.S))
+        cls.html = re.sub(r"<script.*?</script>|<style.*?</style>", "", cls.page, flags=re.S)
+
+    @staticmethod
+    def appels(source, nom):
+        """Le texte des arguments de chaque appel `nom(...)`, parenthèses équilibrées (hors définition de la fonction)."""
+        out = []
+        for m in re.finditer(r"(?<![\w.])%s\(" % re.escape(nom), source):
+            if source[max(0, m.start() - 9):m.start()] == "function ":
+                continue
+            i, n = m.end(), 1
+            while n:
+                n += {"(": 1, ")": -1}.get(source[i], 0)
+                i += 1
+            out.append(source[m.end():i - 1])
+        return out
+
+    def test_structure(self):
+        p = self.page
+        self.assertIn('<html lang="fr">', p)
+        self.assertIn('name="viewport"', p)
+        self.assertIn('<script src="/aveugle-rsa.js"></script>', p)
+        self.assertIn("prefers-color-scheme: dark", p)
+        sections = re.findall(r'<section id="([\w-]+)" hidden>(.*?)</section>', self.html, re.S)
+        self.assertEqual({s for s, _ in sections}, {"hors", "accueil", "membre", "quitter", "bord", "question", "envoi",
+                                                     "envoye", "lot", "lots-fini"})
+        for nom, corps in sections:   # un h1 par écran, que le script peut focaliser
+            self.assertEqual(len(re.findall(r'<h1 tabindex="-1"', corps)), 1, nom)
+        self.assertEqual(self.html.count("<h1"), len(sections))
+        self.assertIn("h.focus()", self.script)
+
+    def test_rien_d_exterieur(self):
+        self.assertNotRegex(self.page, r"https?://")                  # ni script, ni police, ni mesure d'audience
+        self.assertNotIn("umami", self.page.lower())
+        self.assertEqual(re.findall(r"<script[^>]*\bsrc=\"([^\"]+)\"", self.page), ["/aveugle-rsa.js"])
+
+    def test_aucun_texte_du_serveur_par_innerhtml(self):
+        self.assertNotIn("innerHTML", self.page)
+        self.assertNotIn("outerHTML", self.page)
+        self.assertNotIn("insertAdjacentHTML", self.page)
+        self.assertNotIn("document.write", self.page)
+
+    def test_deux_interlocuteurs(self):
+        """Deux fetch, pas un de plus : le guichet sur la même origine ; l'urne sur la sienne, sans cookie."""
+        fetchs = self.appels(self.script, "fetch")
+        self.assertEqual(len(fetchs), 2)
+        guichet, urne_ = sorted(fetchs, key=lambda a: "etat.urne" in a)
+        self.assertIn("credentials: 'same-origin'", guichet)
+        self.assertNotIn("etat.urne", guichet)
+        self.assertTrue(urne_.startswith("etat.urne + chemin"))
+        self.assertIn("credentials: 'omit'", urne_)
+        self.assertIn("referrerPolicy: 'no-referrer'", urne_)
+
+    def test_le_bord_ne_part_jamais_au_guichet(self):
+        appels = self.appels(self.script, "guichet")
+        self.assertGreaterEqual(len(appels), 5)
+        for a in appels:
+            self.assertTrue(re.match(r"'(GET|POST)', '/api/compte/", a), a)
+            self.assertNotRegex(a.lower(), r"bord", a)
+        self.assertIn("{ code: code, consentement: true }", self.script)
+        self.assertIn("'cadrages.bord'", self.script)
+        # le bord ne quitte l'appareil que vers l'urne, avec une réponse ou un avis
+        envois_du_bord = [a for a in self.appels(self.script, "urne") if "bord" in a]
+        self.assertEqual(sorted(a.split("'")[1] for a in envois_du_bord), ["/api/urne/avis", "/api/urne/depot"])
+
+    def test_le_retrait_comme_le_test_python(self):
+        """Message : identifiant, octet nul, 32 octets au hasard ; préparé, aveuglé, finalisé ; gardé avant toute question."""
+        s = self.script
+        for geste in ("A.hasard(32)", "A.preparer(message)", "A.aveugler(cle, prepare)", "A.finaliser(cle, prepare",
+                      "'/api/compte/bulletin', { questionnaire: id, aveugle: A.hex(x.aveugle) }"):
+            self.assertIn(geste, s)
+        self.assertLess(s.index("ecrire(CLE_BULLETINS, t)"), s.index("debuter(q, t[q.id])"))
+        for cle in ("cadrages.bulletins", "cadrages.recus", "cadrages.carte"):
+            self.assertIn(cle, s)
+
+    def test_les_textes_du_cadrage(self):
+        h = self.html
+        for phrase in ("ce site ne peut pas savoir lesquelles sont les vôtres",
+                       "Ce choix reste sur cet appareil. Il part avec chacune de vos réponses, jamais avec votre nom.",
+                       "J’accepte que mes réponses et le bord que j’indique servent aux résultats publiés par ce site.",
+                       "Code d’invitation", "15 ans", "Rejoindre le panel", "Envoyer mes réponses",
+                       "Une fois parties, elles ne portent pas votre nom. Vous pourrez les effacer depuis cet appareil seulement.",
+                       "C’est envoyé", "Quitter et effacer mes réponses", "Mes réponses envoyées", "Ce média est plutôt…",
+                       "Ce site ne garde aucun lien entre une personne et ses réponses ; il ne peut pas en reconstituer un après "
+                       "coup ; il ne protège pas contre un serveur piraté au moment même où la réponse est envoyée.",
+                       "Ce n’est pas un sondage."):
+            self.assertIn(phrase, h)
+        self.assertIn("Vous avez déjà commencé ce questionnaire sur un autre appareil. Finissez-le là-bas.", self.script)
+        textes = h + "".join(re.findall(r"'([^']*)'", self.script))
+        self.assertNotIn("—", textes)                                   # aucun tiret long
+        self.assertNotRegex(textes.lower(), r"\b(nous|nos|notre|anonyme)\b")
+
+    def test_le_compte_mene_au_panel(self):
+        with open(os.path.join(config.ICI, "compte", "compte.html"), encoding="utf-8") as f:
+            compte = f.read()
+        self.assertIn("plus.href = '/panel'", compte)
+        self.assertIn("'En savoir plus'", compte)
+        self.assertIn("c.disabled = !t.ouvert || panel", compte)       # la case reste désactivée
 
 
 class Separation(unittest.TestCase):
